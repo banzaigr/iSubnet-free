@@ -1,0 +1,1913 @@
+// --- Theme Mode Cache Recovery (Prevents Flash) ---
+(function() {
+  try {
+    const isDark = localStorage.getItem('isubnet_dark_mode') === 'true';
+    if (isDark) {
+      document.body.classList.add('dark-mode');
+    }
+    const color = localStorage.getItem('isubnet_theme_color');
+    if (color) {
+      document.documentElement.style.setProperty('--accent-primary', color);
+    }
+  } catch (e) {}
+})();
+
+// --- iOS Status Bar Time Update ---
+function updateTime() {
+  const timeEl = document.getElementById('status-time');
+  if (!timeEl) return;
+  const now = new Date();
+  let hours = now.getHours();
+  let minutes = now.getMinutes();
+  minutes = minutes < 10 ? '0' + minutes : minutes;
+  timeEl.textContent = `${hours}:${minutes}`;
+}
+setInterval(updateTime, 1000);
+updateTime();
+
+// --- Freemium / Pro Tier ---
+const FREE_NOTES_LIMIT = 2;
+const FREE_HISTORY_LIMIT = 2;
+let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
+
+function showProModal() {
+  document.getElementById('pro-modal').classList.remove('hidden');
+}
+
+function closeProModal() {
+  document.getElementById('pro-modal').classList.add('hidden');
+}
+
+function unlockPro() {
+  const modal = document.querySelector('#pro-modal .pro-modal');
+  if (!modal) return;
+  
+  if (!modal.dataset.originalHtml) {
+    modal.dataset.originalHtml = modal.innerHTML;
+  }
+  
+  modal.innerHTML = `
+    <div class="pro-modal-header">
+      <span class="pro-crown" style="font-size: 40px; display: block; margin-bottom: 10px;">📱</span>
+      <h2 style="color: var(--accent-primary); margin: 0 0 10px;">Mobile App Required</h2>
+      <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px;">
+        This web version is a demonstration. Security and payment processing for iSubnet Pro is handled securely via the <strong>Apple App Store</strong> and <strong>Google Play Store</strong> in the mobile app.
+      </p>
+    </div>
+    <button class="btn-primary pro-unlock-btn" id="btn-pro-ok" style="margin-bottom: 10px;">OK</button>
+  `;
+  
+  document.getElementById('btn-pro-ok').addEventListener('click', () => {
+    modal.innerHTML = modal.dataset.originalHtml;
+    document.getElementById('btn-pro-unlock').addEventListener('click', unlockPro);
+    document.getElementById('btn-pro-dismiss').addEventListener('click', closeProModal);
+    closeProModal();
+  });
+}
+
+// Global helpers for testing/debugging Pro features in the browser
+window.unlockProDemo = function() {
+  PRO_UNLOCKED = true;
+  SafeStorage.setItem('isubnet_pro', 'true');
+  applyProState();
+  console.log("iSubnet Pro unlocked successfully for testing!");
+  return "Pro unlocked!";
+};
+
+window.lockProDemo = function() {
+  PRO_UNLOCKED = false;
+  SafeStorage.setItem('isubnet_pro', 'false');
+  location.reload();
+  return "Pro locked!";
+};
+
+function applyProState() {
+  const badge = document.querySelector('.free-badge') || document.querySelector('.pro-badge');
+  const splitterBtn = document.getElementById('tab-btn-splitter');
+  
+  if (PRO_UNLOCKED) {
+    // Swap FREE badge for PRO badge
+    if (badge) {
+      badge.textContent = 'PRO';
+      badge.className = 'pro-badge';
+    }
+    // Unlock splitter tab
+    if (splitterBtn) {
+      splitterBtn.classList.remove('tab-btn-locked');
+      splitterBtn.setAttribute('data-target', 'splitter-tab');
+      splitterBtn.removeAttribute('data-pro');
+      const lockIcon = splitterBtn.querySelector('.tab-lock-icon');
+      if (lockIcon) lockIcon.remove();
+    }
+    // Remove any limit banners
+    document.querySelectorAll('.pro-limit-banner').forEach(el => el.remove());
+  } else {
+    // Lock FREE state back
+    if (badge) {
+      badge.textContent = 'FREE';
+      badge.className = 'free-badge';
+    }
+    // Lock splitter tab
+    if (splitterBtn) {
+      splitterBtn.classList.add('tab-btn-locked');
+      splitterBtn.removeAttribute('data-target');
+      splitterBtn.setAttribute('data-pro', 'true');
+      if (!splitterBtn.querySelector('.tab-lock-icon')) {
+        const lock = document.createElement('div');
+        lock.className = 'tab-lock-icon';
+        lock.textContent = '🔒';
+        splitterBtn.appendChild(lock);
+      }
+    }
+    
+    // Switch to another tab if currently on Splitter
+    const activeTab = document.querySelector('.tab-content.active');
+    if (activeTab && activeTab.id === 'splitter-tab') {
+      const ipv4Btn = document.querySelector('.tab-btn[data-target="ipv4-tab"]');
+      if (ipv4Btn) ipv4Btn.click();
+    }
+    
+    // Re-render list templates to show limits
+    renderNotes();
+    renderHistory();
+  }
+}
+
+// --- Safe Storage Wrapper for Local file:// CORS constraints ---
+const SafeStorage = {
+  getItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn('localStorage is disabled or blocked. Using memory fallback.', e);
+      return this._fallback[key] || null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('localStorage is disabled or blocked. Using memory fallback.', e);
+      this._fallback[key] = value;
+    }
+  },
+  _fallback: {}
+};
+
+PRO_UNLOCKED = SafeStorage.getItem('isubnet_pro') === 'true';
+
+// --- Tab Navigation Setup ---
+function setupTabNavigation() {
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-target');
+      if (!target) return;
+      
+      // Deactivate all buttons and contents
+      tabButtons.forEach(b => b.classList.remove('active'));
+      tabContents.forEach(c => c.classList.remove('active'));
+      
+      // Activate target
+      btn.classList.add('active');
+      document.getElementById(target).classList.add('active');
+    });
+  });
+}
+
+
+
+// Convert CIDR number to decimal subnet mask string (IPv4)
+function cidrToSubnetMask(cidr) {
+  if (cidr === 0) return '0.0.0.0';
+  const mask = (~0 << (32 - cidr)) >>> 0;
+  return [
+    (mask >>> 24) & 255,
+    (mask >>> 16) & 255,
+    (mask >>> 8) & 255,
+    mask & 255
+  ].join('.');
+}
+
+// --- IPv4 CALCULATION LOGIC ---
+
+// Convert IP Address string to 32-bit integer
+function ipToUint32(ipStr) {
+  const parts = ipStr.split('.').map(p => parseInt(p, 10));
+  return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
+}
+
+// Convert 32-bit integer back to IP Address string
+function uint32ToIp(val) {
+  return [
+    (val >>> 24) & 255,
+    (val >>> 16) & 255,
+    (val >>> 8) & 255,
+    val & 255
+  ].join('.');
+}
+
+// Convert number to 32-bit binary string (with dots separating octets)
+function uint32ToBinaryStr(val) {
+  const bin = val.toString(2).padStart(32, '0');
+  return `${bin.substring(0, 8)}.${bin.substring(8, 16)}.${bin.substring(16, 24)}.${bin.substring(24, 32)}`;
+}
+
+// Validate IPv4 format
+function validateIPv4(ipStr) {
+  const reg = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  if (!reg.test(ipStr)) return false;
+  const parts = ipStr.match(reg).slice(1).map(Number);
+  return parts.every(p => p >= 0 && p <= 255);
+}
+
+// Perform calculations for IPv4
+function calculateIPv4() {
+  const ipInput = document.getElementById('ipv4-address').value.trim();
+  const hostsInput = document.getElementById('ipv4-hosts').value.trim();
+  const errorEl = document.getElementById('ipv4-error');
+  const resultsCard = document.getElementById('ipv4-results');
+
+  // Reset states
+  errorEl.textContent = '';
+  resultsCard.classList.add('hidden');
+  document.getElementById('ipv4-subnets-container').classList.add('hidden');
+
+  const dotCount = (ipInput.match(/\./g) || []).length;
+  if (ipInput === '' || dotCount < 3 || ipInput.endsWith('.')) {
+    errorEl.textContent = '';
+    resultsCard.classList.add('hidden');
+    return;
+  }
+
+  if (!validateIPv4(ipInput)) {
+    errorEl.textContent = 'Invalid IPv4 address format. Use format e.g. 192.168.1.1';
+    return;
+  }
+
+  let cidrInput = parseInt(document.getElementById('ipv4-cidr').value, 10);
+
+  // If hostsInput is provided, override the CIDR input with the prefix needed to support that number of hosts
+  let targetCidr = null;
+  if (hostsInput !== '') {
+    const requiredHosts = parseInt(hostsInput, 10);
+    if (isNaN(requiredHosts) || requiredHosts < 1) {
+      errorEl.textContent = 'Required hosts must be a positive number.';
+      return;
+    }
+
+    if (requiredHosts === 1) {
+      targetCidr = 32;
+    } else if (requiredHosts === 2) {
+      targetCidr = 31;
+    } else {
+      const hostBitsNeeded = Math.ceil(Math.log2(requiredHosts + 2));
+      targetCidr = 32 - hostBitsNeeded;
+    }
+
+    if (targetCidr < 0 || targetCidr > 32) {
+      errorEl.textContent = `Unable to accommodate ${requiredHosts} hosts. Max IPv4 capacity is 4,294,967,294 hosts.`;
+      return;
+    }
+
+    cidrInput = targetCidr;
+    // Visually update the slider value
+    document.getElementById('ipv4-cidr').value = cidrInput;
+  }
+
+  // Update the visual CIDR label
+  document.getElementById('ipv4-cidr-val').textContent = `/${cidrInput} (${cidrToSubnetMask(cidrInput)})`;
+
+  const ipVal = ipToUint32(ipInput);
+  const maskVal = cidrInput === 0 ? 0 : (~0 << (32 - cidrInput)) >>> 0;
+  const wildcardVal = ~maskVal >>> 0;
+  const networkVal = (ipVal & maskVal) >>> 0;
+  const broadcastVal = (ipVal | wildcardVal) >>> 0;
+
+  // Class detection based on first octet
+  const firstOctet = (ipVal >>> 24) & 255;
+  let ipClass = 'Unknown';
+  if (firstOctet >= 1 && firstOctet <= 126) ipClass = 'Class A';
+  else if (firstOctet === 127) ipClass = 'Class A (Loopback)';
+  else if (firstOctet >= 128 && firstOctet <= 191) ipClass = 'Class B';
+  else if (firstOctet >= 192 && firstOctet <= 223) ipClass = 'Class C';
+  else if (firstOctet >= 224 && firstOctet <= 239) ipClass = 'Class D (Multicast)';
+  else if (firstOctet >= 240 && firstOctet <= 255) ipClass = 'Class E (Experimental)';
+
+  // Private vs Public IP check
+  let ipType = 'Public IP';
+  if (firstOctet === 10) ipType = 'Private IP (Class A)';
+  else if (firstOctet === 172 && ((ipVal >>> 16) & 255) >= 16 && ((ipVal >>> 16) & 255) <= 31) ipType = 'Private IP (Class B)';
+  else if (firstOctet === 192 && ((ipVal >>> 16) & 255) === 168) ipType = 'Private IP (Class C)';
+  else if (firstOctet === 127) ipType = 'Localhost (Loopback)';
+  else if (firstOctet === 169 && ((ipVal >>> 16) & 255) === 254) ipType = 'Link-Local (APIPA)';
+
+  // Usable hosts calculations
+  let totalHosts = 0;
+  let rangeStart = '';
+  let rangeEnd = '';
+
+  if (cidrInput === 32) {
+    totalHosts = 1;
+    rangeStart = uint32ToIp(networkVal);
+    rangeEnd = uint32ToIp(networkVal);
+  } else if (cidrInput === 31) {
+    totalHosts = 2;
+    rangeStart = uint32ToIp(networkVal);
+    rangeEnd = uint32ToIp(broadcastVal);
+  } else {
+    totalHosts = (2 ** (32 - cidrInput)) - 2;
+    rangeStart = uint32ToIp(networkVal + 1);
+    rangeEnd = uint32ToIp(broadcastVal - 1);
+  }
+
+  // Populate basic results
+  document.getElementById('ipv4-badge-class').textContent = ipClass;
+  document.getElementById('res-cidr').textContent = `/${cidrInput}`;
+  document.getElementById('res-mask').textContent = uint32ToIp(maskVal);
+  document.getElementById('res-wildcard').textContent = uint32ToIp(wildcardVal);
+  document.getElementById('res-network').textContent = uint32ToIp(networkVal);
+  document.getElementById('res-broadcast').textContent = uint32ToIp(broadcastVal);
+  document.getElementById('res-range').textContent = `${rangeStart} - ${rangeEnd}`;
+  document.getElementById('res-hosts').textContent = totalHosts.toLocaleString();
+  document.getElementById('res-type').textContent = ipType;
+
+  // Populate binary
+  document.getElementById('bin-ip').textContent = uint32ToBinaryStr(ipVal);
+  document.getElementById('bin-mask').textContent = uint32ToBinaryStr(maskVal);
+
+  // If the user specified Required Hosts but did NOT trigger partitioning of a larger block,
+  // we can show a list of consecutive subnets of this calculated size within a classful boundary (/24 for C, /16 for B, /8 for A).
+  // E.g., if they input 192.168.1.1 (Class C, default boundary /24) and 50 hosts (requires /26),
+  // we show the subnets of size /26 that fit inside 192.168.1.0/24.
+  if (hostsInput !== '') {
+    let parentCidr = 24; // Default to Class C boundary
+    if (ipClass.startsWith('Class A')) parentCidr = 8;
+    else if (ipClass.startsWith('Class B')) parentCidr = 16;
+    
+    // Only show partitioning if our calculated size is smaller (higher CIDR) than the class boundary
+    if (cidrInput > parentCidr) {
+      const subnetsContainer = document.getElementById('ipv4-subnets-container');
+      const subnetListEl = document.getElementById('res-subnet-list');
+      subnetListEl.innerHTML = '';
+      subnetsContainer.classList.remove('hidden');
+
+      const classfulNetworkVal = (ipVal & (parentCidr === 8 ? 0xFF000000 : parentCidr === 16 ? 0xFFFF0000 : 0xFFFFFF00)) >>> 0;
+      const subnetsCount = 2 ** (cidrInput - parentCidr);
+      const subnetSize = 2 ** (32 - cidrInput);
+      const maxRender = Math.min(subnetsCount, 64);
+
+      for (let i = 0; i < maxRender; i++) {
+        const subNetVal = (classfulNetworkVal + (i * subnetSize)) >>> 0;
+        const subBroadVal = (subNetVal + subnetSize - 1) >>> 0;
+        
+        let subStart = '';
+        let subEnd = '';
+        if (cidrInput === 32) {
+          subStart = uint32ToIp(subNetVal);
+          subEnd = uint32ToIp(subNetVal);
+        } else if (cidrInput === 31) {
+          subStart = uint32ToIp(subNetVal);
+          subEnd = uint32ToIp(subBroadVal);
+        } else {
+          subStart = uint32ToIp(subNetVal + 1);
+          subEnd = uint32ToIp(subBroadVal - 1);
+        }
+
+        const item = document.createElement('div');
+        item.className = 'subnet-row-item';
+        // Add a class to highlight the specific subnet containing the user's IP
+        const containsUserIp = (ipVal >= subNetVal && ipVal <= subBroadVal);
+        if (containsUserIp) {
+          item.style.borderColor = 'var(--accent-cyan)';
+          item.style.background = 'rgba(6, 182, 212, 0.1)';
+        }
+
+        item.innerHTML = `
+          <span class="subnet-idx">Subnet #${i + 1} (/${cidrInput} - ${cidrToSubnetMask(cidrInput)})${containsUserIp ? ' 📍' : ''}</span>
+          <div class="subnet-details">
+            <span class="subnet-ip">${uint32ToIp(subNetVal)}</span>
+            <span class="subnet-range">${subStart} - ${subEnd}</span>
+          </div>
+        `;
+        subnetListEl.appendChild(item);
+      }
+
+      if (subnetsCount > maxRender) {
+        const extraRow = document.createElement('p');
+        extraRow.className = 'helper-text';
+        extraRow.style.textAlign = 'center';
+        extraRow.textContent = `... and ${subnetsCount - maxRender} more subnets.`;
+        subnetListEl.appendChild(extraRow);
+      }
+    }
+  }
+
+  // Show result panel with smooth fade-in
+  resultsCard.classList.remove('hidden');
+
+  // Record history
+  const desc = `${ipInput}/${cidrInput} (${hostsInput ? hostsInput + ' hosts - ' : ''}${cidrToSubnetMask(cidrInput)})`;
+  recordHistoryDebounced('IPv4', { ip: ipInput, cidr: cidrInput, hosts: hostsInput }, desc);
+}
+
+// --- IPv6 CALCULATION LOGIC ---
+
+// Parse shorthand IPv6 to a 128-bit BigInt
+function parseIPv6(ipStr) {
+  ipStr = ipStr.trim().toLowerCase();
+  
+  // Basic sanity validation
+  if (!/^[0-9a-f:]+$/i.test(ipStr)) return null;
+  if (ipStr.includes(':::')) return null;
+
+  let parts = [];
+  if (ipStr.includes('::')) {
+    const split = ipStr.split('::');
+    if (split.length > 2) return null; // multiple double colons invalid
+    const left = split[0] ? split[0].split(':') : [];
+    const right = split[1] ? split[1].split(':') : [];
+    const missing = 8 - (left.length + right.length);
+    if (missing < 0) return null;
+    parts = [...left, ...Array(missing).fill('0'), ...right];
+  } else {
+    parts = ipStr.split(':');
+  }
+
+  if (parts.length !== 8) return null;
+
+  let bigIntVal = BigInt(0);
+  for (let i = 0; i < 8; i++) {
+    const val = parseInt(parts[i] === '' ? '0' : parts[i], 16);
+    if (isNaN(val) || val < 0 || val > 0xffff) return null;
+    bigIntVal = (bigIntVal << BigInt(16)) + BigInt(val);
+  }
+  return bigIntVal;
+}
+
+// Format 128-bit BigInt to fully-expanded IPv6 string
+function formatIPv6Expanded(bigIntVal) {
+  const parts = [];
+  let temp = bigIntVal;
+  for (let i = 0; i < 8; i++) {
+    const part = Number(temp & BigInt(0xffff));
+    parts.unshift(part.toString(16).padStart(4, '0'));
+    temp = temp >> BigInt(16);
+  }
+  return parts.join(':');
+}
+
+// Format 128-bit BigInt to compressed IPv6 string
+function formatIPv6Compressed(bigIntVal) {
+  const parts = [];
+  let temp = bigIntVal;
+  for (let i = 0; i < 8; i++) {
+    const part = Number(temp & BigInt(0xffff));
+    parts.unshift(part.toString(16));
+    temp = temp >> BigInt(16);
+  }
+
+  // Find longest contiguous run of '0'
+  let maxZeroStart = -1;
+  let maxZeroLen = 0;
+  let currentZeroStart = -1;
+  let currentZeroLen = 0;
+
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === '0') {
+      if (currentZeroStart === -1) {
+        currentZeroStart = i;
+      }
+      currentZeroLen++;
+      if (currentZeroLen > maxZeroLen) {
+        maxZeroLen = currentZeroLen;
+        maxZeroStart = currentZeroStart;
+      }
+    } else {
+      currentZeroStart = -1;
+      currentZeroLen = 0;
+    }
+  }
+
+  if (maxZeroLen > 1) {
+    const left = parts.slice(0, maxZeroStart).join(':');
+    const right = parts.slice(maxZeroStart + maxZeroLen).join(':');
+    return `${left}::${right}`;
+  }
+  return parts.join(':');
+}
+
+// Calculate IPv6 Subnetting
+function calculateIPv6() {
+  const ipInput = document.getElementById('ipv6-address').value.trim();
+  const hostsInput = document.getElementById('ipv6-hosts').value.trim();
+  const errorEl = document.getElementById('ipv6-error');
+  const resultsCard = document.getElementById('ipv6-results');
+
+  // Reset
+  errorEl.textContent = '';
+  resultsCard.classList.add('hidden');
+
+  const colonCount = (ipInput.match(/:/g) || []).length;
+  // If user is typing and ends with a single colon (but NOT double colon ::), hide results silently.
+  if (ipInput === '' || colonCount < 2 || (ipInput.endsWith(':') && !ipInput.endsWith('::'))) {
+    errorEl.textContent = '';
+    resultsCard.classList.add('hidden');
+    return;
+  }
+
+  const ipBigInt = parseIPv6(ipInput);
+  if (ipBigInt === null) {
+    errorEl.textContent = 'Invalid IPv6 address. Enter valid hexadecimal blocks separated by colons.';
+    return;
+  }
+
+  let prefixLength = parseInt(document.getElementById('ipv6-cidr').value, 10);
+
+  // If hostsInput is provided, override the prefix length with the CIDR required
+  if (hostsInput !== '') {
+    if (!/^\d+$/.test(hostsInput)) {
+      errorEl.textContent = 'Required hosts must be a valid positive integer.';
+      return;
+    }
+    try {
+      const requiredHosts = BigInt(hostsInput);
+      if (requiredHosts < BigInt(1)) {
+        errorEl.textContent = 'Required hosts must be at least 1.';
+        return;
+      }
+
+      let bitsNeeded = 0;
+      if (requiredHosts > BigInt(1)) {
+        bitsNeeded = (requiredHosts - BigInt(1)).toString(2).length;
+      }
+
+      const targetPrefix = 128 - bitsNeeded;
+      if (targetPrefix < 1 || targetPrefix > 128) {
+        errorEl.textContent = 'Unable to accommodate host size in IPv6.';
+        return;
+      }
+
+      prefixLength = targetPrefix;
+      // Visually update the slider
+      document.getElementById('ipv6-cidr').value = prefixLength;
+    } catch (err) {
+      errorEl.textContent = 'Invalid hosts input.';
+      return;
+    }
+  }
+
+  // Update the visual Prefix label
+  document.getElementById('ipv6-cidr-val').textContent = `/${prefixLength}`;
+
+  // Calculate 128-bit mask ranges
+  const hostMask = (BigInt(1) << BigInt(128 - prefixLength)) - BigInt(1);
+  const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
+  const networkPrefixVal = ipBigInt & netMask;
+  const broadcastVal = networkPrefixVal | hostMask;
+
+  // Address Type Identification
+  let addrType = 'Global Unicast';
+  const top8 = Number(ipBigInt >> BigInt(120)) & 255;
+  const top10 = Number(ipBigInt >> BigInt(118)) & 1023;
+  const top7 = Number(ipBigInt >> BigInt(121)) & 127;
+
+  if (ipBigInt === BigInt(0)) {
+    addrType = 'Unspecified Address (::)';
+  } else if (ipBigInt === BigInt(1)) {
+    addrType = 'Loopback Address (::1)';
+  } else if (top8 === 255) {
+    addrType = 'Multicast Range';
+  } else if (top10 === 1008) { // fe80
+    addrType = 'Link-Local Unicast';
+  } else if (top7 === 124 || top7 === 125) { // fc00 or fd00
+    addrType = 'Unique Local (Private LAN)';
+  }
+
+  // Calculate Total Addresses
+  const totalAddresses = BigInt(2) ** BigInt(128 - prefixLength);
+
+  // Populate fields
+  document.getElementById('ipv6-badge-type').textContent = addrType;
+  document.getElementById('res6-compressed').textContent = formatIPv6Compressed(ipBigInt);
+  document.getElementById('res6-expanded').textContent = formatIPv6Expanded(ipBigInt);
+  document.getElementById('res6-prefix').textContent = `/${prefixLength}`;
+  document.getElementById('res6-net-prefix').textContent = `${formatIPv6Compressed(networkPrefixVal)}/${prefixLength}`;
+  document.getElementById('res6-start').textContent = formatIPv6Compressed(networkPrefixVal);
+  document.getElementById('res6-end').textContent = formatIPv6Compressed(broadcastVal);
+  document.getElementById('res6-total').textContent = totalAddresses.toLocaleString();
+
+  resultsCard.classList.remove('hidden');
+
+  // Record history
+  recordHistoryDebounced('IPv6', { ip: ipInput, cidr: prefixLength, hosts: hostsInput }, `${formatIPv6Compressed(ipBigInt)}/${prefixLength}${hostsInput ? ` (${hostsInput} hosts)` : ''}`);
+}
+
+// --- NOTES MANAGEMENT LOGIC ---
+
+let notes = [];
+
+function loadNotes() {
+  const stored = SafeStorage.getItem('isubnet_notes');
+  if (stored) {
+    try {
+      notes = JSON.parse(stored);
+      if (!Array.isArray(notes)) notes = [];
+    } catch (e) {
+      notes = [];
+    }
+  } else {
+    notes = [];
+  }
+  renderNotes();
+}
+
+function saveNotesToStorage() {
+  SafeStorage.setItem('isubnet_notes', JSON.stringify(notes));
+  renderNotes();
+}
+
+function addNote(title, content, category = 'Manual') {
+  if (!PRO_UNLOCKED && notes.length >= FREE_NOTES_LIMIT) {
+    showNotesLimitBanner();
+    return;
+  }
+  const newNote = {
+    id: Date.now(),
+    date: new Date().toLocaleString(),
+    category: category,
+    title: title,
+    content: content
+  };
+  notes.unshift(newNote);
+  saveNotesToStorage();
+}
+
+function deleteNote(id) {
+  notes = notes.filter(n => n.id !== id);
+  saveNotesToStorage();
+}
+
+function renderNotes() {
+  const emptyEl = document.getElementById('notes-list-empty');
+  const listEl = document.getElementById('notes-list');
+  if (!listEl || !emptyEl) return;
+
+  listEl.innerHTML = '';
+  
+  const notesToRender = PRO_UNLOCKED ? notes : notes.slice(0, FREE_NOTES_LIMIT);
+  
+  if (notesToRender.length === 0) {
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  
+  emptyEl.classList.add('hidden');
+
+  notesToRender.forEach(note => {
+    const item = document.createElement('div');
+    item.className = 'note-item';
+    
+    // Set colored border depending on category
+    if (note.category === 'IPv4') {
+      item.style.borderLeftColor = 'var(--accent-primary)';
+    } else if (note.category === 'IPv6') {
+      item.style.borderLeftColor = 'var(--accent-cyan)';
+    } else {
+      item.style.borderLeftColor = 'var(--accent-success)';
+    }
+
+    item.innerHTML = `
+      <div class="note-meta">
+        <span class="note-category badge" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-primary);">${note.category}</span>
+        <span class="note-date">${note.date}</span>
+      </div>
+      <h3 class="note-title">${escapeHTML(note.title || 'Untitled Note')}</h3>
+      <div class="note-content">${escapeHTML(note.content)}</div>
+      <div class="note-actions">
+        <button class="btn-action edit-btn">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          <span>Edit</span>
+        </button>
+        <button class="btn-action copy-btn">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          <span>Copy</span>
+        </button>
+        <button class="btn-action share-btn">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+          <span>Share</span>
+        </button>
+        <button class="btn-action delete delete-btn">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          <span>Delete</span>
+        </button>
+      </div>
+    `;
+
+    // Copy action
+    item.querySelector('.copy-btn').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      navigator.clipboard.writeText(note.content).then(() => {
+        const label = btn.querySelector('span');
+        const origText = label.textContent;
+        label.textContent = 'Copied!';
+        setTimeout(() => {
+          label.textContent = origText;
+        }, 1500);
+      });
+    });
+
+    // Share action
+    item.querySelector('.share-btn').addEventListener('click', () => {
+      shareText(note.title || 'Note', note.content);
+    });
+
+    // Edit action
+    item.querySelector('.edit-btn').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const contentEl = item.querySelector('.note-content');
+      const actionsEl = item.querySelector('.note-actions');
+      const titleEl = item.querySelector('.note-title');
+      
+      // If already editing, exit
+      if (item.classList.contains('editing')) return;
+      item.classList.add('editing');
+
+      const originalTitle = note.title || 'Untitled Note';
+      const originalText = note.content;
+
+      // Replace title element with an input box
+      titleEl.outerHTML = `<input type="text" class="note-edit-title" value="${escapeHTML(originalTitle)}">`;
+      const titleInput = item.querySelector('.note-edit-title');
+
+      // Replace content element with a textarea
+      contentEl.innerHTML = `<textarea class="note-edit-textarea"></textarea>`;
+      const textarea = contentEl.querySelector('textarea');
+      textarea.value = originalText;
+      textarea.focus();
+
+      // Change action buttons to Save and Cancel
+      actionsEl.innerHTML = `
+        <button class="btn-action save-btn" style="color: var(--accent-cyan);">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          <span>Save</span>
+        </button>
+        <button class="btn-action cancel-btn">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          <span>Cancel</span>
+        </button>
+      `;
+
+      // Save listener
+      actionsEl.querySelector('.save-btn').addEventListener('click', () => {
+        const newTitle = titleInput.value.trim() || 'Untitled Note';
+        const newText = textarea.value.trim();
+        if (newText !== '') {
+          note.title = newTitle;
+          note.content = newText;
+          note.date = new Date().toLocaleString() + ' (Edited)';
+          saveNotesToStorage();
+        } else {
+          deleteNote(note.id);
+        }
+      });
+
+      // Cancel listener
+      actionsEl.querySelector('.cancel-btn').addEventListener('click', () => {
+        item.classList.remove('editing');
+        renderNotes();
+      });
+    });
+
+    // Delete action
+    item.querySelector('.delete-btn').addEventListener('click', () => {
+      deleteNote(note.id);
+    });
+
+    listEl.appendChild(item);
+  });
+
+  if (!PRO_UNLOCKED && notes.length >= FREE_NOTES_LIMIT) {
+    showNotesLimitBanner();
+  }
+}
+
+// --- HISTORY ENGINE ---
+
+let historyItems = [];
+let historyTimer = null;
+
+function loadHistory() {
+  const stored = SafeStorage.getItem('isubnet_history');
+  if (stored) {
+    try {
+      historyItems = JSON.parse(stored);
+      if (!Array.isArray(historyItems)) historyItems = [];
+    } catch (e) {
+      historyItems = [];
+    }
+  } else {
+    historyItems = [];
+  }
+  renderHistory();
+}
+
+function saveHistoryToStorage() {
+  SafeStorage.setItem('isubnet_history', JSON.stringify(historyItems));
+  renderHistory();
+}
+
+function recordHistoryDebounced(type, data, details) {
+  if (historyTimer) clearTimeout(historyTimer);
+  historyTimer = setTimeout(() => {
+    // Avoid duplicate records
+    if (historyItems.length > 0) {
+      const last = historyItems[0];
+      if (last.type === type && JSON.stringify(last.data) === JSON.stringify(data)) {
+        return;
+      }
+    }
+
+    const newItem = {
+      id: Date.now().toString(),
+      type: type,
+      data: data,
+      details: details,
+      date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    historyItems.unshift(newItem);
+    const limit = PRO_UNLOCKED ? 50 : FREE_HISTORY_LIMIT;
+    if (historyItems.length > limit) {
+      historyItems = historyItems.slice(0, limit);
+      if (!PRO_UNLOCKED) showHistoryLimitBanner();
+    }
+    saveHistoryToStorage();
+  }, 1200);
+}
+
+function deleteHistoryItem(id) {
+  historyItems = historyItems.filter(item => item.id !== id);
+  saveHistoryToStorage();
+}
+
+function clearHistory() {
+  if (confirm('Are you sure you want to clear all history?')) {
+    historyItems = [];
+    saveHistoryToStorage();
+  }
+}
+
+function restoreHistoryItem(id) {
+  const item = historyItems.find(x => x.id === id);
+  if (!item) return;
+
+  if (item.type === 'IPv4') {
+    document.getElementById('ipv4-address').value = item.data.ip;
+    document.getElementById('ipv4-cidr').value = item.data.cidr;
+    document.getElementById('ipv4-hosts').value = item.data.hosts;
+    calculateIPv4();
+    // Navigate tab
+    const tabBtn = document.querySelector('.tab-btn[data-target="ipv4-tab"]');
+    if (tabBtn) tabBtn.click();
+  } else if (item.type === 'IPv6') {
+    document.getElementById('ipv6-address').value = item.data.ip;
+    document.getElementById('ipv6-cidr').value = item.data.cidr;
+    document.getElementById('ipv6-hosts').value = item.data.hosts;
+    calculateIPv6();
+    // Navigate tab
+    const tabBtn = document.querySelector('.tab-btn[data-target="ipv6-tab"]');
+    if (tabBtn) tabBtn.click();
+  } else if (item.type === 'Converter') {
+    document.getElementById('converter-input').value = item.data.input;
+    runConverter();
+    // Navigate tab
+    const tabBtn = document.querySelector('.tab-btn[data-target="converter-tab"]');
+    if (tabBtn) tabBtn.click();
+  }
+}
+
+function renderHistory() {
+  const emptyEl = document.getElementById('history-list-empty');
+  const listEl = document.getElementById('history-list');
+  if (!listEl || !emptyEl) return;
+
+  listEl.innerHTML = '';
+  
+  const historyToRender = PRO_UNLOCKED ? historyItems : historyItems.slice(0, FREE_HISTORY_LIMIT);
+  
+  if (historyToRender.length === 0) {
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  
+  emptyEl.classList.add('hidden');
+
+  historyToRender.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'history-item';
+    
+    // Add colored borders based on item type
+    if (item.type === 'IPv4') {
+      row.style.borderLeft = '3px solid var(--accent-primary)';
+    } else if (item.type === 'IPv6') {
+      row.style.borderLeft = '3px solid var(--accent-cyan)';
+    } else {
+      row.style.borderLeft = '3px solid var(--accent-success)';
+    }
+
+    const typeLower = item.type.toLowerCase();
+
+    row.innerHTML = `
+      <div class="history-item-left">
+        <span class="history-item-type ${typeLower}">${item.type}</span>
+        <span class="history-item-details">${escapeHTML(item.details)}</span>
+        <span class="history-item-date">${item.date}</span>
+      </div>
+      <div class="history-item-right">
+        <button class="btn-action restore-btn">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12h-2c0-2.76-2.24-5-5-5s-5 2.24-5 5H5l4 4 4-4h-3c0-1.66 1.34-3 3-3s3 1.34 3 3h2c0-3.87-3.13-7-7-7s-7 3.13-7 7H2l4 4 4-4H7c0-2.76 2.24-5 5-5s5 2.24 5 5z"/></svg>
+          <span>Restore</span>
+        </button>
+        <button class="btn-action delete-btn" style="color: #EF4444;">
+          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          <span>Delete</span>
+        </button>
+      </div>
+    `;
+
+    // Make clicking the row body trigger restore, except if clicking buttons
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-action')) return;
+      restoreHistoryItem(item.id);
+    });
+
+    row.querySelector('.restore-btn').addEventListener('click', () => {
+      restoreHistoryItem(item.id);
+    });
+
+    row.querySelector('.delete-btn').addEventListener('click', () => {
+      deleteHistoryItem(item.id);
+    });
+
+    listEl.appendChild(row);
+  });
+
+  if (!PRO_UNLOCKED && historyItems.length >= FREE_HISTORY_LIMIT) {
+    showHistoryLimitBanner();
+  }
+}
+
+function escapeHTML(str) {
+  return str.replace(/[&<>'"]/g, 
+    tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag)
+  );
+}
+
+// Format IPv4 data to string
+function saveIpv4Note() {
+  const ip = document.getElementById('ipv4-address').value.trim();
+  const cidr = document.getElementById('res-cidr').textContent;
+  const mask = document.getElementById('res-mask').textContent;
+  const wildcard = document.getElementById('res-wildcard').textContent;
+  const network = document.getElementById('res-network').textContent;
+  const broadcast = document.getElementById('res-broadcast').textContent;
+  const range = document.getElementById('res-range').textContent;
+  const hosts = document.getElementById('res-hosts').textContent;
+  const classText = document.getElementById('ipv4-badge-class').textContent;
+  const typeText = document.getElementById('res-type').textContent;
+
+  const noteTitle = `IPv4 Subnet: ${ip}${cidr}`;
+  const noteContent = `• Subnet Mask: ${mask}
+• Wildcard Mask: ${wildcard}
+• Network Address: ${network}
+• Broadcast Address: ${broadcast}
+• Usable IP Range: ${range}
+• Total Usable Hosts: ${hosts}
+• Network Class & Type: ${classText}, ${typeText}`;
+
+  addNote(noteTitle, noteContent, 'IPv4');
+  switchToNotesTab();
+}
+
+// Format IPv6 data to string
+function saveIpv6Note() {
+  const input = document.getElementById('ipv6-address').value.trim();
+  const compressed = document.getElementById('res6-compressed').textContent;
+  const prefix = document.getElementById('res6-prefix').textContent;
+  const netPrefix = document.getElementById('res6-net-prefix').textContent;
+  const start = document.getElementById('res6-start').textContent;
+  const end = document.getElementById('res6-end').textContent;
+  const total = document.getElementById('res6-total').textContent;
+  const typeText = document.getElementById('ipv6-badge-type').textContent;
+
+  const noteTitle = `IPv6 Prefix: ${compressed}${prefix}`;
+  const noteContent = `• Network Prefix: ${netPrefix}
+• IP Range Start: ${start}
+• IP Range End: ${end}
+• Total Addresses: ${total}
+• Address Type: ${typeText}`;
+
+  addNote(noteTitle, noteContent, 'IPv6');
+  switchToNotesTab();
+}
+
+// Format Converter data to string
+function saveConvNote() {
+  const type = document.getElementById('conv-type').textContent;
+  const prefix = document.getElementById('conv-prefix').textContent;
+  const mask = document.getElementById('conv-mask').textContent;
+  const wildcard = document.getElementById('conv-wildcard').textContent;
+  const isIpv6 = (type.indexOf('IPv6') !== -1);
+  
+  let noteTitle = `Converter: ${type} (${prefix})`;
+  let noteContent = '';
+  
+  if (isIpv6) {
+    const ipv6Mask = document.getElementById('conv-ipv6-mask').textContent;
+    noteContent = `• Prefix Length: ${prefix}
+• Host Wildcard: ${wildcard}
+• Routing Prefix Mask: ${ipv6Mask}`;
+  } else {
+    const binary = document.getElementById('conv-binary').textContent;
+    noteContent = `• Prefix Length: ${prefix}
+• Subnet Mask: ${mask}
+• Wildcard Mask: ${wildcard}
+• Binary Representation: ${binary}`;
+  }
+  
+  addNote(noteTitle, noteContent, isIpv6 ? 'IPv6' : 'IPv4');
+  switchToNotesTab();
+}
+
+function switchToNotesTab() {
+  const noteTabBtn = document.querySelector('.tab-btn[data-target="notes-tab"]');
+  if (noteTabBtn) noteTabBtn.click();
+}
+
+// --- SHARING UTILITIES ---
+
+function shareText(title, text) {
+  if (navigator.share) {
+    navigator.share({
+      title: title,
+      text: text
+    }).catch(err => {
+      console.log('Share failed:', err);
+    });
+  } else {
+    navigator.clipboard.writeText(text).then(() => {
+      alert(`${title} copied to clipboard! (Your browser does not support the native Share API)`);
+    });
+  }
+}
+
+function shareIpv4Result() {
+  const ip = document.getElementById('ipv4-address').value.trim();
+  const cidr = document.getElementById('res-cidr').textContent;
+  const mask = document.getElementById('res-mask').textContent;
+  const wildcard = document.getElementById('res-wildcard').textContent;
+  const network = document.getElementById('res-network').textContent;
+  const broadcast = document.getElementById('res-broadcast').textContent;
+  const range = document.getElementById('res-range').textContent;
+  const hosts = document.getElementById('res-hosts').textContent;
+  const classText = document.getElementById('ipv4-badge-class').textContent;
+  const typeText = document.getElementById('res-type').textContent;
+
+  const title = `IPv4 Subnet: ${ip}${cidr}`;
+  const text = `IPv4 Subnet Calculation:
+• IP Address: ${ip}
+• Subnet CIDR: ${cidr}
+• Subnet Mask: ${mask}
+• Wildcard Mask: ${wildcard}
+• Network Address: ${network}
+• Broadcast Address: ${broadcast}
+• Usable IP Range: ${range}
+• Total Usable Hosts: ${hosts}
+• Network Class & Type: ${classText}, ${typeText}`;
+
+  shareText(title, text);
+}
+
+function shareIpv6Result() {
+  const input = document.getElementById('ipv6-address').value.trim();
+  const compressed = document.getElementById('res6-compressed').textContent;
+  const prefix = document.getElementById('res6-prefix').textContent;
+  const netPrefix = document.getElementById('res6-net-prefix').textContent;
+  const start = document.getElementById('res6-start').textContent;
+  const end = document.getElementById('res6-end').textContent;
+  const total = document.getElementById('res6-total').textContent;
+  const typeText = document.getElementById('ipv6-badge-type').textContent;
+
+  const title = `IPv6 Prefix: ${compressed}${prefix}`;
+  const text = `IPv6 Subnet Calculation:
+• Input Address: ${input}
+• Compressed: ${compressed}
+• Prefix Length: ${prefix}
+• Network Prefix: ${netPrefix}
+• IP Range Start: ${start}
+• IP Range End: ${end}
+• Total Addresses: ${total}
+• Address Type: ${typeText}`;
+
+  shareText(title, text);
+}
+
+function shareConvResult() {
+  const type = document.getElementById('conv-type').textContent;
+  const prefix = document.getElementById('conv-prefix').textContent;
+  const mask = document.getElementById('conv-mask').textContent;
+  const wildcard = document.getElementById('conv-wildcard').textContent;
+  const isIpv6 = (type.indexOf('IPv6') !== -1);
+  
+  const title = `Converter: ${type} (${prefix})`;
+  let text = '';
+  
+  if (isIpv6) {
+    const ipv6Mask = document.getElementById('conv-ipv6-mask').textContent;
+    text = `Converter Results (${type}):
+• Prefix Length: ${prefix}
+• Host Wildcard: ${wildcard}
+• Routing Prefix Mask: ${ipv6Mask}`;
+  } else {
+    const binary = document.getElementById('conv-binary').textContent;
+    text = `Converter Results (${type}):
+• Prefix Length: ${prefix}
+• Subnet Mask: ${mask}
+• Wildcard Mask: ${wildcard}
+• Binary Representation: ${binary}`;
+  }
+  
+  shareText(title, text);
+}
+
+// --- REFERENCE GUIDE COPY & SHARE UTILITIES ---
+
+const refClassesText = `IPv4 Address Classes Reference:
+• Class A: 1.0.0.0 - 126.255.255.255 (Mask: 255.0.0.0 /8)
+• Class B: 128.0.0.0 - 191.255.255.255 (Mask: 255.255.0.0 /16)
+• Class C: 192.0.0.0 - 223.255.255.255 (Mask: 255.255.255.0 /24)
+• Class D (Multicast): 224.0.0.0 - 239.255.255.255 (Mask: N/A)
+• Class E (Research): 240.0.0.0 - 255.255.255.255 (Mask: N/A)`;
+
+const refPrivateText = `Private IP Ranges Reference (RFC 1918):
+• Class A Private: 10.0.0.0 - 10.255.255.255 (/8)
+• Class B Private: 172.16.0.0 - 172.31.255.255 (/12)
+• Class C Private: 192.168.0.0 - 192.168.255.255 (/16)
+• Loopback Localhost: 127.0.0.0 - 127.255.255.255 (/8)
+• Link-Local (APIPA): 169.254.0.0 - 169.254.255.255 (/16)`;
+
+const refIpv6Text = `IPv6 Common Address Types Reference:
+• Global Unicast (Public): 2000::/3
+• Link-Local (Auto-configured): fe80::/10
+• Unique Local (Private LAN): fc00::/7
+• Loopback Address: ::1/128
+• Multicast Range: ff00::/8`;
+
+function copyTextWithToast(btnId, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById(btnId);
+    const label = btn.querySelector('span');
+    const origText = label.textContent;
+    label.textContent = 'Copied!';
+    setTimeout(() => {
+      label.textContent = origText;
+    }, 1500);
+  });
+}
+
+function shareRefClasses() {
+  shareText('IPv4 Address Classes', refClassesText);
+}
+function shareRefPrivate() {
+  shareText('Private IP Ranges', refPrivateText);
+}
+function shareRefIpv6() {
+  shareText('IPv6 Address Types', refIpv6Text);
+}
+
+// --- SETUP EVENT LISTENERS ---
+
+function setupEventListeners() {
+  document.getElementById('btn-calc-ipv4').addEventListener('click', calculateIPv4);
+  document.getElementById('btn-calc-ipv6').addEventListener('click', calculateIPv6);
+  
+  // Real-time calculation triggers
+  document.getElementById('ipv4-address').addEventListener('input', calculateIPv4);
+  document.getElementById('ipv4-cidr').addEventListener('input', calculateIPv4);
+  document.getElementById('ipv4-hosts').addEventListener('input', calculateIPv4);
+  
+  document.getElementById('ipv6-address').addEventListener('input', calculateIPv6);
+  document.getElementById('ipv6-cidr').addEventListener('input', calculateIPv6);
+  document.getElementById('ipv6-hosts').addEventListener('input', calculateIPv6);
+  
+  // Save to notes event bindings
+  document.getElementById('btn-save-notes-ipv4').addEventListener('click', saveIpv4Note);
+  document.getElementById('btn-save-notes-ipv6').addEventListener('click', saveIpv6Note);
+  document.getElementById('btn-save-notes-conv').addEventListener('click', saveConvNote);
+  
+  // Share event bindings
+  document.getElementById('btn-share-ipv4').addEventListener('click', shareIpv4Result);
+  document.getElementById('btn-share-ipv6').addEventListener('click', shareIpv6Result);
+  document.getElementById('btn-share-conv').addEventListener('click', shareConvResult);
+  
+  // Reference guide copy & share bindings
+  document.getElementById('btn-copy-ref-classes').addEventListener('click', () => {
+    copyTextWithToast('btn-copy-ref-classes', refClassesText);
+  });
+  document.getElementById('btn-share-ref-classes').addEventListener('click', shareRefClasses);
+  
+  document.getElementById('btn-copy-ref-private').addEventListener('click', () => {
+    copyTextWithToast('btn-copy-ref-private', refPrivateText);
+  });
+  document.getElementById('btn-share-ref-private').addEventListener('click', shareRefPrivate);
+  
+  document.getElementById('btn-copy-ref-ipv6').addEventListener('click', () => {
+    copyTextWithToast('btn-copy-ref-ipv6', refIpv6Text);
+  });
+  document.getElementById('btn-share-ref-ipv6').addEventListener('click', shareRefIpv6);
+  
+  document.getElementById('btn-save-note-manual').addEventListener('click', () => {
+    const titleInput = document.getElementById('note-title');
+    const txtInput = document.getElementById('note-text');
+    
+    const titleVal = titleInput.value.trim() || 'Manual Note';
+    const txtVal = txtInput.value.trim();
+    
+    if (txtVal === '') return;
+    
+    addNote(titleVal, txtVal, 'Manual');
+    
+    titleInput.value = '';
+    txtInput.value = '';
+  });
+  
+  // Enter key event binding for inputs
+  document.getElementById('ipv4-address').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') calculateIPv4();
+  });
+  document.getElementById('ipv4-hosts').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') calculateIPv4();
+  });
+  document.getElementById('ipv6-address').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') calculateIPv6();
+  });
+  document.getElementById('ipv6-hosts').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') calculateIPv6();
+  });
+}
+
+// --- WILDCARD & PREFIX CONVERTER LOGIC ---
+
+function runConverter() {
+  const input = document.getElementById('converter-input').value.trim();
+  const errorEl = document.getElementById('converter-error');
+  const resultsDiv = document.getElementById('converter-results');
+  
+  errorEl.textContent = '';
+  if (input === '') {
+    resultsDiv.classList.add('hidden');
+    return;
+  }
+
+  // Check if it matches CIDR prefix pattern: e.g. "/22" or "22"
+  const cidrReg = /^\/?(\d{1,3})$/;
+  if (cidrReg.test(input)) {
+    const cidrNum = parseInt(input.match(cidrReg)[1], 10);
+    
+    // IPv4 Prefix
+    if (cidrNum >= 0 && cidrNum <= 32) {
+      const maskVal = cidrNum === 0 ? 0 : (~0 << (32 - cidrNum)) >>> 0;
+      const wildcardVal = ~maskVal >>> 0;
+      
+      document.getElementById('conv-type').textContent = 'IPv4 Prefix';
+      document.getElementById('conv-prefix').textContent = `/${cidrNum}`;
+      document.getElementById('conv-mask').textContent = uint32ToIp(maskVal);
+      document.getElementById('conv-wildcard').textContent = uint32ToIp(wildcardVal);
+      document.getElementById('conv-binary').textContent = uint32ToBinaryStr(maskVal);
+      
+      document.getElementById('conv-ipv6-row').style.display = 'none';
+      document.getElementById('conv-binary-row').style.display = 'flex';
+      resultsDiv.classList.remove('hidden');
+      return;
+    }
+    
+    // IPv6 Prefix
+    if (cidrNum > 32 && cidrNum <= 128) {
+      // Calculate IPv6 routing prefix mask
+      const hostMask = (BigInt(1) << BigInt(128 - cidrNum)) - BigInt(1);
+      const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
+      
+      document.getElementById('conv-type').textContent = 'IPv6 Prefix';
+      document.getElementById('conv-prefix').textContent = `/${cidrNum}`;
+      document.getElementById('conv-mask').textContent = 'N/A (IPv6)';
+      document.getElementById('conv-wildcard').textContent = `::${formatIPv6Compressed(hostMask)}`;
+      document.getElementById('conv-ipv6-mask').textContent = `${formatIPv6Compressed(netMask)}`;
+      
+      document.getElementById('conv-ipv6-row').style.display = 'flex';
+      document.getElementById('conv-binary-row').style.display = 'none';
+      resultsDiv.classList.remove('hidden');
+      return;
+    }
+    
+    errorEl.textContent = 'Prefix length must be between 0 and 32 (IPv4) or 33 and 128 (IPv6).';
+    resultsDiv.classList.add('hidden');
+    return;
+  }
+
+  // Check if it matches IPv4 format: e.g. "255.255.252.0" or "0.0.3.255"
+  if (validateIPv4(input)) {
+    const ipVal = ipToUint32(input);
+    
+    // Determine if it is a Subnet Mask or a Wildcard Mask
+    // Subnet masks start with 255 (top bit is 1), wildcards start with 0 (top bit is 0)
+    const isWildcard = (ipVal & 0x80000000) === 0;
+    
+    let maskVal = 0;
+    let wildcardVal = 0;
+    
+    if (isWildcard) {
+      wildcardVal = ipVal;
+      maskVal = ~wildcardVal >>> 0;
+    } else {
+      maskVal = ipVal;
+      wildcardVal = ~maskVal >>> 0;
+    }
+    
+    // Check if the mask is a canonical subnet mask (contiguous bits)
+    const inverted = ~maskVal >>> 0;
+    const isCanonical = ((inverted + 1) & inverted) === 0;
+    
+    if (!isCanonical) {
+      errorEl.textContent = 'Warning: This is a non-canonical mask (non-contiguous bits).';
+    }
+    
+    // Calculate CIDR prefix
+    const calculatedCidr = Math.clz32(~maskVal);
+    
+    // Double check if it is truly canonical by matching it against standard mask
+    const standardMask = calculatedCidr === 0 ? 0 : (~0 << (32 - calculatedCidr)) >>> 0;
+    
+    document.getElementById('conv-type').textContent = isWildcard ? 'IPv4 Wildcard' : 'IPv4 Subnet Mask';
+    document.getElementById('conv-prefix').textContent = (isCanonical && maskVal === standardMask) ? `/${calculatedCidr}` : 'Non-canonical';
+    document.getElementById('conv-mask').textContent = uint32ToIp(maskVal);
+    document.getElementById('conv-wildcard').textContent = uint32ToIp(wildcardVal);
+    document.getElementById('conv-binary').textContent = uint32ToBinaryStr(maskVal);
+    
+    document.getElementById('conv-ipv6-row').style.display = 'none';
+    document.getElementById('conv-binary-row').style.display = 'flex';
+    resultsDiv.classList.remove('hidden');
+    return;
+  }
+
+  errorEl.textContent = 'Invalid format. Input a prefix (e.g. /22 or 22) or an IPv4 mask (e.g. 0.0.3.255 or 255.255.252.0).';
+  resultsDiv.classList.add('hidden');
+
+  if (!resultsDiv.classList.contains('hidden')) {
+    recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
+  }
+}
+
+// --- SUBNET SPLITTER LOGIC ---
+
+let currentSplitMethod = 'equal'; // 'equal' or 'vlsm'
+
+function initSplitterListeners() {
+  // Split Method Selection (Equal vs VLSM)
+  const methodBtns = document.querySelectorAll('.method-btn');
+  const equalPanel = document.getElementById('split-equal-panel');
+  const vlsmPanel = document.getElementById('split-vlsm-panel');
+
+  methodBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      methodBtns.forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'none';
+        b.style.color = 'var(--text-secondary)';
+        b.style.fontWeight = '500';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'var(--card-bg)';
+      btn.style.color = 'var(--text-primary)';
+      btn.style.fontWeight = '600';
+      
+      currentSplitMethod = btn.getAttribute('data-method');
+      if (currentSplitMethod === 'equal') {
+        equalPanel.classList.remove('hidden');
+        vlsmPanel.classList.add('hidden');
+      } else {
+        equalPanel.classList.add('hidden');
+        vlsmPanel.classList.remove('hidden');
+      }
+      runSplitter();
+    });
+  });
+
+  // Inputs change triggers
+  document.getElementById('split-base-ip').addEventListener('input', runSplitter);
+  document.getElementById('split-base-cidr').addEventListener('input', () => {
+    updateEqualSplitDropdown();
+    runSplitter();
+  });
+  document.getElementById('split-equal-size').addEventListener('change', runSplitter);
+  document.getElementById('split-vlsm-hosts').addEventListener('input', runSplitter);
+
+  // Notes and Share bindings for Split results
+  document.getElementById('btn-save-notes-split').addEventListener('click', saveSplitNote);
+  document.getElementById('btn-share-split').addEventListener('click', shareSplitResult);
+  
+  runSplitter();
+}
+
+function updateEqualSplitDropdown() {
+  const baseCidr = parseInt(document.getElementById('split-base-cidr').value, 10) || 24;
+  const select = document.getElementById('split-equal-size');
+  if (!select) return;
+  select.innerHTML = '';
+  
+  // Populate target subnets size from baseCidr + 1 up to 32
+  for (let i = baseCidr + 1; i <= 32; i++) {
+    const numSubnets = 2 ** (i - baseCidr);
+    const hostCapacity = i === 32 ? 1 : i === 31 ? 2 : (2 ** (32 - i)) - 2;
+    const option = document.createElement('option');
+    option.value = i;
+    option.textContent = `/${i} (${numSubnets} subnets of ${hostCapacity} hosts each)`;
+    select.appendChild(option);
+  }
+}
+
+function runSplitter() {
+  const baseIp = document.getElementById('split-base-ip').value.trim();
+  const baseCidr = parseInt(document.getElementById('split-base-cidr').value, 10);
+  const errorEl = document.getElementById('split-error');
+  const resultsCard = document.getElementById('split-results');
+  const tbody = document.getElementById('split-results-tbody');
+
+  errorEl.textContent = '';
+  resultsCard.classList.add('hidden');
+  tbody.innerHTML = '';
+
+  // Silent validation check while typing base network
+  const dotCount = (baseIp.match(/\./g) || []).length;
+  if (baseIp === '' || dotCount < 3 || baseIp.endsWith('.')) {
+    return;
+  }
+
+  if (!validateIPv4(baseIp)) {
+    errorEl.textContent = 'Invalid Base IP Address format.';
+    return;
+  }
+
+  if (isNaN(baseCidr) || baseCidr < 0 || baseCidr > 30) {
+    errorEl.textContent = 'Base prefix must be between 0 and 30.';
+    return;
+  }
+
+  const baseIpVal = ipToUint32(baseIp);
+  const baseMask = baseCidr === 0 ? 0 : (~0 << (32 - baseCidr)) >>> 0;
+  const baseNetworkVal = (baseIpVal & baseMask) >>> 0;
+  const baseCapacity = 2 ** (32 - baseCidr);
+
+  let subnets = [];
+
+  if (currentSplitMethod === 'equal') {
+    const targetCidr = parseInt(document.getElementById('split-equal-size').value, 10);
+    if (isNaN(targetCidr) || targetCidr <= baseCidr) {
+      // Dropdown might not be initialized yet
+      return;
+    }
+
+    const subnetsCount = 2 ** (targetCidr - baseCidr);
+    const subnetsSize = 2 ** (32 - targetCidr);
+    
+    // Cap equal split listing rendering for sanity
+    const maxRender = Math.min(subnetsCount, 128);
+
+    for (let i = 0; i < maxRender; i++) {
+      const netVal = (baseNetworkVal + (i * subnetsSize)) >>> 0;
+      const broadVal = (netVal + subnetsSize - 1) >>> 0;
+      const rangeText = targetCidr === 32 ? uint32ToIp(netVal) : 
+                        targetCidr === 31 ? `${uint32ToIp(netVal)} - ${uint32ToIp(broadVal)}` :
+                        `${uint32ToIp(netVal + 1)} - ${uint32ToIp(broadVal - 1)}`;
+      const usableHosts = targetCidr === 32 ? 1 : targetCidr === 31 ? 2 : subnetsSize - 2;
+
+      subnets.push({
+        name: `Subnet #${i + 1}`,
+        cidr: targetCidr,
+        network: uint32ToIp(netVal),
+        mask: cidrToSubnetMask(targetCidr),
+        range: rangeText,
+        hosts: usableHosts,
+        required: 'Equal size'
+      });
+    }
+
+    if (subnetsCount > maxRender) {
+      resultsCard.classList.remove('hidden');
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).</td></tr>`;
+    }
+
+  } else {
+    // VLSM Split Mode
+    const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
+    if (hostsText === '') return;
+
+    const reqSizes = hostsText.split(',')
+                             .map(s => parseInt(s.trim(), 10))
+                             .filter(n => !isNaN(n) && n > 0);
+
+    if (reqSizes.length === 0) return;
+
+    // Clone to sort descending (allocate largest first)
+    const sortedHosts = [...reqSizes].map((hosts, origIndex) => ({ hosts, origIndex }));
+    sortedHosts.sort((a, b) => b.hosts - a.hosts);
+
+    let currentIpVal = baseNetworkVal;
+
+    for (let i = 0; i < sortedHosts.length; i++) {
+      const hostsCount = sortedHosts[i].hosts;
+      // Size block is power of 2 containing hostsCount + 2 (network + broadcast)
+      const blockSize = 2 ** Math.ceil(Math.log2(hostsCount + 2));
+      const targetCidr = 32 - Math.log2(blockSize);
+
+      // Subnet network address must align to block size
+      if (currentIpVal % blockSize !== 0) {
+        currentIpVal = currentIpVal + (blockSize - (currentIpVal % blockSize));
+      }
+
+      const netVal = currentIpVal;
+      const broadVal = (netVal + blockSize - 1) >>> 0;
+
+      // Check if this block falls outside our base network boundary
+      if (broadVal > (baseNetworkVal + baseCapacity - 1)) {
+        errorEl.textContent = 'Allocated subnets exceed the base network boundary!';
+        return;
+      }
+
+      const rangeText = targetCidr === 32 ? uint32ToIp(netVal) : 
+                        targetCidr === 31 ? `${uint32ToIp(netVal)} - ${uint32ToIp(broadVal)}` :
+                        `${uint32ToIp(netVal + 1)} - ${uint32ToIp(broadVal - 1)}`;
+      const usableCapacity = targetCidr === 32 ? 1 : targetCidr === 31 ? 2 : blockSize - 2;
+
+      subnets.push({
+        name: `Subnet #${sortedHosts[i].origIndex + 1}`,
+        cidr: targetCidr,
+        network: uint32ToIp(netVal),
+        mask: cidrToSubnetMask(targetCidr),
+        range: rangeText,
+        hosts: `${usableCapacity} (req. ${hostsCount})`,
+        required: hostsCount
+      });
+
+      currentIpVal += blockSize;
+    }
+  }
+
+  // Populate UI table
+  subnets.forEach((sub, index) => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+    tr.innerHTML = `
+      <td style="padding: 8px 4px; font-weight: bold; color: var(--text-secondary);">${sub.name}</td>
+      <td style="padding: 8px 4px; font-family: monospace;">${sub.network}</td>
+      <td style="padding: 8px 4px;">/${sub.cidr}<br><span style="font-size: 10px; color: var(--text-secondary);">${sub.mask}</span></td>
+      <td style="padding: 8px 4px; font-size: 11px; font-family: monospace;">${sub.range}</td>
+      <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-primary);">${sub.hosts}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  resultsCard.classList.remove('hidden');
+}
+
+function getFormattedSplitOutput() {
+  const baseIp = document.getElementById('split-base-ip').value.trim();
+  const baseCidr = document.getElementById('split-base-cidr').value;
+  const method = currentSplitMethod === 'equal' ? 'Equal Split' : 'VLSM (by Host Count)';
+  
+  let content = `Subnet Split Results (${method}):\nBase Network: ${baseIp}/${baseCidr}\n\nAllocated Subnets:\n`;
+  
+  const rows = document.querySelectorAll('#split-results-tbody tr');
+  rows.forEach((row, i) => {
+    const tds = row.querySelectorAll('td');
+    if (tds.length >= 5) {
+      const name = tds[0].textContent;
+      const net = tds[1].textContent;
+      const maskInfo = tds[2].textContent.replace('\n', ' ');
+      const range = tds[3].textContent;
+      const hosts = tds[4].textContent;
+      content += `• ${name}: ${net} ${maskInfo} | Range: ${range} | Usable Hosts: ${hosts}\n`;
+    }
+  });
+  return content;
+}
+
+function saveSplitNote() {
+  const baseIp = document.getElementById('split-base-ip').value.trim();
+  const baseCidr = document.getElementById('split-base-cidr').value;
+  const title = `Split: ${baseIp}/${baseCidr}`;
+  const content = getFormattedSplitOutput();
+  addNote(title, content, 'IPv4');
+  switchToNotesTab();
+}
+
+function shareSplitResult() {
+  const baseIp = document.getElementById('split-base-ip').value.trim();
+  const baseCidr = document.getElementById('split-base-cidr').value;
+  const title = `Subnet Splitter: ${baseIp}/${baseCidr}`;
+  const content = getFormattedSplitOutput();
+  shareText(title, content);
+}
+
+// --- Settings & Customization Engine ---
+let activeThemeColor = SafeStorage.getItem('isubnet_theme_color') || '#4f46e5';
+
+function loadThemeColor() {
+  document.documentElement.style.setProperty('--accent-primary', activeThemeColor);
+  
+  // Update swatch active outline states
+  const swatches = document.querySelectorAll('.theme-swatch');
+  swatches.forEach(swatch => {
+    const color = swatch.getAttribute('data-color');
+    if (color === activeThemeColor) {
+      swatch.style.borderColor = 'var(--text-primary)';
+      swatch.classList.add('active');
+    } else {
+      swatch.style.borderColor = 'transparent';
+      swatch.classList.remove('active');
+    }
+  });
+}
+
+function setThemeColor(color) {
+  activeThemeColor = color;
+  SafeStorage.setItem('isubnet_theme_color', color);
+  loadThemeColor();
+}
+
+function initSettings() {
+  const btnSettings = document.getElementById('btn-settings');
+  const modalSettings = document.getElementById('settings-modal');
+  const btnSettingsClose = document.getElementById('btn-settings-close');
+  
+  const swatches = document.querySelectorAll('.theme-swatch');
+  const btnAccount = document.getElementById('btn-settings-account');
+  const modalAccount = document.getElementById('account-modal');
+  const btnAccountClose = document.getElementById('btn-account-close');
+  const formSignup = document.getElementById('form-signup');
+  const signupError = document.getElementById('signup-error');
+  const accountInfo = document.getElementById('settings-account-info');
+
+  const btnPlan = document.getElementById('btn-settings-plan');
+  const modalPlan = document.getElementById('plan-modal');
+  const btnPlanClose = document.getElementById('btn-plan-close');
+  const toggles = document.querySelectorAll('.billing-toggle');
+  const planPrice = document.getElementById('plan-modal-price');
+  const btnPlanSelectPro = document.getElementById('btn-plan-select-pro');
+
+  // Toggle settings panel
+  if (btnSettings && modalSettings && btnSettingsClose) {
+    btnSettings.addEventListener('click', () => modalSettings.classList.remove('hidden'));
+    btnSettingsClose.addEventListener('click', () => modalSettings.classList.add('hidden'));
+  }
+
+  // Load color picker handlers
+  swatches.forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      const color = swatch.getAttribute('data-color');
+      setThemeColor(color);
+    });
+  });
+  
+  loadThemeColor();
+
+  // Dark Mode Switch Handler
+  const chkDarkMode = document.getElementById('chk-dark-mode');
+  if (chkDarkMode) {
+    chkDarkMode.checked = document.body.classList.contains('dark-mode');
+    chkDarkMode.addEventListener('change', () => {
+      if (chkDarkMode.checked) {
+        document.body.classList.add('dark-mode');
+        SafeStorage.setItem('isubnet_dark_mode', 'true');
+      } else {
+        document.body.classList.remove('dark-mode');
+        SafeStorage.setItem('isubnet_dark_mode', 'false');
+      }
+    });
+  }
+
+  // Create Account / Sign In logic
+  const linkToggleAuth = document.getElementById('link-toggle-auth');
+  const accountModalTitle = document.getElementById('account-modal-title');
+  const signupNameGroup = document.getElementById('signup-name-group');
+  const signupNameInput = document.getElementById('signup-name');
+  const btnAccountSubmit = document.getElementById('btn-account-submit');
+  let isSignUpMode = true;
+
+  if (linkToggleAuth) {
+    linkToggleAuth.addEventListener('click', (e) => {
+      e.preventDefault();
+      isSignUpMode = !isSignUpMode;
+      signupError.textContent = '';
+      if (isSignUpMode) {
+        accountModalTitle.textContent = 'Create Account';
+        signupNameGroup.style.display = 'block';
+        signupNameInput.setAttribute('required', 'true');
+        btnAccountSubmit.textContent = 'Sign Up';
+        linkToggleAuth.textContent = 'Already have an account? Sign In';
+      } else {
+        accountModalTitle.textContent = 'Sign In';
+        signupNameGroup.style.display = 'none';
+        signupNameInput.removeAttribute('required');
+        btnAccountSubmit.textContent = 'Sign In';
+        linkToggleAuth.textContent = "Don't have an account? Sign Up";
+      }
+    });
+  }
+
+  if (btnAccount && modalAccount && btnAccountClose) {
+    btnAccount.addEventListener('click', () => {
+      // Toggle sign in/out
+      if (btnAccount.textContent === 'Sign Out') {
+        accountInfo.textContent = 'Not signed in';
+        btnAccount.textContent = 'Sign In / Register';
+        btnAccount.style.background = 'var(--accent-primary)';
+        btnAccount.style.color = '#FFF';
+        btnAccount.style.border = 'none';
+        btnAccount.style.boxShadow = '0 4px 12px rgba(79, 70, 229, 0.15)';
+        
+        // Reset trial plan on sign out
+        PRO_UNLOCKED = false;
+        SafeStorage.setItem('isubnet_pro', 'false');
+        applyProState();
+        document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+      } else {
+        signupError.textContent = '';
+        modalSettings.classList.add('hidden'); // Hide settings panel to prevent overlap unresponsive clicks
+        modalAccount.classList.remove('hidden');
+      }
+    });
+    btnAccountClose.addEventListener('click', () => {
+      modalAccount.classList.add('hidden');
+      modalSettings.classList.remove('hidden'); // Restore settings panel
+    });
+  }
+
+  if (formSignup) {
+    formSignup.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = signupNameInput.value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      
+      if (isSignUpMode && !name) {
+        signupError.textContent = 'Please fill out all fields.';
+        return;
+      }
+      
+      signupError.textContent = '';
+      const displayName = isSignUpMode ? name : email.split('@')[0];
+      accountInfo.innerHTML = `Signed in as <strong>${escapeHTML(displayName)}</strong><br><span style="font-size:11px; opacity:0.7;">${escapeHTML(email)}</span>`;
+      btnAccount.textContent = 'Sign Out';
+      btnAccount.style.background = 'rgba(239, 68, 68, 0.1)';
+      btnAccount.style.color = 'var(--accent-danger)';
+      btnAccount.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+      btnAccount.style.boxShadow = 'none';
+
+      // 7 Days Pro Trial Activation
+      PRO_UNLOCKED = true;
+      SafeStorage.setItem('isubnet_pro', 'true');
+      applyProState();
+      document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Pro Trial</strong> (7 days left)`;
+
+      modalAccount.classList.add('hidden');
+      modalSettings.classList.remove('hidden'); // Restore settings panel
+    });
+  }
+
+  // Manage Plan logic
+  if (btnPlan && modalPlan && btnPlanClose) {
+    btnPlan.addEventListener('click', () => {
+      modalSettings.classList.add('hidden'); // Hide settings panel to prevent overlap unresponsive clicks
+      modalPlan.classList.remove('hidden');
+    });
+    btnPlanClose.addEventListener('click', () => {
+      modalPlan.classList.add('hidden');
+      modalSettings.classList.remove('hidden'); // Restore settings panel
+    });
+  }
+
+  // Billing cycles toggles
+  toggles.forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      toggles.forEach(t => {
+        t.classList.remove('active');
+        t.style.background = 'none';
+        t.style.color = 'var(--text-secondary)';
+      });
+      toggle.classList.add('active');
+      toggle.style.background = 'var(--bg-card)';
+      toggle.style.color = 'var(--text-primary)';
+      
+      const cycle = toggle.getAttribute('data-cycle');
+      if (cycle === 'monthly') {
+        planPrice.textContent = '€0.49/mo';
+      } else if (cycle === 'annual') {
+        planPrice.textContent = '€2.49/yr';
+      } else {
+        planPrice.textContent = '€4.99 one-time';
+      }
+    });
+  });
+
+  if (btnPlanSelectPro) {
+    btnPlanSelectPro.addEventListener('click', () => {
+      modalPlan.classList.add('hidden');
+      modalSettings.classList.add('hidden');
+      showProModal();
+    });
+  }
+}
+
+// --- Run Setup on page load ---
+function init() {
+  initSettings();
+  setupTabNavigation();
+  setupEventListeners();
+  calculateIPv4();
+  calculateIPv6();
+  loadNotes();
+  loadHistory();
+  initSplitterListeners();
+  updateEqualSplitDropdown();
+  
+  // Setup clear history binding
+  const clearHistBtn = document.getElementById('btn-clear-history');
+  if (clearHistBtn) {
+    clearHistBtn.addEventListener('click', clearHistory);
+  }
+  
+  // Setup converter listener and init
+  const convInput = document.getElementById('converter-input');
+  if (convInput) {
+    convInput.addEventListener('input', runConverter);
+    runConverter(); // run initial converter on default load
+  }
+
+  // --- Pro modal bindings ---
+  document.getElementById('btn-pro-unlock').addEventListener('click', unlockPro);
+  document.getElementById('btn-pro-dismiss').addEventListener('click', closeProModal);
+
+  // --- Locked Splitter tab click ---
+  const splitterBtn = document.getElementById('tab-btn-splitter');
+  if (splitterBtn) {
+    splitterBtn.addEventListener('click', () => {
+      if (splitterBtn.getAttribute('data-pro') === 'true') {
+        showProModal();
+      }
+    });
+  }
+
+  // Apply pro state on load (restores PRO badge + unlocked tabs if already purchased)
+  applyProState();
+}
+
+// --- Limit Banner Helpers ---
+function showNotesLimitBanner() {
+  const list = document.getElementById('notes-list');
+  if (!list) return;
+  if (list.querySelector('.pro-limit-banner')) return; // already shown
+  const banner = document.createElement('div');
+  banner.className = 'pro-limit-banner';
+  banner.innerHTML = `
+    <p>You've reached the <strong>free limit of ${FREE_NOTES_LIMIT} notes</strong>. Upgrade to Pro for unlimited notes.</p>
+    <button class="btn-upgrade-inline" onclick="showProModal()">Upgrade</button>
+  `;
+  list.prepend(banner);
+}
+
+function showHistoryLimitBanner() {
+  const list = document.getElementById('history-list');
+  if (!list) return;
+  if (list.querySelector('.pro-limit-banner')) return;
+  const banner = document.createElement('div');
+  banner.className = 'pro-limit-banner';
+  banner.innerHTML = `
+    <p>History is limited to <strong>${FREE_HISTORY_LIMIT} entries</strong> on the free plan.</p>
+    <button class="btn-upgrade-inline" onclick="showProModal()">Upgrade</button>
+  `;
+  list.prepend(banner);
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
