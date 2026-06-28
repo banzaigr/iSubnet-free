@@ -16,7 +16,7 @@
   
   --shadow-soft: 0 4px 12px rgba(15, 23, 42, 0.04), 0 2px 4px rgba(15, 23, 42, 0.02);
   --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.06);
-  --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 /* Reset and Base Styles */
@@ -133,11 +133,25 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 10px 20px 80px;
-  scrollbar-width: none; /* Hide scrollbar Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
 }
 
 .app-content::-webkit-scrollbar {
-  display: none; /* Hide scrollbar Chrome/Safari */
+  width: 6px;
+}
+
+.app-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-content::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 10px;
+}
+
+.app-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
 }
 
 /* Minimalist Card Panel */
@@ -944,9 +958,7 @@ input[type="range"]::-moz-range-thumb:active {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.75);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -1117,14 +1129,52 @@ body.dark-mode {
 }
 
 body.dark-mode .app-tab-bar {
-  background: rgba(19, 25, 38, 0.9) !important;
+  background: #131926 !important;
   border-top: 1px solid var(--border-color) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 body.dark-mode .phone-wrapper {
   border-color: #0f172a !important;
+}
+
+@media (max-width: 600px) {
+  html, body {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+  body {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+  .phone-wrapper {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  .status-bar {
+    display: none !important;
+  }
+  .app-content {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    will-change: scroll-position !important;
+  }
+  /* Disable heavy shadow hovers on mobile touch screens */
+  .card:hover {
+    box-shadow: var(--shadow-soft) !important;
+    border-color: var(--border-color) !important;
+    transform: none !important;
+  }
 }
 
 

@@ -32,6 +32,8 @@ if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== 'YOUR_API_KEY')
   useRealFirebase = true;
 }
 
+let currentUserId = 'local';
+
 function syncNotesToFirebase() {
   if (!useRealFirebase) return;
   const user = firebase.auth().currentUser;
@@ -43,6 +45,8 @@ function syncNotesToFirebase() {
       remoteNotes.push({ id: doc.id, ...doc.data() });
     });
     if (remoteNotes.length > 0) {
+      // Sort by ID descending (timestamp) to display latest first
+      remoteNotes.sort((a, b) => b.id.localeCompare(a.id));
       notes = remoteNotes;
       saveNotesToStorage();
       renderNotes();
@@ -79,6 +83,8 @@ function syncHistoryToFirebase() {
       remoteHistory.push(doc.data());
     });
     if (remoteHistory.length > 0) {
+      // Sort by ID descending (timestamp) to display latest first
+      remoteHistory.sort((a, b) => b.id.localeCompare(a.id));
       historyItems = remoteHistory;
       saveHistoryToStorage();
       renderHistory();
@@ -786,7 +792,7 @@ function calculateIPv6() {
 let notes = [];
 
 function loadNotes() {
-  const stored = SafeStorage.getItem('isubnet_notes');
+  const stored = SafeStorage.getItem('isubnet_notes_' + currentUserId);
   if (stored) {
     try {
       notes = JSON.parse(stored);
@@ -795,13 +801,32 @@ function loadNotes() {
       notes = [];
     }
   } else {
-    notes = [];
+    if (currentUserId === 'local') {
+      const legacy = SafeStorage.getItem('isubnet_notes');
+      if (legacy) {
+        try {
+          notes = JSON.parse(legacy);
+          if (!Array.isArray(notes)) notes = [];
+          SafeStorage.setItem('isubnet_notes_local', legacy);
+          SafeStorage.removeItem('isubnet_notes');
+        } catch (e) {
+          notes = [];
+        }
+      } else {
+        notes = [];
+      }
+    } else {
+      notes = [];
+    }
   }
   renderNotes();
 }
 
 function saveNotesToStorage() {
-  SafeStorage.setItem('isubnet_notes', JSON.stringify(notes));
+  SafeStorage.setItem('isubnet_notes_' + currentUserId, JSON.stringify(notes));
+  if (currentUserId !== 'local') {
+    SafeStorage.setItem('isubnet_notes_local', JSON.stringify(notes.slice(0, 2)));
+  }
   renderNotes();
 }
 
@@ -978,7 +1003,7 @@ let historyItems = [];
 let historyTimer = null;
 
 function loadHistory() {
-  const stored = SafeStorage.getItem('isubnet_history');
+  const stored = SafeStorage.getItem('isubnet_history_' + currentUserId);
   if (stored) {
     try {
       historyItems = JSON.parse(stored);
@@ -987,13 +1012,32 @@ function loadHistory() {
       historyItems = [];
     }
   } else {
-    historyItems = [];
+    if (currentUserId === 'local') {
+      const legacy = SafeStorage.getItem('isubnet_history');
+      if (legacy) {
+        try {
+          historyItems = JSON.parse(legacy);
+          if (!Array.isArray(historyItems)) historyItems = [];
+          SafeStorage.setItem('isubnet_history_local', legacy);
+          SafeStorage.removeItem('isubnet_history');
+        } catch (e) {
+          historyItems = [];
+        }
+      } else {
+        historyItems = [];
+      }
+    } else {
+      historyItems = [];
+    }
   }
   renderHistory();
 }
 
 function saveHistoryToStorage() {
-  SafeStorage.setItem('isubnet_history', JSON.stringify(historyItems));
+  SafeStorage.setItem('isubnet_history_' + currentUserId, JSON.stringify(historyItems));
+  if (currentUserId !== 'local') {
+    SafeStorage.setItem('isubnet_history_local', JSON.stringify(historyItems.slice(0, 2)));
+  }
   renderHistory();
 }
 
@@ -1013,7 +1057,19 @@ function recordHistoryDebounced(type, data, details) {
       type: type,
       data: data,
       details: details,
-      date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      date: (function() {
+        const now = new Date();
+        const d = now.getDate();
+        const m = now.getMonth() + 1;
+        const y = now.getFullYear();
+        const dd = d < 10 ? '0' + d : d;
+        const mm = m < 10 ? '0' + m : m;
+        const hh = now.getHours();
+        const min = now.getMinutes();
+        const hoursFormatted = hh < 10 ? '0' + hh : hh;
+        const minsFormatted = min < 10 ? '0' + min : min;
+        return `${dd}/${mm}/${y} ${hoursFormatted}:${minsFormatted}`;
+      })()
     };
 
     historyItems.unshift(newItem);
@@ -1073,6 +1129,21 @@ function restoreHistoryItem(id) {
     runConverter();
     // Navigate tab
     const tabBtn = document.querySelector('.tab-btn[data-target="converter-tab"]');
+    if (tabBtn) tabBtn.click();
+  } else if (item.type === 'Splitter') {
+    document.getElementById('split-base-ip').value = item.data.baseIp;
+    document.getElementById('split-base-cidr').value = item.data.baseCidr;
+    
+    const methodBtns = document.querySelectorAll('.method-btn');
+    methodBtns.forEach(btn => {
+      if (btn.getAttribute('data-method') === item.data.method) {
+        btn.click();
+      }
+    });
+    
+    runSplitter();
+    
+    const tabBtn = document.querySelector('.tab-btn[data-target="splitter-tab"]');
     if (tabBtn) tabBtn.click();
   }
 }
@@ -1485,6 +1556,7 @@ function runConverter() {
       document.getElementById('conv-ipv6-row').style.display = 'none';
       document.getElementById('conv-binary-row').style.display = 'flex';
       resultsDiv.classList.remove('hidden');
+      recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
       return;
     }
     
@@ -1503,6 +1575,7 @@ function runConverter() {
       document.getElementById('conv-ipv6-row').style.display = 'flex';
       document.getElementById('conv-binary-row').style.display = 'none';
       resultsDiv.classList.remove('hidden');
+      recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
       return;
     }
     
@@ -1553,15 +1626,12 @@ function runConverter() {
     document.getElementById('conv-ipv6-row').style.display = 'none';
     document.getElementById('conv-binary-row').style.display = 'flex';
     resultsDiv.classList.remove('hidden');
+    recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
     return;
   }
 
   errorEl.textContent = 'Invalid format. Input a prefix (e.g. /22 or 22) or an IPv4 mask (e.g. 0.0.3.255 or 255.255.252.0).';
   resultsDiv.classList.add('hidden');
-
-  if (!resultsDiv.classList.contains('hidden')) {
-    recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
-  }
 }
 
 // --- SUBNET SPLITTER LOGIC ---
@@ -1774,6 +1844,9 @@ function runSplitter() {
   });
 
   resultsCard.classList.remove('hidden');
+
+  const methodLabel = currentSplitMethod === 'equal' ? 'Equal Split' : 'VLSM';
+  recordHistoryDebounced('Splitter', { baseIp, baseCidr, method: currentSplitMethod }, `Splitter: ${baseIp}/${baseCidr} (${methodLabel})`);
 }
 
 function getFormattedSplitOutput() {
@@ -2019,6 +2092,34 @@ function initSettings() {
   if (useRealFirebase) {
     firebase.auth().onAuthStateChanged((user) => {
       if (user) {
+        // Migrate local data to account
+        if (currentUserId === 'local') {
+          const localNotesRaw = SafeStorage.getItem('isubnet_notes_local');
+          const localHistoryRaw = SafeStorage.getItem('isubnet_history_local');
+          
+          currentUserId = user.uid;
+          
+          if (localNotesRaw) {
+            try {
+              const localNotes = JSON.parse(localNotesRaw);
+              localNotes.forEach(note => saveNoteToFirebase(note));
+              SafeStorage.setItem('isubnet_notes_' + user.uid, localNotesRaw);
+            } catch(e) {}
+          }
+          if (localHistoryRaw) {
+            try {
+              const localHistory = JSON.parse(localHistoryRaw);
+              localHistory.forEach(item => saveHistoryToFirebase(item));
+              SafeStorage.setItem('isubnet_history_' + user.uid, localHistoryRaw);
+            } catch(e) {}
+          }
+        } else {
+          currentUserId = user.uid;
+        }
+
+        loadNotes();
+        loadHistory();
+
         PRO_UNLOCKED = true;
         SafeStorage.setItem('isubnet_pro', 'true');
         applyProState();
@@ -2035,6 +2136,10 @@ function initSettings() {
         syncNotesToFirebase();
         syncHistoryToFirebase();
       } else {
+        currentUserId = 'local';
+        loadNotes();
+        loadHistory();
+
         accountInfo.textContent = 'Not signed in';
         btnAccount.textContent = 'Sign In / Register';
         btnAccount.style.background = 'var(--accent-primary)';
