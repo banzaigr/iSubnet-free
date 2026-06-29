@@ -1181,6 +1181,7 @@ body.dark-mode .phone-wrapper {
 
 .app-logo {
   border: 3px solid var(--logo-border) !important;
+  object-fit: cover !important;
   transition: var(--transition-smooth) !important;
 }
 
