@@ -8,16 +8,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/risch72004/iSubnet-free-web.git"
+    "url": "git+https://github.com/banzaigr/iSubnet-free-web.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/risch72004/iSubnet-free-web/issues"
+    "url": "https://github.com/banzaigr/iSubnet-free-web/issues"
   },
-  "homepage": "https://github.com/risch72004/iSubnet-free-web#readme",
+  "homepage": "https://github.com/banzaigr/iSubnet-free-web#readme",
   "dependencies": {
     "@capacitor/android": "^8.4.1",
     "@capacitor/assets": "^3.0.5",

@@ -4,6 +4,7 @@
   --bg-primary: #f8fafc;        /* Soft gray-blue background */
   --bg-card: #ffffff;           /* Clean white cards */
   --border-color: #e2e8f0;      /* Light border */
+  --logo-border: #0f172a;       /* Midnight border for logo in light mode */
   
   --text-primary: #1e293b;      /* Dark slate text */
   --text-secondary: #64748b;    /* Muted slate text */
@@ -1084,6 +1085,7 @@ body.dark-mode {
   --text-primary: #ffffff;      /* Pure white primary text */
   --text-secondary: #f1f5f9;    /* Crisp off-white secondary text (not grey) */
   --text-muted: #94a3b8;        /* Slate muted text */
+  --logo-border: #ffffff;       /* White border for logo in dark mode */
 }
 
 body.dark-mode .btn-dismiss:hover {
@@ -1175,6 +1177,11 @@ body.dark-mode .phone-wrapper {
     border-color: var(--border-color) !important;
     transform: none !important;
   }
+}
+
+.app-logo {
+  border: 3px solid var(--logo-border) !important;
+  transition: var(--transition-smooth) !important;
 }
 
 

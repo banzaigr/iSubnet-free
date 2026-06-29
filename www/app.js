@@ -1669,185 +1669,363 @@ function initSplitterListeners() {
     });
   });
 
-  // Inputs change triggers
-  document.getElementById('split-base-ip').addEventListener('input', runSplitter);
-  document.getElementById('split-base-cidr').addEventListener('input', () => {
-    updateEqualSplitDropdown();
-    runSplitter();
-  });
-  document.getElementById('split-equal-size').addEventListener('change', runSplitter);
-  document.getElementById('split-vlsm-hosts').addEventListener('input', runSplitter);
+  // Inputs change triggers with null checks
+  const splitBaseIp = document.getElementById('split-base-ip');
+  if (splitBaseIp) splitBaseIp.addEventListener('input', handleAppSplitIpChange);
+  
+  const splitBaseCidr = document.getElementById('split-base-cidr');
+  if (splitBaseCidr) splitBaseCidr.addEventListener('input', handleAppSplitBaseCidrChange);
+  
+  const splitEqualRange = document.getElementById('split-equal-range');
+  if (splitEqualRange) {
+    splitEqualRange.addEventListener('input', () => {
+      updateEqualSplitSliderVal();
+      runSplitter();
+    });
+  }
+  
+  const splitVlsmHosts = document.getElementById('split-vlsm-hosts');
+  if (splitVlsmHosts) splitVlsmHosts.addEventListener('input', runSplitter);
 
   // Notes and Share bindings for Split results
-  document.getElementById('btn-save-notes-split').addEventListener('click', saveSplitNote);
-  document.getElementById('btn-share-split').addEventListener('click', shareSplitResult);
+  const btnSaveSplit = document.getElementById('btn-save-notes-split');
+  if (btnSaveSplit) btnSaveSplit.addEventListener('click', saveSplitNote);
   
+  const btnShareSplit = document.getElementById('btn-share-split');
+  if (btnShareSplit) btnShareSplit.addEventListener('click', shareSplitResult);
+  
+  handleAppSplitIpChange();
+}
+
+let appSplitIpType = 'v4';
+
+function handleAppSplitIpChange() {
+  const ipEl = document.getElementById('split-base-ip');
+  if (!ipEl) return;
+  const ip = ipEl.value.trim();
+  const isV6 = ip.indexOf(':') !== -1;
+  const currentType = isV6 ? 'v6' : 'v4';
+  
+  const cidrEl = document.getElementById('split-base-cidr');
+  if (cidrEl) {
+    if (currentType !== appSplitIpType) {
+      appSplitIpType = currentType;
+      if (isV6) {
+        cidrEl.setAttribute('min', '0');
+        cidrEl.setAttribute('max', '127');
+        cidrEl.value = '64';
+      } else {
+        cidrEl.setAttribute('min', '0');
+        cidrEl.setAttribute('max', '30');
+        cidrEl.value = '24';
+      }
+    }
+  }
+  resetAppSplitTargetSlider();
   runSplitter();
 }
 
-function updateEqualSplitDropdown() {
-  const baseCidr = parseInt(document.getElementById('split-base-cidr').value, 10) || 24;
-  const select = document.getElementById('split-equal-size');
-  if (!select) return;
-  select.innerHTML = '';
+function handleAppSplitBaseCidrChange() {
+  resetAppSplitTargetSlider();
+  runSplitter();
+}
+
+function resetAppSplitTargetSlider() {
+  const baseCidrEl = document.getElementById('split-base-cidr');
+  const range = document.getElementById('split-equal-range');
+  if (!baseCidrEl || !range) return;
   
-  // Populate target subnets size from baseCidr + 1 up to 32
-  for (let i = baseCidr + 1; i <= 32; i++) {
-    const numSubnets = 2 ** (i - baseCidr);
-    const hostCapacity = i === 32 ? 1 : i === 31 ? 2 : (2 ** (32 - i)) - 2;
-    const option = document.createElement('option');
-    option.value = i;
-    option.textContent = `/${i} (${numSubnets} subnets of ${hostCapacity} hosts each)`;
-    select.appendChild(option);
+  const baseCidr = parseInt(baseCidrEl.value, 10) || (appSplitIpType === 'v6' ? 64 : 24);
+  const isV6 = appSplitIpType === 'v6';
+  const maxCidr = isV6 ? Math.min(128, baseCidr + 16) : Math.min(32, baseCidr + 8);
+  const minCidr = baseCidr + 1;
+  
+  range.setAttribute('min', minCidr.toString());
+  range.setAttribute('max', maxCidr.toString());
+  range.value = minCidr.toString();
+  
+  updateEqualSplitSliderVal();
+}
+
+function updateEqualSplitSliderVal() {
+  const baseCidrEl = document.getElementById('split-base-cidr');
+  const range = document.getElementById('split-equal-range');
+  const valSpan = document.getElementById('split-equal-val');
+  if (!baseCidrEl || !range || !valSpan) return;
+  
+  const baseCidr = parseInt(baseCidrEl.value, 10) || (appSplitIpType === 'v6' ? 64 : 24);
+  const targetCidr = parseInt(range.value, 10);
+  const isV6 = appSplitIpType === 'v6';
+  
+  let subnetCountStr = '';
+  const diff = targetCidr - baseCidr;
+  if (isV6) {
+    if (diff >= 48) {
+      subnetCountStr = '2^' + diff;
+    } else {
+      subnetCountStr = Math.pow(2, diff).toLocaleString();
+    }
+  } else {
+    subnetCountStr = Math.pow(2, diff).toLocaleString();
   }
+  
+  let hostCapacity = '';
+  if (isV6) {
+    const hostBits = 128 - targetCidr;
+    hostCapacity = hostBits >= 48 ? '2^' + hostBits : Math.pow(2, hostBits).toLocaleString();
+  } else {
+    hostCapacity = targetCidr === 32 ? '1' : targetCidr === 31 ? '2' : (Math.pow(2, 32 - targetCidr) - 2).toLocaleString();
+  }
+  
+  valSpan.textContent = '/' + targetCidr + ' (' + subnetCountStr + ' subnets of ' + hostCapacity + ' hosts)';
+}
+
+function blocksToIpStr(blocks) {
+  return blocks.map(b => b.toString(16)).join(':').replace(/:(0:)+/, '::');
 }
 
 function runSplitter() {
-  const baseIp = document.getElementById('split-base-ip').value.trim();
-  const baseCidr = parseInt(document.getElementById('split-base-cidr').value, 10);
+  const baseIpEl = document.getElementById('split-base-ip');
+  const baseCidrEl = document.getElementById('split-base-cidr');
   const errorEl = document.getElementById('split-error');
   const resultsCard = document.getElementById('split-results');
   const tbody = document.getElementById('split-results-tbody');
+
+  if (!baseIpEl || !baseCidrEl || !errorEl || !resultsCard || !tbody) return;
+
+  const baseIp = baseIpEl.value.trim();
+  const baseCidr = parseInt(baseCidrEl.value, 10);
 
   errorEl.textContent = '';
   resultsCard.classList.add('hidden');
   tbody.innerHTML = '';
 
-  // Silent validation check while typing base network
-  const dotCount = (baseIp.match(/\./g) || []).length;
-  if (baseIp === '' || dotCount < 3 || baseIp.endsWith('.')) {
-    return;
-  }
-
-  if (!validateIPv4(baseIp)) {
-    errorEl.textContent = 'Invalid Base IP Address format.';
-    return;
-  }
-
-  if (isNaN(baseCidr) || baseCidr < 0 || baseCidr > 30) {
-    errorEl.textContent = 'Base prefix must be between 0 and 30.';
-    return;
-  }
-
-  const baseIpVal = ipToUint32(baseIp);
-  const baseMask = baseCidr === 0 ? 0 : (~0 << (32 - baseCidr)) >>> 0;
-  const baseNetworkVal = (baseIpVal & baseMask) >>> 0;
-  const baseCapacity = 2 ** (32 - baseCidr);
-
-  let subnets = [];
-
-  if (currentSplitMethod === 'equal') {
-    const targetCidr = parseInt(document.getElementById('split-equal-size').value, 10);
-    if (isNaN(targetCidr) || targetCidr <= baseCidr) {
-      // Dropdown might not be initialized yet
+  const isV6 = appSplitIpType === 'v6';
+  
+  if (isV6) {
+    if (baseIp === '' || baseIp.indexOf(':') === -1) return;
+    const parsed = parseIPv6(baseIp);
+    if (!parsed) {
+      errorEl.textContent = 'Invalid Base IPv6 Address format.';
       return;
     }
-
-    const subnetsCount = 2 ** (targetCidr - baseCidr);
-    const subnetsSize = 2 ** (32 - targetCidr);
+    if (isNaN(baseCidr) || baseCidr < 0 || baseCidr > 127) {
+      errorEl.textContent = 'Base prefix must be between 0 and 127.';
+      return;
+    }
     
-    // Cap equal split listing rendering for sanity
-    const maxRender = Math.min(subnetsCount, 128);
-
-    for (let i = 0; i < maxRender; i++) {
-      const netVal = (baseNetworkVal + (i * subnetsSize)) >>> 0;
-      const broadVal = (netVal + subnetsSize - 1) >>> 0;
-      const rangeText = targetCidr === 32 ? uint32ToIp(netVal) : 
-                        targetCidr === 31 ? `${uint32ToIp(netVal)} - ${uint32ToIp(broadVal)}` :
-                        `${uint32ToIp(netVal + 1)} - ${uint32ToIp(broadVal - 1)}`;
-      const usableHosts = targetCidr === 32 ? 1 : targetCidr === 31 ? 2 : subnetsSize - 2;
-
-      subnets.push({
-        name: `Subnet #${i + 1}`,
-        cidr: targetCidr,
-        network: uint32ToIp(netVal),
-        mask: cidrToSubnetMask(targetCidr),
-        range: rangeText,
-        hosts: usableHosts,
-        required: 'Equal size'
-      });
+    // Unpack BigInt parsed to standard block array
+    const parsedBlocks = [];
+    let temp = parsed;
+    for (let k = 0; k < 8; k++) {
+      parsedBlocks.unshift(Number(temp & BigInt(0xffff)));
+      temp = temp >> BigInt(16);
     }
-
-    if (subnetsCount > maxRender) {
-      resultsCard.classList.remove('hidden');
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).</td></tr>`;
+    
+    let subnets = [];
+    
+    if (currentSplitMethod === 'equal') {
+      const range = document.getElementById('split-equal-range');
+      if (!range) return;
+      const targetCidr = parseInt(range.value, 10);
+      if (isNaN(targetCidr) || targetCidr <= baseCidr) return;
+      
+      const subnetsCount = Math.pow(2, targetCidr - baseCidr);
+      const maxRender = Math.min(subnetsCount, 128);
+      
+      const baseNetworkBlocks = [];
+      for (let i = 0; i < 8; i++) {
+        const startBit = i * 16;
+        if (baseCidr <= startBit) {
+          baseNetworkBlocks.push(0);
+        } else if (baseCidr >= startBit + 16) {
+          baseNetworkBlocks.push(parsedBlocks[i]);
+        } else {
+          const divisor = Math.pow(2, 16 - (baseCidr - startBit));
+          baseNetworkBlocks.push(Math.floor(parsedBlocks[i] / divisor) * divisor);
+        }
+      }
+      
+      const blockIdx = Math.floor((targetCidr - 1) / 16);
+      const targetBitInBlock = targetCidr - (blockIdx * 16);
+      const increment = Math.pow(2, 16 - targetBitInBlock);
+      
+      for (let i = 0; i < maxRender; i++) {
+        const subnetNetBlocks = [];
+        for (let k = 0; k < 8; k++) {
+          subnetNetBlocks.push(baseNetworkBlocks[k]);
+        }
+        subnetNetBlocks[blockIdx] = baseNetworkBlocks[blockIdx] + (i * increment);
+        
+        const subnetLastBlocks = [];
+        for (let k = 0; k < 8; k++) {
+          if (k < blockIdx) {
+            subnetLastBlocks.push(subnetNetBlocks[k]);
+          } else if (k === blockIdx) {
+            subnetLastBlocks.push(subnetNetBlocks[k] + (increment - 1));
+          } else {
+            subnetLastBlocks.push(65535);
+          }
+        }
+        
+        subnets.push({
+          name: `Subnet #${i + 1}`,
+          cidr: targetCidr,
+          network: blocksToIpStr(subnetNetBlocks),
+          mask: 'N/A',
+          range: blocksToIpStr(subnetNetBlocks) + ' -\n' + blocksToIpStr(subnetLastBlocks),
+          hosts: 'N/A',
+          required: 'Equal size'
+        });
+      }
+      
+      if (subnetsCount > maxRender) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).</td></tr>`;
+      }
+    } else {
+      errorEl.textContent = 'VLSM by host count is currently only supported for IPv4.';
+      return;
     }
-
+    
+    subnets.forEach((sub, index) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+      tr.innerHTML = `
+        <td style="padding: 8px 4px; font-weight: bold; color: var(--text-secondary);">${sub.name}</td>
+        <td style="padding: 8px 4px; font-family: monospace;">${sub.network}</td>
+        <td style="padding: 8px 4px;">/${sub.cidr}<br><span style="font-size: 10px; color: var(--text-secondary);">${sub.mask}</span></td>
+        <td style="padding: 8px 4px; font-size: 11px; font-family: monospace;">${sub.range}</td>
+        <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-primary);">${sub.hosts}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    
+    resultsCard.classList.remove('hidden');
+    
   } else {
-    // VLSM Split Mode
-    const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
-    if (hostsText === '') return;
-
-    const reqSizes = hostsText.split(',')
-                             .map(s => parseInt(s.trim(), 10))
-                             .filter(n => !isNaN(n) && n > 0);
-
-    if (reqSizes.length === 0) return;
-
-    // Clone to sort descending (allocate largest first)
-    const sortedHosts = [...reqSizes].map((hosts, origIndex) => ({ hosts, origIndex }));
-    sortedHosts.sort((a, b) => b.hosts - a.hosts);
-
-    let currentIpVal = baseNetworkVal;
-
-    for (let i = 0; i < sortedHosts.length; i++) {
-      const hostsCount = sortedHosts[i].hosts;
-      // Size block is power of 2 containing hostsCount + 2 (network + broadcast)
-      const blockSize = 2 ** Math.ceil(Math.log2(hostsCount + 2));
-      const targetCidr = 32 - Math.log2(blockSize);
-
-      // Subnet network address must align to block size
-      if (currentIpVal % blockSize !== 0) {
-        currentIpVal = currentIpVal + (blockSize - (currentIpVal % blockSize));
-      }
-
-      const netVal = currentIpVal;
-      const broadVal = (netVal + blockSize - 1) >>> 0;
-
-      // Check if this block falls outside our base network boundary
-      if (broadVal > (baseNetworkVal + baseCapacity - 1)) {
-        errorEl.textContent = 'Allocated subnets exceed the base network boundary!';
-        return;
-      }
-
-      const rangeText = targetCidr === 32 ? uint32ToIp(netVal) : 
-                        targetCidr === 31 ? `${uint32ToIp(netVal)} - ${uint32ToIp(broadVal)}` :
-                        `${uint32ToIp(netVal + 1)} - ${uint32ToIp(broadVal - 1)}`;
-      const usableCapacity = targetCidr === 32 ? 1 : targetCidr === 31 ? 2 : blockSize - 2;
-
-      subnets.push({
-        name: `Subnet #${sortedHosts[i].origIndex + 1}`,
-        cidr: targetCidr,
-        network: uint32ToIp(netVal),
-        mask: cidrToSubnetMask(targetCidr),
-        range: rangeText,
-        hosts: `${usableCapacity} (req. ${hostsCount})`,
-        required: hostsCount
-      });
-
-      currentIpVal += blockSize;
+    const dotCount = (baseIp.match(/\./g) || []).length;
+    if (baseIp === '' || dotCount < 3 || baseIp.endsWith('.')) return;
+    
+    if (!validateIPv4(baseIp)) {
+      errorEl.textContent = 'Invalid Base IP Address format.';
+      return;
     }
+    
+    if (isNaN(baseCidr) || baseCidr < 0 || baseCidr > 30) {
+      errorEl.textContent = 'Base prefix must be between 0 and 30.';
+      return;
+    }
+    
+    const baseIpVal = ipToUint32(baseIp);
+    const divisor = Math.pow(2, 32 - baseCidr);
+    const baseNetworkVal = baseCidr === 0 ? 0 : (baseIpVal - (baseIpVal % divisor)) >>> 0;
+    const baseCapacity = Math.pow(2, 32 - baseCidr);
+    
+    let subnets = [];
+    
+    if (currentSplitMethod === 'equal') {
+      const range = document.getElementById('split-equal-range');
+      if (!range) return;
+      const targetCidr = parseInt(range.value, 10);
+      if (isNaN(targetCidr) || targetCidr <= baseCidr) return;
+      
+      const subnetsCount = Math.pow(2, targetCidr - baseCidr);
+      const subnetsSize = Math.pow(2, 32 - targetCidr);
+      const maxRender = Math.min(subnetsCount, 128);
+      
+      for (let i = 0; i < maxRender; i++) {
+        const netVal = (baseNetworkVal + (i * subnetsSize)) >>> 0;
+        const broadVal = (netVal + subnetsSize - 1) >>> 0;
+        const rangeText = targetCidr === 32 ? uint32ToIp(netVal) : 
+                          targetCidr === 31 ? uint32ToIp(netVal) + ' - ' + uint32ToIp(broadVal) :
+                          uint32ToIp(netVal + 1) + ' - ' + uint32ToIp(broadVal - 1);
+        const usableHosts = targetCidr === 32 ? 1 : targetCidr === 31 ? 2 : subnetsSize - 2;
+        
+        subnets.push({
+          name: `Subnet #${i + 1}`,
+          cidr: targetCidr,
+          network: uint32ToIp(netVal),
+          mask: cidrToSubnetMask(targetCidr),
+          range: rangeText,
+          hosts: usableHosts.toLocaleString(),
+          required: 'Equal size'
+        });
+      }
+      
+      if (subnetsCount > maxRender) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).</td></tr>`;
+      }
+    } else {
+      const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
+      if (hostsText === '') return;
+      
+      const reqSizes = hostsText.split(',')
+                               .map(s => parseInt(s.trim(), 10))
+                               .filter(n => !isNaN(n) && n > 0);
+      if (reqSizes.length === 0) return;
+      
+      const sortedHosts = [...reqSizes].map((hosts, origIndex) => ({ hosts, origIndex }));
+      sortedHosts.sort((a, b) => b.hosts - a.hosts);
+      
+      let currentIpVal = baseNetworkVal;
+      
+      for (let i = 0; i < sortedHosts.length; i++) {
+        const hostsCount = sortedHosts[i].hosts;
+        const blockSize = Math.pow(2, Math.ceil(Math.log2(hostsCount + 2)));
+        const targetCidr = 32 - Math.log2(blockSize);
+        
+        if (currentIpVal % blockSize !== 0) {
+          currentIpVal = currentIpVal + (blockSize - (currentIpVal % blockSize));
+        }
+        
+        const netVal = currentIpVal;
+        const broadVal = (netVal + blockSize - 1) >>> 0;
+        
+        if (broadVal > (baseNetworkVal + baseCapacity - 1)) {
+          errorEl.textContent = 'Allocated subnets exceed the base network boundary!';
+          return;
+        }
+        
+        const rangeText = targetCidr === 32 ? uint32ToIp(netVal) : 
+                          targetCidr === 31 ? uint32ToIp(netVal) + ' - ' + uint32ToIp(broadVal) :
+                          uint32ToIp(netVal + 1) + ' - ' + uint32ToIp(broadVal - 1);
+        const usableCapacity = targetCidr === 32 ? 1 : targetCidr === 31 ? 2 : blockSize - 2;
+        
+        subnets.push({
+          name: `Subnet #${sortedHosts[i].origIndex + 1}`,
+          cidr: targetCidr,
+          network: uint32ToIp(netVal),
+          mask: cidrToSubnetMask(targetCidr),
+          range: rangeText,
+          hosts: usableCapacity.toLocaleString() + ' (req. ' + hostsCount + ')',
+          required: hostsCount
+        });
+        
+        currentIpVal += blockSize;
+      }
+    }
+    
+    subnets.forEach((sub, index) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+      tr.innerHTML = `
+        <td style="padding: 8px 4px; font-weight: bold; color: var(--text-secondary);">${sub.name}</td>
+        <td style="padding: 8px 4px; font-family: monospace;">${sub.network}</td>
+        <td style="padding: 8px 4px;">/${sub.cidr}<br><span style="font-size: 10px; color: var(--text-secondary);">${sub.mask}</span></td>
+        <td style="padding: 8px 4px; font-size: 11px; font-family: monospace;">${sub.range}</td>
+        <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-primary);">${sub.hosts}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    
+    resultsCard.classList.remove('hidden');
   }
-
-  // Populate UI table
-  subnets.forEach((sub, index) => {
-    const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
-    tr.innerHTML = `
-      <td style="padding: 8px 4px; font-weight: bold; color: var(--text-secondary);">${sub.name}</td>
-      <td style="padding: 8px 4px; font-family: monospace;">${sub.network}</td>
-      <td style="padding: 8px 4px;">/${sub.cidr}<br><span style="font-size: 10px; color: var(--text-secondary);">${sub.mask}</span></td>
-      <td style="padding: 8px 4px; font-size: 11px; font-family: monospace;">${sub.range}</td>
-      <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-primary);">${sub.hosts}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
-  resultsCard.classList.remove('hidden');
-
+  
   const methodLabel = currentSplitMethod === 'equal' ? 'Equal Split' : 'VLSM';
-  recordHistoryDebounced('Splitter', { baseIp, baseCidr, method: currentSplitMethod }, `Splitter: ${baseIp}/${baseCidr} (${methodLabel})`);
+  recordHistoryDebounced('Splitter', { baseIp, baseCidr, method: currentSplitMethod }, 'Splitter: ' + baseIp + '/' + baseCidr + ' (' + methodLabel + ')');
 }
+
+
 
 function getFormattedSplitOutput() {
   const baseIp = document.getElementById('split-base-ip').value.trim();
@@ -2197,6 +2375,76 @@ function initSettings() {
       upgradeWithRevenueCat();
     });
   }
+
+  // Feedback Modal Interaction Handlers
+  const btnFeedback = document.getElementById('btn-settings-feedback');
+  const modalFeedback = document.getElementById('feedback-modal');
+  const btnFeedbackClose = document.getElementById('btn-feedback-close');
+  const formAppFeedback = document.getElementById('form-app-feedback');
+
+  if (btnFeedback && modalFeedback && btnFeedbackClose) {
+    btnFeedback.addEventListener('click', () => {
+      modalSettings.classList.add('hidden');
+      modalFeedback.classList.remove('hidden');
+    });
+    btnFeedbackClose.addEventListener('click', () => {
+      modalFeedback.classList.add('hidden');
+      modalSettings.classList.remove('hidden');
+    });
+  }
+
+  if (formAppFeedback) {
+    formAppFeedback.addEventListener('submit', (e) => {
+      e.preventDefault();
+      
+      const submitBtn = formAppFeedback.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.textContent = 'Sending...';
+        submitBtn.disabled = true;
+      }
+      
+      const nameVal = document.getElementById('fb-app-name').value.trim();
+      const emailVal = document.getElementById('fb-app-email').value.trim();
+      const categoryVal = document.getElementById('fb-app-type').value;
+      const messageVal = document.getElementById('fb-app-message').value.trim();
+      
+      fetch("https://formsubmit.co/ajax/isubnetcalc@gmail.com", {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          name: nameVal,
+          email: emailVal,
+          category: categoryVal,
+          message: messageVal
+        })
+      })
+      .then(response => {
+        if (response.ok) return response.json();
+        throw new Error('Network response was not ok.');
+      })
+      .then(data => {
+        if (submitBtn) {
+          submitBtn.textContent = 'Submit Feedback';
+          submitBtn.disabled = false;
+        }
+        alert("Thank you! Your feedback has been sent successfully.");
+        formAppFeedback.reset();
+        if (modalFeedback) {
+          modalFeedback.classList.add('hidden');
+        }
+      })
+      .catch(error => {
+        if (submitBtn) {
+          submitBtn.textContent = 'Submit Feedback';
+          submitBtn.disabled = false;
+        }
+        alert("Oops! There was an issue sending your feedback. Please check your connection and try again.");
+      });
+    });
+  }
 }
 
 // --- Run Setup on page load ---
@@ -2210,7 +2458,6 @@ function init() {
   loadNotes();
   loadHistory();
   initSplitterListeners();
-  updateEqualSplitDropdown();
   
   // Setup clear history binding
   const clearHistBtn = document.getElementById('btn-clear-history');
