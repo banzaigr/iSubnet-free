@@ -1883,8 +1883,69 @@ function runSplitter() {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).</td></tr>`;
       }
     } else {
-      errorEl.textContent = 'VLSM by host count is currently only supported for IPv4.';
-      return;
+      const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
+      if (hostsText === '') return;
+      
+      const reqSizes = hostsText.split(',')
+                               .map(s => parseInt(s.trim(), 10))
+                               .filter(n => !isNaN(n) && n > 0);
+      if (reqSizes.length === 0) return;
+      
+      const sortedHosts = [...reqSizes].map((hosts, origIndex) => ({ hosts: BigInt(hosts), origIndex }));
+      sortedHosts.sort((a, b) => (b.hosts > a.hosts ? 1 : -1));
+      
+      const baseBigInt = parseIPv6(baseIp);
+      let currentIpVal = baseBigInt;
+      const baseCapacity = BigInt(1) << BigInt(128 - baseCidr);
+      
+      for (let i = 0; i < sortedHosts.length; i++) {
+        const hostsCount = sortedHosts[i].hosts;
+        let needed = hostsCount + BigInt(2);
+        let power = 0;
+        while ((BigInt(1) << BigInt(power)) < needed) {
+          power++;
+        }
+        const blockSize = BigInt(1) << BigInt(power);
+        const targetCidr = 128 - power;
+        
+        if (currentIpVal % blockSize !== BigInt(0)) {
+          currentIpVal = currentIpVal + (blockSize - (currentIpVal % blockSize));
+        }
+        
+        const netVal = currentIpVal;
+        const endVal = netVal + blockSize - BigInt(1);
+        
+        if (endVal > (baseBigInt + baseCapacity - BigInt(1))) {
+          errorEl.textContent = 'Allocated subnets exceed the base network boundary!';
+          return;
+        }
+        
+        const subNetBlocks = [];
+        let tempNet = netVal;
+        for (let k = 0; k < 8; k++) {
+          subNetBlocks.unshift(Number(tempNet & BigInt(0xffff)));
+          tempNet = tempNet >> BigInt(16);
+        }
+        
+        const subEndBlocks = [];
+        let tempEnd = endVal;
+        for (let k = 0; k < 8; k++) {
+          subEndBlocks.unshift(Number(tempEnd & BigInt(0xffff)));
+          tempEnd = tempEnd >> BigInt(16);
+        }
+        
+        subnets.push({
+          name: `Subnet #${sortedHosts[i].origIndex + 1}`,
+          cidr: targetCidr,
+          network: blocksToIpStr(subNetBlocks),
+          mask: 'N/A',
+          range: blocksToIpStr(subNetBlocks) + ' -\n' + blocksToIpStr(subEndBlocks),
+          hosts: (BigInt(1) << BigInt(power)).toLocaleString() + ' (req. ' + hostsCount + ')',
+          required: hostsCount.toString()
+        });
+        
+        currentIpVal += blockSize;
+      }
     }
     
     subnets.forEach((sub, index) => {
@@ -2458,6 +2519,8 @@ function init() {
   loadNotes();
   loadHistory();
   initSplitterListeners();
+  initBulkCalculator();
+  setupExporterListeners();
   
   // Setup clear history binding
   const clearHistBtn = document.getElementById('btn-clear-history');
@@ -2522,3 +2585,366 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+// --- BULK CALCULATOR ENGINE ---
+function initBulkCalculator() {
+  const modeBtnsV4 = document.querySelectorAll('.calc-mode-btn-v4');
+  const singlePanelV4 = document.getElementById('ipv4-single-panel');
+  const bulkPanelV4 = document.getElementById('ipv4-bulk-panel');
+  const resultsCardV4 = document.getElementById('ipv4-results');
+  const bulkResultsCardV4 = document.getElementById('ipv4-bulk-results');
+
+  modeBtnsV4.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.getAttribute('data-mode');
+      if (mode === 'bulk' && !PRO_UNLOCKED) {
+        showProModal();
+        return;
+      }
+      modeBtnsV4.forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'none';
+        b.style.color = 'var(--text-secondary)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'var(--bg-card)';
+      btn.style.color = 'var(--text-primary)';
+
+      if (mode === 'single') {
+        singlePanelV4.classList.remove('hidden');
+        bulkPanelV4.classList.add('hidden');
+        bulkResultsCardV4.classList.add('hidden');
+        calculateIPv4();
+      } else {
+        singlePanelV4.classList.add('hidden');
+        bulkPanelV4.classList.remove('hidden');
+        resultsCardV4.classList.add('hidden');
+        calculateBulkIPv4();
+      }
+    });
+  });
+
+  const modeBtnsV6 = document.querySelectorAll('.calc-mode-btn-v6');
+  const singlePanelV6 = document.getElementById('ipv6-single-panel');
+  const bulkPanelV6 = document.getElementById('ipv6-bulk-panel');
+  const resultsCardV6 = document.getElementById('ipv6-results');
+  const bulkResultsCardV6 = document.getElementById('ipv6-bulk-results');
+
+  modeBtnsV6.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.getAttribute('data-mode');
+      if (mode === 'bulk' && !PRO_UNLOCKED) {
+        showProModal();
+        return;
+      }
+      modeBtnsV6.forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'none';
+        b.style.color = 'var(--text-secondary)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'var(--bg-card)';
+      btn.style.color = 'var(--text-primary)';
+
+      if (mode === 'single') {
+        singlePanelV6.classList.remove('hidden');
+        bulkPanelV6.classList.add('hidden');
+        bulkResultsCardV6.classList.add('hidden');
+        calculateIPv6();
+      } else {
+        singlePanelV6.classList.add('hidden');
+        bulkPanelV6.classList.remove('hidden');
+        resultsCardV6.classList.add('hidden');
+        calculateBulkIPv6();
+      }
+    });
+  });
+
+  document.getElementById('btn-calc-bulk-ipv4').addEventListener('click', calculateBulkIPv4);
+  document.getElementById('btn-calc-bulk-ipv6').addEventListener('click', calculateBulkIPv6);
+}
+
+function calculateBulkIPv4() {
+  const input = document.getElementById('ipv4-bulk-input').value.trim();
+  const errorEl = document.getElementById('ipv4-bulk-error');
+  const tbody = document.getElementById('ipv4-bulk-results-tbody');
+  const card = document.getElementById('ipv4-bulk-results');
+
+  errorEl.textContent = '';
+  tbody.innerHTML = '';
+
+  if (!input) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  const lines = input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  let hasValid = false;
+
+  lines.forEach(line => {
+    let ip = line;
+    let cidr = 24;
+
+    if (line.includes('/')) {
+      const parts = line.split('/');
+      ip = parts[0].trim();
+      cidr = parseInt(parts[1], 10);
+    } else if (line.includes(' ')) {
+      const parts = line.split(/\s+/);
+      ip = parts[0].trim();
+      const mask = parts[1].trim();
+      if (validateIPv4(mask)) {
+        const maskVal = ipToUint32(mask);
+        cidr = 32 - Math.log2(~maskVal + 1);
+      }
+    }
+
+    if (!validateIPv4(ip) || isNaN(cidr) || cidr < 0 || cidr > 32) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="3" style="color:#ef4444; padding:8px 4px;">Invalid IP/Prefix format</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    hasValid = true;
+    const ipVal = ipToUint32(ip);
+    const maskVal = cidr === 0 ? 0 : (~0 << (32 - cidr)) >>> 0;
+    const wildcardVal = ~maskVal >>> 0;
+    const networkVal = (ipVal & maskVal) >>> 0;
+    const broadcastVal = (ipVal | wildcardVal) >>> 0;
+
+    let rangeStart = '', rangeEnd = '', usableHosts = 0;
+    if (cidr === 32) {
+      usableHosts = 1; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(networkVal);
+    } else if (cidr === 31) {
+      usableHosts = 2; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(broadcastVal);
+    } else {
+      usableHosts = (2 ** (32 - cidr)) - 2;
+      rangeStart = uint32ToIp(networkVal + 1);
+      rangeEnd = uint32ToIp(broadcastVal - 1);
+    }
+
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+    tr.innerHTML = `
+      <td style="padding: 8px 4px; font-weight: 500;">${escapeHTML(ip)}/${cidr}</td>
+      <td style="padding: 8px 4px; font-family: monospace;">${uint32ToIp(networkVal)}</td>
+      <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">${rangeStart} - ${rangeEnd}</td>
+      <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-primary);">${usableHosts.toLocaleString()}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (hasValid) {
+    card.classList.remove('hidden');
+  }
+}
+
+function calculateBulkIPv6() {
+  const input = document.getElementById('ipv6-bulk-input').value.trim();
+  const errorEl = document.getElementById('ipv6-bulk-error');
+  const tbody = document.getElementById('ipv6-bulk-results-tbody');
+  const card = document.getElementById('ipv6-bulk-results');
+
+  errorEl.textContent = '';
+  tbody.innerHTML = '';
+
+  if (!input) {
+    card.classList.add('hidden');
+    return;
+  }
+
+  const lines = input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  let hasValid = false;
+
+  lines.forEach(line => {
+    let ip = line;
+    let cidr = 64;
+
+    if (line.includes('/')) {
+      const parts = line.split('/');
+      ip = parts[0].trim();
+      cidr = parseInt(parts[1], 10);
+    }
+
+    const ipBigInt = parseIPv6(ip);
+    if (ipBigInt === null || isNaN(cidr) || cidr < 1 || cidr > 128) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="2" style="color:#ef4444; padding:8px 4px;">Invalid IPv6/Prefix format</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    hasValid = true;
+    const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
+    const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
+    const networkPrefixVal = ipBigInt & netMask;
+    const broadcastVal = networkPrefixVal | hostMask;
+    const totalAddresses = BigInt(2) ** BigInt(128 - cidr);
+
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+    tr.innerHTML = `
+      <td style="padding: 8px 4px; font-weight: 500;">${formatIPv6Compressed(ipBigInt)}/${cidr}</td>
+      <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">
+        Start: ${formatIPv6Compressed(networkPrefixVal)}<br>
+        End: ${formatIPv6Compressed(broadcastVal)}
+      </td>
+      <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-cyan);">${totalAddresses.toLocaleString()}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (hasValid) {
+    card.classList.remove('hidden');
+  }
+}
+
+// --- CSV/PDF REPORT EXPORTER ---
+function setupExporterListeners() {
+  const exportPDF = () => {
+    window.print();
+  };
+
+  const getCSVData = (type) => {
+    let csv = '';
+    if (type === 'ipv4') {
+      const ip = document.getElementById('ipv4-address').value.trim();
+      const cidr = document.getElementById('res-cidr').textContent;
+      const mask = document.getElementById('res-mask').textContent;
+      const wildcard = document.getElementById('res-wildcard').textContent;
+      const network = document.getElementById('res-network').textContent;
+      const broadcast = document.getElementById('res-broadcast').textContent;
+      const range = document.getElementById('res-range').textContent;
+      const hosts = document.getElementById('res-hosts').textContent;
+      const ipClass = document.getElementById('ipv4-badge-class').textContent;
+      const ipType = document.getElementById('res-type').textContent;
+
+      csv = `Parameter,Value\n`;
+      csv += `IP Address,${ip}\n`;
+      csv += `CIDR Prefix,${cidr}\n`;
+      csv += `Subnet Mask,${mask}\n`;
+      csv += `Wildcard Mask,${wildcard}\n`;
+      csv += `Network Address,${network}\n`;
+      csv += `Broadcast Address,${broadcast}\n`;
+      csv += `Usable IP Range,${range}\n`;
+      csv += `Total Usable Hosts,${hosts}\n`;
+      csv += `Network Class,${ipClass}\n`;
+      csv += `IP Address Type,${ipType}\n`;
+    } else if (type === 'ipv6') {
+      const ip = document.getElementById('ipv6-address').value.trim();
+      const compressed = document.getElementById('res6-compressed').textContent;
+      const expanded = document.getElementById('res6-expanded').textContent;
+      const prefix = document.getElementById('res6-prefix').textContent;
+      const netPrefix = document.getElementById('res6-net-prefix').textContent;
+      const start = document.getElementById('res6-start').textContent;
+      const end = document.getElementById('res6-end').textContent;
+      const total = document.getElementById('res6-total').textContent;
+      const typeText = document.getElementById('ipv6-badge-type').textContent;
+
+      csv = `Parameter,Value\n`;
+      csv += `IP Address,${ip}\n`;
+      csv += `Compressed Address,${compressed}\n`;
+      csv += `Expanded Address,${expanded}\n`;
+      csv += `Prefix,${prefix}\n`;
+      csv += `Network Prefix,${netPrefix}\n`;
+      csv += `Range Start,${start}\n`;
+      csv += `Range End,${end}\n`;
+      csv += `Total Addresses,${total}\n`;
+      csv += `Address Type,${typeText}\n`;
+    } else if (type === 'split') {
+      csv = `Subnet Name,Network Address,Prefix / Mask,Usable Range,Hosts\n`;
+      const rows = document.querySelectorAll('#split-results-tbody tr');
+      rows.forEach(row => {
+        const tds = row.querySelectorAll('td');
+        if (tds.length >= 5) {
+          csv += `"${tds[0].textContent}","${tds[1].textContent}","${tds[2].textContent.replace('\n', ' ')}","${tds[3].textContent.replace('\n', ' ')}","${tds[4].textContent}"\n`;
+        }
+      });
+    } else if (type === 'conv') {
+      const convType = document.getElementById('conv-type').textContent;
+      const prefix = document.getElementById('conv-prefix').textContent;
+      const mask = document.getElementById('conv-mask').textContent;
+      const wildcard = document.getElementById('conv-wildcard').textContent;
+      csv = `Parameter,Value\n`;
+      csv += `Type,${convType}\n`;
+      csv += `Prefix,${prefix}\n`;
+      csv += `Subnet Mask,${mask}\n`;
+      csv += `Wildcard Mask,${wildcard}\n`;
+    } else if (type === 'bulk-ipv4') {
+      csv = `Input IP,Network,Range,Usable Hosts\n`;
+      const rows = document.querySelectorAll('#ipv4-bulk-results-tbody tr');
+      rows.forEach(row => {
+        const tds = row.querySelectorAll('td');
+        if (tds.length >= 4) {
+          csv += `"${tds[0].textContent}","${tds[1].textContent}","${tds[2].textContent}","${tds[3].textContent}"\n`;
+        }
+      });
+    } else if (type === 'bulk-ipv6') {
+      csv = `Input IP,Prefix / Range,Total Addresses\n`;
+      const rows = document.querySelectorAll('#ipv6-bulk-results-tbody tr');
+      rows.forEach(row => {
+        const tds = row.querySelectorAll('td');
+        if (tds.length >= 3) {
+          csv += `"${tds[0].textContent}","${tds[1].textContent.replace('\n', ' ')}","${tds[2].textContent}"\n`;
+        }
+      });
+    }
+    return csv;
+  };
+
+  const triggerCSVDownload = (type) => {
+    if (!PRO_UNLOCKED) {
+      showProModal();
+      return;
+    }
+    const csvContent = getCSVData(type);
+    downloadCSV(`isubnet_export_${type}.csv`, csvContent);
+  };
+
+  const pdfIds = ['btn-export-pdf-ipv4', 'btn-export-pdf-ipv6', 'btn-export-pdf-split', 'btn-export-pdf-conv', 'btn-export-pdf-bulk-ipv4', 'btn-export-pdf-bulk-ipv6'];
+  pdfIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!PRO_UNLOCKED) {
+          showProModal();
+          return;
+        }
+        exportPDF();
+      });
+    }
+  });
+
+  const csvIds = [
+    { id: 'btn-export-csv-ipv4', type: 'ipv4' },
+    { id: 'btn-export-csv-ipv6', type: 'ipv6' },
+    { id: 'btn-export-csv-split', type: 'split' },
+    { id: 'btn-export-csv-conv', type: 'conv' },
+    { id: 'btn-export-csv-bulk-ipv4', type: 'bulk-ipv4' },
+    { id: 'btn-export-csv-bulk-ipv6', type: 'bulk-ipv6' }
+  ];
+  csvIds.forEach(item => {
+    const el = document.getElementById(item.id);
+    if (el) {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        triggerCSVDownload(item.type);
+      });
+    }
+  });
+}
+
+function downloadCSV(filename, content) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
