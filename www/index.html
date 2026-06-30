@@ -8,7 +8,7 @@
   <!-- Import premium font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
     window.onerror = function(message, source, lineno, colno, error) {
       var container = document.getElementById('fatal-error-overlay');
@@ -270,27 +270,70 @@
       <section id="ipv4-tab" class="tab-content active">
         <div class="card input-card">
           <h2 class="card-title">IPv4 Subnet Calculator</h2>
+
+          <div class="segmented-control" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 18px; gap: 4px;">
+            <button class="calc-mode-btn-v4 active" data-mode="single" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">Single IP</button>
+            <button class="calc-mode-btn-v4" data-mode="bulk" id="btn-bulk-mode-v4" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 4px;">Bulk IPs <span style="font-size: 10px;">👑</span></button>
+          </div>
           
-          <div class="input-group">
-            <label for="ipv4-address">IP Address</label>
-            <input type="text" id="ipv4-address" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
-            <span class="error-msg" id="ipv4-error"></span>
-          </div>
-
-          <div class="cidr-slider-card-horizontal" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 15px; margin-bottom: 15px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 0;">CIDR Prefix</label>
-              <span id="ipv4-cidr-val" class="highlight" style="font-size: 16px; font-weight: bold; color: var(--accent-primary);">/24</span>
+          <div id="ipv4-single-panel">
+            <div class="input-group">
+              <label for="ipv4-address">IP Address</label>
+              <input type="text" id="ipv4-address" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
+              <span class="error-msg" id="ipv4-error"></span>
             </div>
-            <input type="range" id="ipv4-cidr" min="0" max="32" value="24">
+
+            <div class="cidr-slider-card-horizontal" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 15px; margin-bottom: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 0;">CIDR Prefix</label>
+                <span id="ipv4-cidr-val" class="highlight" style="font-size: 16px; font-weight: bold; color: var(--accent-primary);">/24</span>
+              </div>
+              <input type="range" id="ipv4-cidr" min="0" max="32" value="24">
+            </div>
+
+            <div class="input-group">
+              <label for="ipv4-hosts">Required Hosts (Optional)</label>
+              <input type="number" id="ipv4-hosts" placeholder="e.g. 50" min="1">
+            </div>
           </div>
 
-          <div class="input-group">
-            <label for="ipv4-hosts">Required Hosts (Optional)</label>
-            <input type="number" id="ipv4-hosts" placeholder="e.g. 50" min="1">
+          <!-- Bulk IPv4 Panel (hidden by default) -->
+          <div id="ipv4-bulk-panel" class="hidden">
+            <div class="input-group">
+              <label for="ipv4-bulk-input">IP Addresses (one per line or comma separated, e.g. 10.0.0.1/24)</label>
+              <textarea id="ipv4-bulk-input" rows="5" placeholder="192.168.1.1/24&#10;10.0.0.5/8&#10;172.16.1.10/16" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <span class="error-msg" id="ipv4-bulk-error"></span>
+            </div>
+            <button id="btn-calc-bulk-ipv4" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
           </div>
 
           <button id="btn-calc-ipv4" class="btn-primary" style="display: none;">Calculate</button>
+        </div>
+
+        <!-- Bulk Results Card -->
+        <div class="card result-card hidden" id="ipv4-bulk-results">
+          <div class="result-header" style="margin-bottom: 12px;">
+            <h3>Bulk Subnet Results</h3>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-export-pdf-bulk-ipv4" class="btn-action" style="font-size: 11px; padding: 4px 8px;">PDF</button>
+              <button id="btn-export-csv-bulk-ipv4" class="btn-action" style="font-size: 11px; padding: 4px 8px;">CSV</button>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary);">
+                  <th style="padding: 8px 4px;">Input IP</th>
+                  <th style="padding: 8px 4px;">Network</th>
+                  <th style="padding: 8px 4px;">Range</th>
+                  <th style="padding: 8px 4px;">Usable Hosts</th>
+                </tr>
+              </thead>
+              <tbody id="ipv4-bulk-results-tbody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="card result-card hidden" id="ipv4-results">
@@ -350,12 +393,20 @@
               <!-- Dynamically populated -->
             </div>
           </div>
-          <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
-            <button id="btn-save-notes-ipv4" class="btn-action">
-              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
-              <span>Save to Notes</span>
+          <div class="result-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; flex-wrap: wrap;">
+            <button id="btn-export-pdf-ipv4" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>PDF</span>
             </button>
-            <button id="btn-share-ipv4" class="btn-action">
+            <button id="btn-export-csv-ipv4" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-ipv4" class="btn-action" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-ipv4" class="btn-action" style="padding: 6px 10px;">
               <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
               <span>Share</span>
             </button>
@@ -426,12 +477,20 @@
               </tbody>
             </table>
           </div>
-          <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
-            <button id="btn-save-notes-split" class="btn-action">
-              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
-              <span>Save to Notes</span>
+          <div class="result-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%; flex-wrap: wrap;">
+            <button id="btn-export-pdf-split" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>PDF</span>
             </button>
-            <button id="btn-share-split" class="btn-action">
+            <button id="btn-export-csv-split" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-split" class="btn-action" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-split" class="btn-action" style="padding: 6px 10px;">
               <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
               <span>Share</span>
             </button>
@@ -443,27 +502,69 @@
       <section id="ipv6-tab" class="tab-content">
         <div class="card input-card">
           <h2 class="card-title">IPv6 Subnet Calculator</h2>
+
+          <div class="segmented-control" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 18px; gap: 4px;">
+            <button class="calc-mode-btn-v6 active" data-mode="single" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">Single IP</button>
+            <button class="calc-mode-btn-v6" data-mode="bulk" id="btn-bulk-mode-v6" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 4px;">Bulk IPs <span style="font-size: 10px;">👑</span></button>
+          </div>
           
-          <div class="input-group">
-            <label for="ipv6-address">IPv6 Address</label>
-            <input type="text" id="ipv6-address" placeholder="e.g. 2001:db8::" value="2001:db8::">
-            <span class="error-msg" id="ipv6-error"></span>
-          </div>
-
-          <div class="cidr-slider-card-horizontal" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 15px; margin-bottom: 15px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 0;">Prefix Length</label>
-              <span id="ipv6-cidr-val" class="highlight" style="font-size: 16px; font-weight: bold; color: var(--accent-primary);">/64</span>
+          <div id="ipv6-single-panel">
+            <div class="input-group">
+              <label for="ipv6-address">IPv6 Address</label>
+              <input type="text" id="ipv6-address" placeholder="e.g. 2001:db8::" value="2001:db8::">
+              <span class="error-msg" id="ipv6-error"></span>
             </div>
-            <input type="range" id="ipv6-cidr" min="1" max="128" value="64">
+
+            <div class="cidr-slider-card-horizontal" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 15px; margin-bottom: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 0;">Prefix Length</label>
+                <span id="ipv6-cidr-val" class="highlight" style="font-size: 16px; font-weight: bold; color: var(--accent-primary);">/64</span>
+              </div>
+              <input type="range" id="ipv6-cidr" min="1" max="128" value="64">
+            </div>
+
+            <div class="input-group">
+              <label for="ipv6-hosts">Required Hosts (Optional)</label>
+              <input type="text" id="ipv6-hosts" placeholder="e.g. 18446744073709551616">
+            </div>
           </div>
 
-          <div class="input-group">
-            <label for="ipv6-hosts">Required Hosts (Optional)</label>
-            <input type="text" id="ipv6-hosts" placeholder="e.g. 18446744073709551616">
+          <!-- Bulk IPv6 Panel (hidden by default) -->
+          <div id="ipv6-bulk-panel" class="hidden">
+            <div class="input-group">
+              <label for="ipv6-bulk-input">IPv6 Addresses (one per line or comma separated, e.g. 2001:db8::/64)</label>
+              <textarea id="ipv6-bulk-input" rows="5" placeholder="2001:db8::/64&#10;fe80::1/10&#10;2001:db8:a::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <span class="error-msg" id="ipv6-bulk-error"></span>
+            </div>
+            <button id="btn-calc-bulk-ipv6" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
           </div>
 
           <button id="btn-calc-ipv6" class="btn-primary" style="display: none;">Calculate</button>
+        </div>
+
+        <!-- Bulk Results Card IPv6 -->
+        <div class="card result-card hidden" id="ipv6-bulk-results">
+          <div class="result-header" style="margin-bottom: 12px;">
+            <h3>Bulk Subnet Results (IPv6)</h3>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-export-pdf-bulk-ipv6" class="btn-action" style="font-size: 11px; padding: 4px 8px;">PDF</button>
+              <button id="btn-export-csv-bulk-ipv6" class="btn-action" style="font-size: 11px; padding: 4px 8px;">CSV</button>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 11px;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary);">
+                  <th style="padding: 8px 4px;">Input IP</th>
+                  <th style="padding: 8px 4px;">Prefix / Range</th>
+                  <th style="padding: 8px 4px;">Total Addresses</th>
+                </tr>
+              </thead>
+              <tbody id="ipv6-bulk-results-tbody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="card result-card hidden" id="ipv6-results">
@@ -502,12 +603,20 @@
               <span class="val font-large" id="res6-total">18,446,744,073,709,551,616</span>
             </div>
           </div>
-          <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
-            <button id="btn-save-notes-ipv6" class="btn-action">
-              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
-              <span>Save to Notes</span>
+          <div class="result-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; flex-wrap: wrap;">
+            <button id="btn-export-pdf-ipv6" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>PDF</span>
             </button>
-            <button id="btn-share-ipv6" class="btn-action">
+            <button id="btn-export-csv-ipv6" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-ipv6" class="btn-action" style="padding: 6px 10px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-ipv6" class="btn-action" style="padding: 6px 10px;">
               <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
               <span>Share</span>
             </button>
@@ -552,12 +661,20 @@
               <span class="label">Binary Subnet Mask</span>
               <span class="val" id="conv-binary" style="font-family: monospace; font-size: 12px; color: #10B981;">11111111.11111111.11111111.00000000</span>
             </div>
-            <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
-              <button id="btn-save-notes-conv" class="btn-action">
-                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
-                <span>Save to Notes</span>
+            <div class="result-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%; flex-wrap: wrap;">
+              <button id="btn-export-pdf-conv" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+                <span>PDF</span>
               </button>
-              <button id="btn-share-conv" class="btn-action">
+              <button id="btn-export-csv-conv" class="btn-action pro-feature-btn" data-pro="true" style="padding: 6px 10px;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+                <span>CSV</span>
+              </button>
+              <button id="btn-save-notes-conv" class="btn-action" style="padding: 6px 10px;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+                <span>Save</span>
+              </button>
+              <button id="btn-share-conv" class="btn-action" style="padding: 6px 10px;">
                 <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
                 <span>Share</span>
               </button>
