@@ -2469,7 +2469,7 @@ function initSettings() {
       const categoryVal = document.getElementById('fb-app-type').value;
       const messageVal = document.getElementById('fb-app-message').value.trim();
       
-      fetch("https://formsubmit.co/ajax/isubnetcalc@gmail.com", {
+      fetch("https://formsubmit.co/ajax/info@banzai.gr", {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
