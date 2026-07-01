@@ -120,7 +120,7 @@ async function initRevenueCat() {
     try {
       const { Purchases } = window.Capacitor.Plugins;
       
-      const apiKeyAndroid = "test_HSrMVMPumumdDfciLiQfOSmszgC";
+      const apiKeyAndroid = "goog_RVInjInoGNBFdIqhouvUjuchGMr";
       const apiKeyIOS = "test_HSrMVMPumumdDfciLiQfOSmszgC";
       
       if (apiKeyAndroid === "goog_YOUR_API_KEY") {
