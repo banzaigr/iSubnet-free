@@ -2165,6 +2165,7 @@ function initSettings() {
   const formSignup = document.getElementById('form-signup');
   const signupError = document.getElementById('signup-error');
   const accountInfo = document.getElementById('settings-account-info');
+  const btnDeleteAccount = document.getElementById('btn-settings-delete-account');
 
   const btnPlan = document.getElementById('btn-settings-plan');
   const modalPlan = document.getElementById('plan-modal');
@@ -2242,6 +2243,7 @@ function initSettings() {
         } else {
           accountInfo.textContent = 'Not signed in';
           btnAccount.textContent = 'Sign In / Register';
+          if (btnDeleteAccount) btnDeleteAccount.classList.add('hidden');
           btnAccount.style.background = 'var(--accent-primary)';
           btnAccount.style.color = '#FFF';
           btnAccount.style.border = 'none';
@@ -2367,6 +2369,7 @@ function initSettings() {
         const displayName = user.displayName || user.email.split('@')[0];
         accountInfo.innerHTML = `Signed in as <strong>${escapeHTML(displayName)}</strong><br><span style="font-size:11px; opacity:0.7;">${escapeHTML(user.email)}</span>`;
         btnAccount.textContent = 'Sign Out';
+        if (btnDeleteAccount) btnDeleteAccount.classList.remove('hidden');
         btnAccount.style.background = 'rgba(239, 68, 68, 0.1)';
         btnAccount.style.color = 'var(--accent-danger)';
         btnAccount.style.border = '1px solid rgba(239, 68, 68, 0.3)';
@@ -2381,6 +2384,7 @@ function initSettings() {
 
         accountInfo.textContent = 'Not signed in';
         btnAccount.textContent = 'Sign In / Register';
+        if (btnDeleteAccount) btnDeleteAccount.classList.add('hidden');
         btnAccount.style.background = 'var(--accent-primary)';
         btnAccount.style.color = '#FFF';
         btnAccount.style.border = 'none';
@@ -2390,6 +2394,67 @@ function initSettings() {
         SafeStorage.setItem('isubnet_pro', 'false');
         applyProState();
         document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+      }
+    });
+  }
+
+  // Handle account deletion and data erasure (GDPR compliance)
+  if (btnDeleteAccount) {
+    btnDeleteAccount.addEventListener('click', async () => {
+      const confirmDelete = confirm("WARNING: Are you sure you want to permanently delete your account? This will erase all your synced configurations, calculator history, and custom notes from Banzai GR servers. This action is irreversible.");
+      if (!confirmDelete) return;
+
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+
+      const userId = user.uid;
+
+      // Show loader state
+      btnDeleteAccount.disabled = true;
+      btnDeleteAccount.textContent = 'Deleting Account...';
+
+      try {
+        if (useRealFirebase) {
+          // 1. Delete all Firestore data for this user ID in batches
+          const batch = db.batch();
+          
+          const notesSnapshot = await db.collection("users").doc(userId).collection("notes").get();
+          notesSnapshot.forEach(doc => batch.delete(doc.ref));
+          
+          const historySnapshot = await db.collection("users").doc(userId).collection("history").get();
+          historySnapshot.forEach(doc => batch.delete(doc.ref));
+          
+          batch.delete(db.collection("users").doc(userId));
+          await batch.commit();
+
+          // 2. Delete the user authentication record in Firebase
+          await user.delete();
+        } else {
+          // Mock mode local logs
+          console.log("Mock Mode: User data deleted from servers for ID: " + userId);
+        }
+
+        alert("Your account and all associated data have been permanently deleted from our servers.");
+        
+        // Hide modal and refresh
+        modalSettings.classList.add('hidden');
+        
+        // Clear local storage notes and history so they don't linger
+        SafeStorage.removeItem('isubnet_notes');
+        SafeStorage.removeItem('isubnet_history');
+        
+        // Reload page to reset state
+        window.location.reload();
+      } catch (err) {
+        console.error("Account deletion failed:", err);
+        btnDeleteAccount.disabled = false;
+        btnDeleteAccount.textContent = 'Delete Account';
+        
+        if (err.code === 'auth/requires-recent-login') {
+          alert("For security reasons, you must sign out and sign in again before you can delete your account.");
+        } else {
+          alert("Failed to delete account. Please try again or contact support.");
+        }
       }
     });
   }
