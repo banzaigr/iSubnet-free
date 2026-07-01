@@ -1314,7 +1314,21 @@ function switchToNotesTab() {
 
 // --- SHARING UTILITIES ---
 
-function shareText(title, text) {
+async function shareText(title, text) {
+  const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+  if (isNative) {
+    try {
+      const { Share } = window.Capacitor.Plugins;
+      await Share.share({
+        title: title,
+        text: text
+      });
+      return;
+    } catch (e) {
+      console.error("Capacitor Share failed:", e);
+    }
+  }
+
   if (navigator.share) {
     navigator.share({
       title: title,
@@ -1324,7 +1338,7 @@ function shareText(title, text) {
     });
   } else {
     navigator.clipboard.writeText(text).then(() => {
-      alert(`${title} copied to clipboard! (Your browser does not support the native Share API)`);
+      alert(`${title} copied to clipboard!`);
     });
   }
 }
@@ -2973,17 +2987,75 @@ function setupExporterListeners() {
     downloadCSV(`isubnet_export_${type}.csv`, csvContent);
   };
 
-  const pdfIds = ['btn-export-pdf-ipv4', 'btn-export-pdf-ipv6', 'btn-export-pdf-split', 'btn-export-pdf-conv', 'btn-export-pdf-bulk-ipv4', 'btn-export-pdf-bulk-ipv6'];
-  pdfIds.forEach(id => {
-    const el = document.getElementById(id);
+  const triggerPDFExport = async (type) => {
+    if (!PRO_UNLOCKED) {
+      showProModal();
+      return;
+    }
+
+    const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+    if (isNative) {
+      try {
+        const reportText = getReportText(type);
+        const { Filesystem, Share } = window.Capacitor.Plugins;
+        const filename = `isubnet_report_${type}.txt`;
+        const writeResult = await Filesystem.writeFile({
+          path: filename,
+          data: reportText,
+          directory: 'CACHE',
+          encoding: 'utf8'
+        });
+        await Share.share({
+          title: 'Export Report',
+          url: writeResult.uri
+        });
+      } catch (err) {
+        console.error("Capacitor Report Export failed:", err);
+        alert("Export failed: " + err.message);
+      }
+    } else {
+      window.print();
+    }
+  };
+
+  function getReportText(type) {
+    const csvData = getCSVData(type);
+    const lines = csvData.trim().split('\n');
+    let report = `iSubnet - Subnetting Calculation Report (${type.toUpperCase()})\n`;
+    report += `Generated: ${new Date().toLocaleString()}\n`;
+    report += `========================================\n\n`;
+    
+    lines.forEach((line, index) => {
+      if (index === 0) return; // Skip header
+      const parts = line.split(',');
+      if (parts.length >= 2) {
+        const param = parts[0].replace(/"/g, '');
+        const val = parts.slice(1).join(',').replace(/"/g, '');
+        report += `${param.padEnd(24)}: ${val}\n`;
+      } else {
+        report += `${line}\n`;
+      }
+    });
+    
+    report += `\n========================================\n`;
+    report += `Banzai GR - https://banzai.gr\n`;
+    return report;
+  }
+
+  const pdfIds = [
+    { id: 'btn-export-pdf-ipv4', type: 'ipv4' },
+    { id: 'btn-export-pdf-ipv6', type: 'ipv6' },
+    { id: 'btn-export-pdf-split', type: 'split' },
+    { id: 'btn-export-pdf-conv', type: 'conv' },
+    { id: 'btn-export-pdf-bulk-ipv4', type: 'bulk-ipv4' },
+    { id: 'btn-export-pdf-bulk-ipv6', type: 'bulk-ipv6' }
+  ];
+  pdfIds.forEach(item => {
+    const el = document.getElementById(item.id);
     if (el) {
       el.addEventListener('click', (e) => {
         e.preventDefault();
-        if (!PRO_UNLOCKED) {
-          showProModal();
-          return;
-        }
-        exportPDF();
+        triggerPDFExport(item.type);
       });
     }
   });
@@ -3007,7 +3079,29 @@ function setupExporterListeners() {
   });
 }
 
-function downloadCSV(filename, content) {
+async function downloadCSV(filename, content) {
+  const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+  if (isNative) {
+    try {
+      const { Filesystem, Share } = window.Capacitor.Plugins;
+      const writeResult = await Filesystem.writeFile({
+        path: filename,
+        data: content,
+        directory: 'CACHE',
+        encoding: 'utf8'
+      });
+      await Share.share({
+        title: 'Export CSV',
+        url: writeResult.uri
+      });
+      return;
+    } catch (err) {
+      console.error("Capacitor CSV Export failed:", err);
+      alert("Export failed: " + err.message);
+      return;
+    }
+  }
+
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
