@@ -2317,11 +2317,11 @@ function initSettings() {
         btnAccount.style.border = '1px solid rgba(239, 68, 68, 0.3)';
         btnAccount.style.boxShadow = 'none';
 
-        // 7 Days Pro Trial Activation
-        PRO_UNLOCKED = true;
-        SafeStorage.setItem('isubnet_pro', 'true');
+        // Default to Free Plan on login in mock mode
+        PRO_UNLOCKED = false;
+        SafeStorage.setItem('isubnet_pro', 'false');
         applyProState();
-        document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Pro Trial</strong> (7 days left)`;
+        document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
 
         modalAccount.classList.add('hidden');
         modalSettings.classList.remove('hidden');
@@ -2361,10 +2361,16 @@ function initSettings() {
         loadNotes();
         loadHistory();
 
-        PRO_UNLOCKED = true;
-        SafeStorage.setItem('isubnet_pro', 'true');
-        applyProState();
-        document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Pro Trial</strong> (7 days left)`;
+        // Check real subscription status from RevenueCat
+        if (useRevenueCat) {
+          updateRevenueCatSubscriptionState();
+        } else {
+          // Default to Free Plan if RevenueCat is not active
+          PRO_UNLOCKED = false;
+          SafeStorage.setItem('isubnet_pro', 'false');
+          applyProState();
+          document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+        }
         
         const displayName = user.displayName || user.email.split('@')[0];
         accountInfo.innerHTML = `Signed in as <strong>${escapeHTML(displayName)}</strong><br><span style="font-size:11px; opacity:0.7;">${escapeHTML(user.email)}</span>`;
