@@ -1373,6 +1373,26 @@ function saveConvNote() {
   switchToNotesTab();
 }
 
+function saveConvSubnetNote() {
+  const inputVal = document.getElementById('converter-input').value.trim();
+  const subnetResults = document.getElementById('converter-subnet-results');
+  if (!subnetResults) return;
+
+  const items = subnetResults.querySelectorAll('.result-item');
+  let noteContent = '';
+  items.forEach(item => {
+    const label = item.querySelector('.label').textContent.trim();
+    const val = item.querySelector('.val').textContent.trim();
+    noteContent += `• ${label}: ${val}\n`;
+  });
+
+  const noteTitle = `Subnet Calc: ${inputVal}`;
+  // Detect if IPv6 for note category sorting
+  const isIpv6 = (inputVal.includes(':'));
+  addNote(noteTitle, noteContent.trim(), isIpv6 ? 'IPv6' : 'IPv4');
+  switchToNotesTab();
+}
+
 function switchToNotesTab() {
   const noteTabBtn = document.querySelector('.tab-btn[data-target="notes-tab"]');
   if (noteTabBtn) noteTabBtn.click();
@@ -1488,6 +1508,22 @@ function shareConvResult() {
   shareText(title, text);
 }
 
+function shareConvSubnetResult() {
+  const inputVal = document.getElementById('converter-input').value.trim();
+  const subnetResults = document.getElementById('converter-subnet-results');
+  if (!subnetResults) return;
+
+  const items = subnetResults.querySelectorAll('.result-item');
+  let text = `Subnet Calculation Results (${inputVal}):\n`;
+  items.forEach(item => {
+    const label = item.querySelector('.label').textContent.trim();
+    const val = item.querySelector('.val').textContent.trim();
+    text += `• ${label}: ${val}\n`;
+  });
+
+  shareText(`iSubnet Calc - ${inputVal}`, text.trim());
+}
+
 // --- REFERENCE GUIDE COPY & SHARE UTILITIES ---
 
 const refClassesText = `IPv4 Address Classes Reference:
@@ -1557,6 +1593,8 @@ function setupEventListeners() {
   document.getElementById('btn-share-ipv4').addEventListener('click', shareIpv4Result);
   document.getElementById('btn-share-ipv6').addEventListener('click', shareIpv6Result);
   document.getElementById('btn-share-conv').addEventListener('click', shareConvResult);
+  document.getElementById('btn-save-notes-conv-subnet').addEventListener('click', saveConvSubnetNote);
+  document.getElementById('btn-share-conv-subnet').addEventListener('click', shareConvSubnetResult);
   
   // Reference guide copy & share bindings
   document.getElementById('btn-copy-ref-classes').addEventListener('click', () => {
@@ -3297,6 +3335,14 @@ function setupExporterListeners() {
       csv += `Prefix,${prefix}\n`;
       csv += `Subnet Mask,${mask}\n`;
       csv += `Wildcard Mask,${wildcard}\n`;
+    } else if (type === 'conv-subnet') {
+      csv = `Parameter,Value\n`;
+      const items = document.querySelectorAll('#converter-subnet-results .result-item');
+      items.forEach(item => {
+        const label = item.querySelector('.label').textContent.trim();
+        const val = item.querySelector('.val').textContent.trim();
+        csv += `"${label}","${val}"\n`;
+      });
     } else if (type === 'bulk-ipv4') {
       csv = `Input IP,Network,Range,Usable Hosts\n`;
       const rows = document.querySelectorAll('#ipv4-bulk-results-tbody tr');
@@ -3388,6 +3434,7 @@ function setupExporterListeners() {
     { id: 'btn-export-pdf-ipv6', type: 'ipv6' },
     { id: 'btn-export-pdf-split', type: 'split' },
     { id: 'btn-export-pdf-conv', type: 'conv' },
+    { id: 'btn-export-pdf-conv-subnet', type: 'conv-subnet' },
     { id: 'btn-export-pdf-bulk-ipv4', type: 'bulk-ipv4' },
     { id: 'btn-export-pdf-bulk-ipv6', type: 'bulk-ipv6' }
   ];
@@ -3406,6 +3453,7 @@ function setupExporterListeners() {
     { id: 'btn-export-csv-ipv6', type: 'ipv6' },
     { id: 'btn-export-csv-split', type: 'split' },
     { id: 'btn-export-csv-conv', type: 'conv' },
+    { id: 'btn-export-csv-conv-subnet', type: 'conv-subnet' },
     { id: 'btn-export-csv-bulk-ipv4', type: 'bulk-ipv4' },
     { id: 'btn-export-csv-bulk-ipv6', type: 'bulk-ipv6' }
   ];
