@@ -338,6 +338,40 @@ const SafeStorage = {
 
 PRO_UNLOCKED = SafeStorage.getItem('isubnet_pro') === 'true';
 
+let lastCalculatedIP = SafeStorage.getItem('isubnet_last_ip') || '';
+
+function updateSharedIP(ip) {
+  if (!ip) return;
+  lastCalculatedIP = ip.trim().replace(/^\[|\]$/g, '').split('/')[0];
+  SafeStorage.setItem('isubnet_last_ip', lastCalculatedIP);
+  renderQuickPastePills();
+}
+
+function renderQuickPastePills() {
+  const pills = document.querySelectorAll('.quick-paste-pill');
+  const insertIpBtn = document.getElementById('btn-insert-note-ip');
+  
+  if (!lastCalculatedIP) {
+    pills.forEach(p => p.classList.add('hidden'));
+    if (insertIpBtn) insertIpBtn.classList.add('hidden');
+    return;
+  }
+  
+  pills.forEach(pill => {
+    pill.classList.remove('hidden');
+    const valSpan = pill.querySelector('.paste-val');
+    if (valSpan) {
+      const dispText = lastCalculatedIP.length > 15 ? lastCalculatedIP.slice(0, 12) + '...' : lastCalculatedIP;
+      valSpan.textContent = dispText;
+    }
+  });
+  
+  if (insertIpBtn) {
+    insertIpBtn.classList.remove('hidden');
+    insertIpBtn.title = `Insert ${lastCalculatedIP} into note`;
+  }
+}
+
 // --- Tab Navigation Setup ---
 function setupTabNavigation() {
   const tabButtons = document.querySelectorAll('.tab-btn');
@@ -428,6 +462,8 @@ function calculateIPv4() {
     errorEl.textContent = 'Invalid IPv4 address format. Use format e.g. 192.168.1.1';
     return;
   }
+
+  updateSharedIP(ipInput);
 
   let cidrInput = parseInt(document.getElementById('ipv4-cidr').value, 10);
 
@@ -705,6 +741,8 @@ function calculateIPv6() {
     errorEl.textContent = 'Invalid IPv6 address. Enter valid hexadecimal blocks separated by colons.';
     return;
   }
+
+  updateSharedIP(ipInput);
 
   let prefixLength = parseInt(document.getElementById('ipv6-cidr').value, 10);
 
@@ -1823,6 +1861,8 @@ function runSplitter() {
       errorEl.textContent = 'Invalid Base IPv6 Address format.';
       return;
     }
+    
+    updateSharedIP(baseIp);
     if (isNaN(baseCidr) || baseCidr < 0 || baseCidr > 127) {
       errorEl.textContent = 'Base prefix must be between 0 and 127.';
       return;
@@ -1985,6 +2025,8 @@ function runSplitter() {
       errorEl.textContent = 'Invalid Base IP Address format.';
       return;
     }
+    
+    updateSharedIP(baseIp);
     
     if (isNaN(baseCidr) || baseCidr < 0 || baseCidr > 30) {
       errorEl.textContent = 'Base prefix must be between 0 and 30.';
@@ -2593,11 +2635,65 @@ function initSettings() {
   }
 }
 
+function initQuickPaste() {
+  const pasteIpv4 = document.getElementById('paste-ipv4');
+  if (pasteIpv4) {
+    pasteIpv4.addEventListener('click', () => {
+      if (lastCalculatedIP) {
+        document.getElementById('ipv4-address').value = lastCalculatedIP;
+        calculateIPv4();
+      }
+    });
+  }
+  
+  const pasteIpv6 = document.getElementById('paste-ipv6');
+  if (pasteIpv6) {
+    pasteIpv6.addEventListener('click', () => {
+      if (lastCalculatedIP) {
+        document.getElementById('ipv6-address').value = lastCalculatedIP;
+        calculateIPv6();
+      }
+    });
+  }
+  
+  const pasteSplit = document.getElementById('paste-split');
+  if (pasteSplit) {
+    pasteSplit.addEventListener('click', () => {
+      if (lastCalculatedIP) {
+        document.getElementById('split-base-ip').value = lastCalculatedIP;
+        runSplitter();
+      }
+    });
+  }
+  
+  const insertNoteIpBtn = document.getElementById('btn-insert-note-ip');
+  if (insertNoteIpBtn) {
+    insertNoteIpBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!lastCalculatedIP) return;
+      
+      const noteTextarea = document.getElementById('note-text');
+      if (noteTextarea) {
+        const startPos = noteTextarea.selectionStart;
+        const endPos = noteTextarea.selectionEnd;
+        const text = noteTextarea.value;
+        noteTextarea.value = text.substring(0, startPos) + lastCalculatedIP + text.substring(endPos, text.length);
+        noteTextarea.focus();
+        noteTextarea.selectionStart = startPos + lastCalculatedIP.length;
+        noteTextarea.selectionEnd = startPos + lastCalculatedIP.length;
+      }
+    });
+  }
+  
+  renderQuickPastePills();
+}
+
 // --- Run Setup on page load ---
 function init() {
   initSettings();
   initRevenueCat();
   setupTabNavigation();
+  initQuickPaste();
   setupEventListeners();
   calculateIPv4();
   calculateIPv6();

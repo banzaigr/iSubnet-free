@@ -279,7 +279,10 @@
           
           <div id="ipv4-single-panel">
             <div class="input-group">
-              <label for="ipv4-address">IP Address</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="ipv4-address" style="margin: 0;">IP Address</label>
+                <span class="quick-paste-pill hidden" id="paste-ipv4" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; font-weight: 600; transition: opacity 0.2s;">📋 Use: <span class="paste-val"></span></span>
+              </div>
               <input type="text" id="ipv4-address" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
               <span class="error-msg" id="ipv4-error"></span>
             </div>
@@ -421,7 +424,10 @@
           <h2 class="card-title">Subnet Splitter (VLSM)</h2>
           <div class="input-row" style="display: flex; gap: 12px; margin-bottom: 10px;">
             <div class="input-group" style="flex: 2;">
-              <label for="split-base-ip">Base IP Network</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="split-base-ip" style="margin: 0;">Base IP Network</label>
+                <span class="quick-paste-pill hidden" id="paste-split" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; font-weight: 600; transition: opacity 0.2s;">📋 Use: <span class="paste-val"></span></span>
+              </div>
               <input type="text" id="split-base-ip" placeholder="e.g. 192.168.1.0" value="192.168.1.0">
             </div>
             <div class="input-group" style="flex: 1;">
@@ -511,7 +517,10 @@
           
           <div id="ipv6-single-panel">
             <div class="input-group">
-              <label for="ipv6-address">IPv6 Address</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="ipv6-address" style="margin: 0;">IPv6 Address</label>
+                <span class="quick-paste-pill hidden" id="paste-ipv6" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; font-weight: 600; transition: opacity 0.2s;">📋 Use: <span class="paste-val"></span></span>
+              </div>
               <input type="text" id="ipv6-address" placeholder="e.g. 2001:db8::" value="2001:db8::">
               <span class="error-msg" id="ipv6-error"></span>
             </div>
@@ -848,7 +857,10 @@
             <label for="note-text">Write note content</label>
             <textarea id="note-text" placeholder="Type subnetting details, device descriptions, or other network engineering notes here..." rows="4"></textarea>
           </div>
-          <button id="btn-save-note-manual" class="btn-primary">Save Note</button>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button id="btn-save-note-manual" class="btn-primary" style="flex: 2;">Save Note</button>
+            <button id="btn-insert-note-ip" class="btn-primary hidden" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none; font-size: 12px; font-weight: 600; padding: 10px;">📋 Insert IP</button>
+          </div>
         </div>
 
         <div class="card result-card">
