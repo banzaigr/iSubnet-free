@@ -1755,7 +1755,7 @@ function runConverter() {
         recordHistoryDebounced('Converter', { input: input }, `Calculated Subnet: ${ipPart}/${cidr}`);
         return;
       }
-    } else if (validateIPv6(ipPart)) {
+    } else if (parseIPv6(ipPart) !== null) {
       let cidr = null;
       const prefixReg = /^\/?(\d{1,3})$/;
       if (prefixReg.test(maskPart)) {
