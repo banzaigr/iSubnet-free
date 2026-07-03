@@ -1226,4 +1226,89 @@ body.dark-mode .phone-wrapper {
   }
 }
 
+/* Premium Result Action Buttons Layout & Appearance */
+.result-actions {
+  display: flex !important;
+  gap: 8px !important;
+  margin-top: 15px !important;
+  border-top: 1px solid var(--border-color) !important;
+  padding-top: 12px !important;
+  width: 100% !important;
+  justify-content: space-between !important;
+}
+
+.result-actions .btn-action {
+  flex: 1 !important;
+  padding: 8px 4px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 6px !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.result-actions .btn-action svg {
+  width: 14px !important;
+  height: 14px !important;
+  color: var(--text-secondary) !important;
+  transition: transform 0.2s ease !important;
+}
+
+/* Hover & Active Effects */
+.result-actions .btn-action:hover {
+  background: var(--bg-card) !important;
+  border-color: var(--accent-primary) !important;
+  color: var(--accent-primary) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+.result-actions .btn-action:hover svg {
+  color: var(--accent-primary) !important;
+  transform: scale(1.1) !important;
+}
+
+.result-actions .btn-action:active {
+  transform: translateY(0) !important;
+  box-shadow: none !important;
+  background: var(--bg-primary) !important;
+}
+
+/* Premium Pro Exporter Styling */
+.result-actions .btn-action.pro-feature-btn {
+  background: rgba(245, 158, 11, 0.04) !important;
+  border-color: rgba(245, 158, 11, 0.2) !important;
+  color: #D97706 !important;
+}
+
+body.dark-mode .result-actions .btn-action.pro-feature-btn {
+  background: rgba(245, 158, 11, 0.08) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #fbbf24 !important;
+}
+
+.result-actions .btn-action.pro-feature-btn:hover {
+  background: rgba(245, 158, 11, 0.08) !important;
+  border-color: #F59E0B !important;
+  color: #F59E0B !important;
+}
+
+body.dark-mode .result-actions .btn-action.pro-feature-btn:hover {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border-color: #fbbf24 !important;
+  color: #fbbf24 !important;
+}
+
+.result-actions .btn-action.pro-feature-btn svg {
+  color: inherit !important;
+}
+
 
