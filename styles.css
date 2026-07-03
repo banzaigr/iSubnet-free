@@ -11,6 +11,7 @@
   --text-muted: #94a3b8;        /* Soft gray placeholder text */
   
   --accent-primary: #4f46e5;    /* Brand Indigo */
+  --accent-primary-rgb: 79, 70, 229; /* RGB for rgba() usage */
   --accent-cyan: #0ea5e9;       /* Sky Blue */
   --accent-success: #10b981;    /* Sage Green */
   --accent-danger: #ef4444;     /* Rose Red */
@@ -510,11 +511,14 @@ th {
   right: 0;
   height: 74px;
   background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-color);
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  padding-bottom: 15px; /* iOS home indicator space */
+  padding-bottom: 15px;
   z-index: 100;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.08);
 }
 
 .tab-btn {
@@ -529,21 +533,69 @@ th {
   font-size: 9.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: var(--transition-smooth);
+  transition: color 0.2s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  padding-top: 4px;
+}
+
+.tab-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 28px;
+  height: 2.5px;
+  border-radius: 0 0 3px 3px;
+  background: var(--accent-primary);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab-btn .tab-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 24px;
+  border-radius: 8px;
+  transition: background 0.2s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .tab-btn svg {
   width: 20px;
   height: 20px;
-  transition: var(--transition-smooth);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.tab-btn:hover .tab-icon-wrap {
+  background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.06);
+}
+
+.tab-btn:active {
+  transform: translateY(0) scale(0.93);
 }
 
 .tab-btn.active {
   color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.tab-btn.active::before {
+  transform: translateX(-50%) scaleX(1);
+}
+
+.tab-btn.active .tab-icon-wrap {
+  background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.1);
 }
 
 .tab-btn.active svg {
-  transform: scale(1.05);
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 4px rgba(var(--accent-primary-rgb, 59, 130, 246), 0.4));
 }
 
 /* Animations */
