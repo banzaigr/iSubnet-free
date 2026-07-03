@@ -52,7 +52,8 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  clip-path: inset(0 0 0 0 round 48px);
 }
 
 /* Time and Status Bar Mockup */
@@ -509,21 +510,21 @@ th {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 74px;
+  height: 78px;
   background: var(--bg-card);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid var(--border-color);
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   padding-bottom: 15px;
   z-index: 100;
-  box-shadow: 0 -4px 24px rgba(0,0,0,0.08);
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
+  align-items: end;
+  overflow: visible;
 }
 
 .tab-btn {
   background: none;
-  border: none;
+  border: 1.5px solid transparent;
   color: var(--text-secondary);
   display: flex;
   flex-direction: column;
@@ -533,69 +534,72 @@ th {
   font-size: 9.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: color 0.2s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
-  padding-top: 4px;
-}
-
-.tab-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%) scaleX(0);
-  width: 28px;
-  height: 2.5px;
-  border-radius: 0 0 3px 3px;
-  background: var(--accent-primary);
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 5px 2px 4px;
+  border-radius: 12px;
+  margin: 0 1px;
+  transition:
+    color 0.25s ease,
+    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    padding 0.25s ease;
 }
 
 .tab-btn .tab-icon-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 24px;
-  border-radius: 8px;
-  transition: background 0.2s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  width: 28px;
+  height: 22px;
+  transition: width 0.25s ease, height 0.25s ease;
 }
 
 .tab-btn svg {
   width: 20px;
   height: 20px;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    width 0.25s ease,
+    height 0.25s ease,
+    filter 0.25s ease;
 }
 
 .tab-btn:hover {
   color: var(--text-primary);
-  transform: translateY(-1px);
-}
-
-.tab-btn:hover .tab-icon-wrap {
-  background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.06);
+  background: rgba(var(--accent-primary-rgb), 0.05);
+  transform: translateY(-2px);
 }
 
 .tab-btn:active {
-  transform: translateY(0) scale(0.93);
+  transform: translateY(1px) scale(0.94);
 }
 
+/* ── Floating Card: active tab ── */
 .tab-btn.active {
   color: var(--accent-primary);
-  font-weight: 600;
-}
-
-.tab-btn.active::before {
-  transform: translateX(-50%) scaleX(1);
+  font-weight: 700;
+  background: var(--bg-card);
+  border-width: 2.5px;
+  border-color: rgba(var(--accent-primary-rgb), 0.85);
+  border-radius: 16px;
+  padding: 10px 4px 8px;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.12),
+    inset 0 0 12px rgba(var(--accent-primary-rgb), 0.2);
+  transform: translateY(-14px);
+  z-index: 10;
 }
 
 .tab-btn.active .tab-icon-wrap {
-  background: rgba(var(--accent-primary-rgb, 59, 130, 246), 0.1);
+  width: 32px;
+  height: 28px;
 }
 
 .tab-btn.active svg {
-  transform: scale(1.1);
-  filter: drop-shadow(0 0 4px rgba(var(--accent-primary-rgb, 59, 130, 246), 0.4));
+  width: 24px;
+  height: 24px;
 }
 
 /* Animations */
@@ -1187,6 +1191,11 @@ body.dark-mode .app-tab-bar {
   border-top: 1px solid var(--border-color) !important;
 }
 
+body.dark-mode .tab-btn.active {
+  border-color: rgba(var(--accent-primary-rgb), 0.7) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
 body.dark-mode .phone-wrapper {
   border-color: #0f172a !important;
 }
@@ -1277,90 +1286,4 @@ body.dark-mode .phone-wrapper {
     color: #000000 !important;
   }
 }
-
-/* Premium Result Action Buttons Layout & Appearance */
-.result-actions {
-  display: flex !important;
-  gap: 8px !important;
-  margin-top: 15px !important;
-  border-top: 1px solid var(--border-color) !important;
-  padding-top: 12px !important;
-  width: 100% !important;
-  justify-content: space-between !important;
-}
-
-.result-actions .btn-action {
-  flex: 1 !important;
-  padding: 8px 4px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  gap: 6px !important;
-  border-radius: 10px !important;
-  cursor: pointer !important;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  background: var(--bg-primary) !important;
-  border: 1px solid var(--border-color) !important;
-  color: var(--text-primary) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
-}
-
-.result-actions .btn-action svg {
-  width: 14px !important;
-  height: 14px !important;
-  color: var(--text-secondary) !important;
-  transition: transform 0.2s ease !important;
-}
-
-/* Hover & Active Effects */
-.result-actions .btn-action:hover {
-  background: var(--bg-card) !important;
-  border-color: var(--accent-primary) !important;
-  color: var(--accent-primary) !important;
-  transform: translateY(-1px) !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
-}
-
-.result-actions .btn-action:hover svg {
-  color: var(--accent-primary) !important;
-  transform: scale(1.1) !important;
-}
-
-.result-actions .btn-action:active {
-  transform: translateY(0) !important;
-  box-shadow: none !important;
-  background: var(--bg-primary) !important;
-}
-
-/* Premium Pro Exporter Styling */
-.result-actions .btn-action.pro-feature-btn {
-  background: rgba(245, 158, 11, 0.04) !important;
-  border-color: rgba(245, 158, 11, 0.2) !important;
-  color: #D97706 !important;
-}
-
-body.dark-mode .result-actions .btn-action.pro-feature-btn {
-  background: rgba(245, 158, 11, 0.08) !important;
-  border-color: rgba(245, 158, 11, 0.3) !important;
-  color: #fbbf24 !important;
-}
-
-.result-actions .btn-action.pro-feature-btn:hover {
-  background: rgba(245, 158, 11, 0.08) !important;
-  border-color: #F59E0B !important;
-  color: #F59E0B !important;
-}
-
-body.dark-mode .result-actions .btn-action.pro-feature-btn:hover {
-  background: rgba(245, 158, 11, 0.15) !important;
-  border-color: #fbbf24 !important;
-  color: #fbbf24 !important;
-}
-
-.result-actions .btn-action.pro-feature-btn svg {
-  color: inherit !important;
-}
-
 

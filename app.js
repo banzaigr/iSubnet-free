@@ -8,6 +8,12 @@
     const color = localStorage.getItem('isubnet_theme_color');
     if (color) {
       document.documentElement.style.setProperty('--accent-primary', color);
+      // Also set the RGB version so rgba() CSS values update immediately
+      const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(color);
+      if (r) {
+        document.documentElement.style.setProperty('--accent-primary-rgb',
+          `${parseInt(r[1],16)}, ${parseInt(r[2],16)}, ${parseInt(r[3],16)}`);
+      }
     }
   } catch (e) {}
 })();
@@ -129,11 +135,18 @@ async function initRevenueCat() {
       }
       
       const apiKey = window.Capacitor.getPlatform() === 'ios' ? apiKeyIOS : apiKeyAndroid;
-      await Purchases.configure({ apiKey });
-      useRevenueCat = true;
-      console.log("RevenueCat initialized successfully!");
-      
-      updateRevenueCatSubscriptionState();
+      // Configure RevenueCat
+      Purchases.configure({ apiKey })
+        .then(() => {
+          useRevenueCat = true;
+          console.log("RevenueCat initialized successfully!");
+          updateRevenueCatSubscriptionState();
+        })
+        .catch(err => {
+          console.warn("RevenueCat configure warning (will try to operate with login sync anyway):", err);
+          useRevenueCat = true; // Still allow login syncing calls to register customer accounts
+          updateRevenueCatSubscriptionState();
+        });
     } catch(err) {
       console.error("RevenueCat Init Error:", err);
     }
@@ -376,27 +389,8 @@ function updateSharedIP(ip) {
 }
 
 function renderQuickPastePills() {
-  const pills = document.querySelectorAll('.quick-paste-pill');
-  const insertIpBtn = document.getElementById('btn-insert-note-ip');
-  
-  if (!lastCalculatedIP) {
-    pills.forEach(p => p.classList.add('hidden'));
-    if (insertIpBtn) insertIpBtn.classList.add('hidden');
-    return;
-  }
-  
-  pills.forEach(pill => {
-    pill.classList.remove('hidden');
-    const valSpan = pill.querySelector('.paste-val');
-    if (valSpan) {
-      const dispText = lastCalculatedIP.length > 15 ? lastCalculatedIP.slice(0, 12) + '...' : lastCalculatedIP;
-      valSpan.textContent = dispText;
-    }
-  });
-  
-  if (insertIpBtn) {
-    insertIpBtn.classList.remove('hidden');
-    insertIpBtn.title = `Insert ${lastCalculatedIP} into note`;
+  if (window._updateCopyPasteVisibility) {
+    window._updateCopyPasteVisibility();
   }
 }
 
@@ -891,16 +885,12 @@ function loadNotes() {
 function saveNotesToStorage() {
   SafeStorage.setItem('isubnet_notes_' + currentUserId, JSON.stringify(notes));
   if (currentUserId !== 'local') {
-    SafeStorage.setItem('isubnet_notes_local', JSON.stringify(notes.slice(0, 2)));
+    SafeStorage.setItem('isubnet_notes_local', JSON.stringify(notes)); // Save all, do not slice
   }
   renderNotes();
 }
 
 function addNote(title, content, category = 'Manual') {
-  if (!PRO_UNLOCKED && notes.length >= FREE_NOTES_LIMIT) {
-    showNotesLimitBanner();
-    return;
-  }
   const newNote = {
     id: String(Date.now()),
     date: new Date().toLocaleString(),
@@ -1102,7 +1092,7 @@ function loadHistory() {
 function saveHistoryToStorage() {
   SafeStorage.setItem('isubnet_history_' + currentUserId, JSON.stringify(historyItems));
   if (currentUserId !== 'local') {
-    SafeStorage.setItem('isubnet_history_local', JSON.stringify(historyItems.slice(0, 2)));
+    SafeStorage.setItem('isubnet_history_local', JSON.stringify(historyItems)); // Save all, do not slice
   }
   renderHistory();
 }
@@ -1112,10 +1102,10 @@ function recordHistoryDebounced(type, data, details) {
   historyTimer = setTimeout(() => {
     // Avoid duplicate records
     if (historyItems.length > 0) {
-      const last = historyItems[0];
-      if (last.type === type && JSON.stringify(last.data) === JSON.stringify(data)) {
-        return;
-      }
+       const last = historyItems[0];
+       if (last.type === type && JSON.stringify(last.data) === JSON.stringify(data)) {
+         return;
+       }
     }
 
     const newItem = {
@@ -1139,10 +1129,9 @@ function recordHistoryDebounced(type, data, details) {
     };
 
     historyItems.unshift(newItem);
-    const limit = PRO_UNLOCKED ? 50 : FREE_HISTORY_LIMIT;
-    if (historyItems.length > limit) {
-      historyItems = historyItems.slice(0, limit);
-      if (!PRO_UNLOCKED) showHistoryLimitBanner();
+    // Keep max 50 items total in local array/storage to avoid massive files
+    if (historyItems.length > 50) {
+      historyItems = historyItems.slice(0, 50);
     }
     saveHistoryToStorage();
     saveHistoryToFirebase(newItem);
@@ -2460,9 +2449,17 @@ function shareSplitResult() {
 // --- Settings & Customization Engine ---
 let activeThemeColor = SafeStorage.getItem('isubnet_theme_color') || '#4f46e5';
 
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+    : '79, 70, 229';
+}
+
 function loadThemeColor() {
   document.documentElement.style.setProperty('--accent-primary', activeThemeColor);
-  
+  document.documentElement.style.setProperty('--accent-primary-rgb', hexToRgb(activeThemeColor));
+
   // Update swatch active outline states
   const swatches = document.querySelectorAll('.theme-swatch');
   swatches.forEach(swatch => {
@@ -2670,6 +2667,13 @@ function initSettings() {
           
           currentUserId = user.uid;
           
+          // Write user metadata to Firestore for administration readability
+          db.collection("users").doc(user.uid).set({
+            email: user.email,
+            displayName: user.displayName || user.email.split('@')[0],
+            lastActive: new Date().toISOString()
+          }, { merge: true }).catch(err => console.error("Error setting user profile:", err));
+          
           if (localNotesRaw) {
             try {
               const localNotes = JSON.parse(localNotesRaw);
@@ -2686,6 +2690,11 @@ function initSettings() {
           }
         } else {
           currentUserId = user.uid;
+          db.collection("users").doc(user.uid).set({
+            email: user.email,
+            displayName: user.displayName || user.email.split('@')[0],
+            lastActive: new Date().toISOString()
+          }, { merge: true }).catch(err => console.error("Error updating user profile:", err));
         }
 
         loadNotes();
@@ -2693,7 +2702,22 @@ function initSettings() {
 
         // Check real subscription status from RevenueCat
         if (useRevenueCat) {
-          updateRevenueCatSubscriptionState();
+          try {
+            const { Purchases } = window.Capacitor.Plugins;
+            Purchases.logIn({ appUserID: user.uid })
+              .then(() => {
+                const displayName = user.displayName || user.email.split('@')[0];
+                Purchases.setEmail({ email: user.email }).catch(() => {});
+                Purchases.setDisplayName({ displayName: displayName }).catch(() => {});
+                updateRevenueCatSubscriptionState();
+              })
+              .catch(err => {
+                console.error("RevenueCat login error:", err);
+                updateRevenueCatSubscriptionState();
+              });
+          } catch(e) {
+            updateRevenueCatSubscriptionState();
+          }
         } else {
           // Default to Free Plan if RevenueCat is not active
           PRO_UNLOCKED = false;
@@ -2730,6 +2754,14 @@ function initSettings() {
         SafeStorage.setItem('isubnet_pro', 'false');
         applyProState();
         document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+        
+        // Log out of RevenueCat
+        if (useRevenueCat) {
+          try {
+            const { Purchases } = window.Capacitor.Plugins;
+            Purchases.logOut().catch(err => console.error("RevenueCat logout error:", err));
+          } catch(e) {}
+        }
       }
     });
   }
@@ -2832,9 +2864,19 @@ function initSettings() {
 
   if (btnPlanSelectPro) {
     btnPlanSelectPro.addEventListener('click', () => {
+      let cycle = 'monthly';
+      const activeToggle = document.querySelector('.billing-toggle.active');
+      if (activeToggle) {
+        const dataCycle = activeToggle.getAttribute('data-cycle');
+        if (dataCycle === 'annual') {
+          cycle = 'yearly';
+        } else {
+          cycle = dataCycle;
+        }
+      }
       modalPlan.classList.add('hidden');
       modalSettings.classList.add('hidden');
-      upgradeWithRevenueCat();
+      purchaseProductByPlan(cycle);
     });
   }
 
@@ -2910,51 +2952,275 @@ function initSettings() {
 }
 
 function initQuickPaste() {
-  const pasteIpv4 = document.getElementById('paste-ipv4');
+  // Always show the copy+paste button pairs so they are always available
+  function updateCopyPasteVisibility() {
+    const pairs = ['copy-paste-ipv4', 'copy-paste-ipv6', 'copy-paste-split', 'copy-paste-converter'];
+    pairs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.remove('hidden');
+        el.style.display = 'flex';
+      }
+    });
+  }
+
+  // Helper: briefly flash button text to confirm copy
+  function flashConfirm(btn, originalHTML) {
+    btn.innerHTML = '<svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!';
+    btn.style.color = 'var(--accent-success)';
+    setTimeout(() => {
+      btn.innerHTML = originalHTML;
+      btn.style.color = '';
+    }, 1500);
+  }
+
+  // Keep a local storage backup of the last copied text in case system clipboard reads are blocked
+  function saveToLocalClipboard(text) {
+    if (!text) return;
+    try {
+      window._isubnetLastCopied = text;
+      localStorage.setItem('isubnet_last_copied', text);
+    } catch(e) {}
+  }
+
+  function getLocalClipboardBackup() {
+    try {
+      return window._isubnetLastCopied || localStorage.getItem('isubnet_last_copied') || '';
+    } catch(e) {
+      return window._isubnetLastCopied || '';
+    }
+  }
+
+  // Helper to read clipboard and paste
+  function pasteFromClipboard(targetInputId, callback) {
+    const inputEl = document.getElementById(targetInputId);
+    if (!inputEl) return;
+
+    function doPaste(text) {
+      if (text) {
+        inputEl.value = text.trim();
+        if (callback) callback();
+        return true;
+      }
+      return false;
+    }
+
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText()
+        .then(text => {
+          if (!doPaste(text)) {
+            // try backup
+            const backup = getLocalClipboardBackup();
+            if (!doPaste(backup)) {
+              const fallback = prompt("Clipboard is empty. Enter text to paste:");
+              if (fallback) doPaste(fallback);
+            }
+          }
+        })
+        .catch(() => {
+          // If browser blocked clipboard read, try local backup first
+          const backup = getLocalClipboardBackup();
+          if (!doPaste(backup)) {
+            const fallback = prompt("Enter text to paste (Clipboard permission blocked):");
+            if (fallback) doPaste(fallback);
+          }
+        });
+    } else {
+      const backup = getLocalClipboardBackup();
+      if (!doPaste(backup)) {
+        const fallback = prompt("Enter text to paste:");
+        if (fallback) doPaste(fallback);
+      }
+    }
+  }
+
+  // IPv4
+  const copyIpv4 = document.getElementById('btn-copy-ipv4');
+  if (copyIpv4) {
+    copyIpv4.addEventListener('click', () => {
+      const inputEl = document.getElementById('ipv4-address');
+      const val = inputEl.value.trim();
+      if (val) {
+        saveToLocalClipboard(val);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(val)
+            .then(() => flashConfirm(copyIpv4, copyIpv4.innerHTML))
+            .catch(() => {
+              inputEl.select();
+              document.execCommand('copy');
+              flashConfirm(copyIpv4, copyIpv4.innerHTML);
+            });
+        } else {
+          inputEl.select();
+          document.execCommand('copy');
+          flashConfirm(copyIpv4, copyIpv4.innerHTML);
+        }
+      }
+    });
+  }
+  const pasteIpv4 = document.getElementById('btn-paste-ipv4');
   if (pasteIpv4) {
     pasteIpv4.addEventListener('click', () => {
-      if (lastCalculatedIP) {
-        document.getElementById('ipv4-address').value = lastCalculatedIP;
-        calculateIPv4();
+      pasteFromClipboard('ipv4-address', calculateIPv4);
+    });
+  }
+
+  // IPv6
+  const copyIpv6 = document.getElementById('btn-copy-ipv6');
+  if (copyIpv6) {
+    copyIpv6.addEventListener('click', () => {
+      const inputEl = document.getElementById('ipv6-address');
+      const val = inputEl.value.trim();
+      if (val) {
+        saveToLocalClipboard(val);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(val)
+            .then(() => flashConfirm(copyIpv6, copyIpv6.innerHTML))
+            .catch(() => {
+              inputEl.select();
+              document.execCommand('copy');
+              flashConfirm(copyIpv6, copyIpv6.innerHTML);
+            });
+        } else {
+          inputEl.select();
+          document.execCommand('copy');
+          flashConfirm(copyIpv6, copyIpv6.innerHTML);
+        }
       }
     });
   }
-  
-  const pasteIpv6 = document.getElementById('paste-ipv6');
+  const pasteIpv6 = document.getElementById('btn-paste-ipv6');
   if (pasteIpv6) {
     pasteIpv6.addEventListener('click', () => {
-      if (lastCalculatedIP) {
-        document.getElementById('ipv6-address').value = lastCalculatedIP;
-        calculateIPv6();
+      pasteFromClipboard('ipv6-address', calculateIPv6);
+    });
+  }
+
+  // Splitter
+  const copySplit = document.getElementById('btn-copy-split');
+  if (copySplit) {
+    copySplit.addEventListener('click', () => {
+      const inputEl = document.getElementById('split-base-ip');
+      const val = inputEl.value.trim();
+      if (val) {
+        saveToLocalClipboard(val);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(val)
+            .then(() => flashConfirm(copySplit, copySplit.innerHTML))
+            .catch(() => {
+              inputEl.select();
+              document.execCommand('copy');
+              flashConfirm(copySplit, copySplit.innerHTML);
+            });
+        } else {
+          inputEl.select();
+          document.execCommand('copy');
+          flashConfirm(copySplit, copySplit.innerHTML);
+        }
       }
     });
   }
-  
-  const pasteSplit = document.getElementById('paste-split');
+  const pasteSplit = document.getElementById('btn-paste-split');
   if (pasteSplit) {
     pasteSplit.addEventListener('click', () => {
-      if (lastCalculatedIP) {
-        document.getElementById('split-base-ip').value = lastCalculatedIP;
-        runSplitter();
+      pasteFromClipboard('split-base-ip', runSplitter);
+    });
+  }
+
+  // Converter
+  const copyConverter = document.getElementById('btn-copy-converter');
+  if (copyConverter) {
+    copyConverter.addEventListener('click', () => {
+      const inputEl = document.getElementById('converter-input');
+      const val = inputEl.value.trim();
+      if (val) {
+        saveToLocalClipboard(val);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(val)
+            .then(() => {
+              flashConfirm(copyConverter, copyConverter.innerHTML);
+            })
+            .catch(() => {
+              // Fallback selection copy
+              inputEl.select();
+              document.execCommand('copy');
+              flashConfirm(copyConverter, copyConverter.innerHTML);
+            });
+        } else {
+          // Fallback selection copy
+          inputEl.select();
+          document.execCommand('copy');
+          flashConfirm(copyConverter, copyConverter.innerHTML);
+        }
       }
     });
   }
+  const pasteConverter = document.getElementById('btn-paste-converter');
+  if (pasteConverter) {
+    pasteConverter.addEventListener('click', () => {
+      pasteFromClipboard('converter-input', () => {
+        const event = new Event('input', { bubbles: true });
+        document.getElementById('converter-input').dispatchEvent(event);
+      });
+    });
+  }
+
+  // Expose so updateLastCalculatedIP can call it
+  window._updateCopyPasteVisibility = updateCopyPasteVisibility;
+  updateCopyPasteVisibility();
   
-  const insertNoteIpBtn = document.getElementById('btn-insert-note-ip');
-  if (insertNoteIpBtn) {
-    insertNoteIpBtn.addEventListener('click', (e) => {
+  // Custom Note Box Paste Button (Pastes last copied clipboard item at cursor)
+  const pasteNoteClipboardBtn = document.getElementById('btn-paste-note-clipboard');
+  if (pasteNoteClipboardBtn) {
+    pasteNoteClipboardBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      if (!lastCalculatedIP) return;
       
       const noteTextarea = document.getElementById('note-text');
-      if (noteTextarea) {
+      if (!noteTextarea) return;
+
+      function insertText(clipText) {
+        if (!clipText) return;
         const startPos = noteTextarea.selectionStart;
         const endPos = noteTextarea.selectionEnd;
         const text = noteTextarea.value;
-        noteTextarea.value = text.substring(0, startPos) + lastCalculatedIP + text.substring(endPos, text.length);
+        noteTextarea.value = text.substring(0, startPos) + clipText + text.substring(endPos, text.length);
         noteTextarea.focus();
-        noteTextarea.selectionStart = startPos + lastCalculatedIP.length;
-        noteTextarea.selectionEnd = startPos + lastCalculatedIP.length;
+        noteTextarea.selectionStart = startPos + clipText.length;
+        noteTextarea.selectionEnd = startPos + clipText.length;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText()
+          .then(text => {
+            if (text) {
+              insertText(text);
+            } else {
+              const backup = getLocalClipboardBackup();
+              if (backup) {
+                insertText(backup);
+              } else {
+                const fallback = prompt("Clipboard is empty. Enter text to paste:");
+                if (fallback) insertText(fallback);
+              }
+            }
+          })
+          .catch(() => {
+            const backup = getLocalClipboardBackup();
+            if (backup) {
+              insertText(backup);
+            } else {
+              const fallback = prompt("Enter text to paste (Clipboard permission blocked):");
+              if (fallback) insertText(fallback);
+            }
+          });
+      } else {
+        const backup = getLocalClipboardBackup();
+        if (backup) {
+          insertText(backup);
+        } else {
+          const fallback = prompt("Enter text to paste:");
+          if (fallback) insertText(fallback);
+        }
       }
     });
   }
@@ -3021,27 +3287,45 @@ function init() {
 function showNotesLimitBanner() {
   const list = document.getElementById('notes-list');
   if (!list) return;
-  if (list.querySelector('.pro-limit-banner')) return; // already shown
+  
+  // Remove existing banner if present to refresh the counts
+  const old = list.querySelector('.pro-limit-banner');
+  if (old) old.remove();
+
+  const hiddenCount = notes.length - FREE_NOTES_LIMIT;
+  if (hiddenCount <= 0) return;
+
+  const isUserLoggedIn = currentUserId !== 'local';
+  const actionText = isUserLoggedIn 
+    ? 'Upgrade to Pro to view them.' 
+    : 'Upgrade to Pro or Sign In to view and sync them.';
+
   const banner = document.createElement('div');
   banner.className = 'pro-limit-banner';
   banner.innerHTML = `
-    <p>You've reached the <strong>free limit of ${FREE_NOTES_LIMIT} notes</strong>. Upgrade to Pro for unlimited notes.</p>
+    <p>You have <strong>${hiddenCount} more note${hiddenCount > 1 ? 's' : ''}</strong> hidden. ${actionText}</p>
     <button class="btn-upgrade-inline" onclick="showProModal()">Upgrade</button>
   `;
-  list.prepend(banner);
+  list.appendChild(banner); // Append at the bottom of the visible list
 }
 
 function showHistoryLimitBanner() {
   const list = document.getElementById('history-list');
   if (!list) return;
-  if (list.querySelector('.pro-limit-banner')) return;
+  
+  const old = list.querySelector('.pro-limit-banner');
+  if (old) old.remove();
+
+  const hiddenCount = historyItems.length - FREE_HISTORY_LIMIT;
+  if (hiddenCount <= 0) return;
+
   const banner = document.createElement('div');
   banner.className = 'pro-limit-banner';
   banner.innerHTML = `
-    <p>History is limited to <strong>${FREE_HISTORY_LIMIT} entries</strong> on the free plan.</p>
+    <p>You have <strong>${hiddenCount} more calculation${hiddenCount > 1 ? 's' : ''}</strong> hidden. Upgrade to Pro to view full history.</p>
     <button class="btn-upgrade-inline" onclick="showProModal()">Upgrade</button>
   `;
-  list.prepend(banner);
+  list.appendChild(banner);
 }
 
 if (document.readyState === 'loading') {
