@@ -392,11 +392,11 @@
             </div>
             <div class="result-item full-width">
               <span class="label">Binary IP Address</span>
-              <span class="val" id="bin-ip" style="font-family: monospace; font-size: 11px; color: var(--accent-primary);">11000000.10101000.00000001.00000001</span>
+              <span class="val" id="bin-ip" style="font-family: monospace; font-size: 11px;">11000000.10101000.00000001.00000001</span>
             </div>
             <div class="result-item full-width">
               <span class="label">Binary Subnet Mask</span>
-              <span class="val" id="bin-mask" style="font-family: monospace; font-size: 11px; color: var(--accent-primary);">11111111.11111111.11111111.00000000</span>
+              <span class="val" id="bin-mask" style="font-family: monospace; font-size: 11px;">11111111.11111111.11111111.00000000</span>
             </div>
           </div>
 
@@ -619,7 +619,14 @@
             </div>
             <div class="result-item full-width">
               <span class="label">Expanded Address</span>
-              <span class="val" id="res6-expanded">2001:0db8:0000:0000:0000:0000:0000:0000</span>
+              <span class="val" id="res6-expanded" style="font-family: monospace; font-size: 11px;">2001:0db8:0000:0000:0000:0000:0000:0000</span>
+            </div>
+            <div class="result-item full-width hidden" id="res6-bitexpanded-row">
+              <span class="label" style="display:flex; align-items:center; gap:5px;">
+                Network Boundary
+                <span style="font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(var(--accent-primary-rgb),0.12); color: var(--accent-primary); letter-spacing: 0.03em;">BIT LEVEL</span>
+              </span>
+              <span class="val" id="res6-bitexpanded" style="font-family: monospace; font-size: 10px; word-break: break-all; line-height: 1.6;"></span>
             </div>
             <div class="result-item">
               <span class="label">Prefix CIDR</span>
@@ -687,32 +694,32 @@
             <span class="error-msg" id="converter-error"></span>
           </div>
 
-          <div class="result-grid hidden" id="converter-results" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 15px;">
-            <div class="result-item">
-              <span class="label">Detected Type</span>
-              <span class="val highlight" id="conv-type">IPv4 Prefix</span>
+          <div class="conv-result-list hidden" id="converter-results" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+            <div class="conv-result-row">
+              <span class="conv-result-label">Detected Type</span>
+              <span class="conv-result-val highlight" id="conv-type">IPv4 Prefix</span>
             </div>
-            <div class="result-item">
-              <span class="label">Prefix Length</span>
-              <span class="val" id="conv-prefix">/24</span>
+            <div class="conv-result-row">
+              <span class="conv-result-label">Prefix Length</span>
+              <span class="conv-result-val" id="conv-prefix">/24</span>
             </div>
-            <div class="result-item">
-              <span class="label">Subnet Mask</span>
-              <span class="val" id="conv-mask">255.255.255.0</span>
+            <div class="conv-result-row">
+              <span class="conv-result-label">Subnet Mask</span>
+              <span class="conv-result-val" id="conv-mask">255.255.255.0</span>
             </div>
-            <div class="result-item">
-              <span class="label">Wildcard Mask</span>
-              <span class="val" id="conv-wildcard">0.0.0.255</span>
+            <div class="conv-result-row">
+              <span class="conv-result-label">Wildcard Mask</span>
+              <span class="conv-result-val" id="conv-wildcard">0.0.0.255</span>
             </div>
-            <div class="result-item full-width" id="conv-ipv6-row" style="display: none;">
-              <span class="label">IPv6 Canonical Mask</span>
-              <span class="val" id="conv-ipv6-mask">ffff:ffff:ffff:ffff::</span>
+            <div class="conv-result-row" id="conv-ipv6-row" style="display: none;">
+              <span class="conv-result-label">IPv6 Canonical Mask</span>
+              <span class="conv-result-val" id="conv-ipv6-mask">ffff:ffff:ffff:ffff::</span>
             </div>
-            <div class="result-item full-width" id="conv-binary-row">
-              <span class="label">Binary Subnet Mask</span>
-              <span class="val" id="conv-binary" style="font-family: monospace; font-size: 12px; color: #10B981;">11111111.11111111.11111111.00000000</span>
+            <div class="conv-result-row" id="conv-binary-row">
+              <span class="conv-result-label">Binary Subnet Mask</span>
+              <span class="conv-result-val" id="conv-binary" style="font-family: monospace; font-size: 12px;">11111111.11111111.11111111.00000000</span>
             </div>
-            <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
               <button id="btn-export-pdf-conv" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
                 <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
                 <span>Report</span>
@@ -758,6 +765,102 @@
             <button id="btn-share-conv-subnet" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
               <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
               <span>Share</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Base Converter Card -->
+        <div class="card ref-card" id="base-converter-card" style="margin-top: 20px;">
+          <h2 class="card-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <svg style="width: 20px; height: 20px; flex-shrink: 0; color: var(--accent-primary);" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1 4v2h4v8h2V9h4V7H6z"/></svg>
+            <span>Number Base Converter</span>
+          </h2>
+          <p class="helper-text" style="margin-bottom: 14px;">Type in any base — Binary (2), Octal (8), Decimal (10), or Hex (16) — to instantly convert to all others.</p>
+
+          <!-- Binary -->
+          <div class="input-group" style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-bin-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(79,70,229,0.12); color: var(--accent-primary);">BIN</span>
+                Binary <span style="color: var(--text-muted); font-size: 11px;">(Base 2)</span>
+              </label>
+              <button id="btn-copy-base-bin" class="btn-action" title="Copy Binary" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-bin-input" placeholder="e.g. 11001010" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <span class="error-msg" id="base-bin-error"></span>
+          </div>
+
+          <!-- Octal -->
+          <div class="input-group" style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-oct-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(14,165,233,0.12); color: var(--accent-cyan);">OCT</span>
+                Octal <span style="color: var(--text-muted); font-size: 11px;">(Base 8)</span>
+              </label>
+              <button id="btn-copy-base-oct" class="btn-action" title="Copy Octal" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-oct-input" placeholder="e.g. 312" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <span class="error-msg" id="base-oct-error"></span>
+          </div>
+
+          <!-- Decimal -->
+          <div class="input-group" style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-dec-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(16,185,129,0.12); color: var(--accent-success);">DEC</span>
+                Decimal <span style="color: var(--text-muted); font-size: 11px;">(Base 10)</span>
+              </label>
+              <button id="btn-copy-base-dec" class="btn-action" title="Copy Decimal" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-dec-input" placeholder="e.g. 202" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <span class="error-msg" id="base-dec-error"></span>
+          </div>
+
+          <!-- Hexadecimal -->
+          <div class="input-group" style="margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-hex-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(239,68,68,0.10); color: var(--accent-danger);">HEX</span>
+                Hexadecimal <span style="color: var(--text-muted); font-size: 11px;">(Base 16)</span>
+              </label>
+              <button id="btn-copy-base-hex" class="btn-action" title="Copy Hex" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-hex-input" placeholder="e.g. CA" autocomplete="off" spellcheck="false" style="font-family: monospace; text-transform: uppercase;">
+            <span class="error-msg" id="base-hex-error"></span>
+          </div>
+
+          <!-- Action buttons row -->
+          <div style="display: flex; gap: 8px; margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 12px; align-items: center;">
+            <button id="btn-export-pdf-base" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>Report</span>
+            </button>
+            <button id="btn-export-csv-base" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-base" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-base" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+            <button id="btn-clear-base-converter" class="btn-action" title="Clear all fields" style="padding: 6px 8px; font-size: 12px; display: flex; justify-content: center; align-items: center; color: var(--accent-danger); border-color: rgba(239,68,68,0.25);">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
         </div>

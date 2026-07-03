@@ -15,6 +15,9 @@
   --accent-cyan: #0ea5e9;       /* Sky Blue */
   --accent-success: #10b981;    /* Sage Green */
   --accent-danger: #ef4444;     /* Rose Red */
+
+  /* Binary bit coloring — updated dynamically by loadThemeColor() */
+  --bit-off-color: hsl(45, 25%, 38%);  /* default contrast for indigo accent */
   
   --shadow-soft: 0 4px 12px rgba(15, 23, 42, 0.04), 0 2px 4px rgba(15, 23, 42, 0.02);
   --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.06);
@@ -1285,5 +1288,76 @@ body.dark-mode .phone-wrapper {
     font-size: 24px !important;
     color: #000000 !important;
   }
+}
+/* --- Binary Bit Coloring --- */
+.bit-on {
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+.bit-off {
+  color: var(--bit-off-color);
+  font-weight: 500;
+}
+
+.bit-dot {
+  color: var(--border-color);
+  font-weight: 400;
+  margin: 0 1px;
+}
+
+/* --- Converter Key-Value Row List (replaces 2-col grid) --- */
+.conv-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.conv-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  gap: 12px;
+}
+
+.conv-result-row:last-of-type {
+  border-bottom: none;
+}
+
+.conv-result-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.conv-result-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-all;
+}
+
+.conv-result-val.highlight {
+  color: var(--accent-primary);
+}
+
+
+.base-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.4;
+  min-width: 34px;
+  text-align: center;
 }
 

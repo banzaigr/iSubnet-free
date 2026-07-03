@@ -14,6 +14,29 @@
         document.documentElement.style.setProperty('--accent-primary-rgb',
           `${parseInt(r[1],16)}, ${parseInt(r[2],16)}, ${parseInt(r[3],16)}`);
       }
+      // Set contrasting bit-off color immediately to prevent flash
+      try {
+        const _h2h = (hex) => {
+          const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          if (!m) return [0, 0, 50];
+          let r = parseInt(m[1],16)/255, g = parseInt(m[2],16)/255, b = parseInt(m[3],16)/255;
+          const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+          let h = 0, s = 0, l = (max + min) / 2;
+          if (d) {
+            s = d / (1 - Math.abs(2*l - 1));
+            if (max===r) h = ((g-b)/d + 6) % 6;
+            else if (max===g) h = (b-r)/d + 2;
+            else h = (r-g)/d + 4;
+            h = Math.round(h * 60);
+          }
+          return [h, Math.round(s*100), Math.round(l*100)];
+        };
+        const [h, s, l] = _h2h(color);
+        const offH = (h + 165) % 360;
+        const offS = Math.max(10, Math.min(s, 35));
+        const offL = l > 55 ? 30 : 68;
+        document.documentElement.style.setProperty('--bit-off-color', `hsl(${offH},${offS}%,${offL}%)`);
+      } catch(e2) {}
     }
   } catch (e) {}
 })();
@@ -453,6 +476,16 @@ function uint32ToBinaryStr(val) {
   return `${bin.substring(0, 8)}.${bin.substring(8, 16)}.${bin.substring(16, 24)}.${bin.substring(24, 32)}`;
 }
 
+// Returns HTML with colored bits: 1s in .bit-on, 0s in .bit-off, dots as plain text
+function coloredBinaryStr(binaryDottedStr) {
+  return binaryDottedStr.split('').map(ch => {
+    if (ch === '1') return '<span class="bit-on">1</span>';
+    if (ch === '0') return '<span class="bit-off">0</span>';
+    return '<span class="bit-on">.</span>';
+  }).join('');
+}
+
+
 // Validate IPv4 format
 function validateIPv4(ipStr) {
   const reg = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -575,8 +608,8 @@ function calculateIPv4() {
   document.getElementById('res-type').textContent = ipType;
 
   // Populate binary
-  document.getElementById('bin-ip').textContent = uint32ToBinaryStr(ipVal);
-  document.getElementById('bin-mask').textContent = uint32ToBinaryStr(maskVal);
+  document.getElementById('bin-ip').innerHTML = coloredBinaryStr(uint32ToBinaryStr(ipVal));
+  document.getElementById('bin-mask').innerHTML = coloredBinaryStr(uint32ToBinaryStr(maskVal));
 
   // If the user specified Required Hosts but did NOT trigger partitioning of a larger block,
   // we can show a list of consecutive subnets of this calculated size within a classful boundary (/24 for C, /16 for B, /8 for A).
@@ -739,7 +772,186 @@ function formatIPv6Compressed(bigIntVal) {
   return parts.join(':');
 }
 
-// Calculate IPv6 Subnetting
+/**
+ * Returns colored HTML for an IPv6 address.
+ * Nibbles (4-bit hex digits) that belong to the network prefix get .bit-on,
+ * host-part nibbles get .bit-off, colons and :: get .bit-dot.
+ *
+ * @param {BigInt} bigIntVal - The 128-bit IPv6 address
+ * @param {number} prefixLength - The prefix length (0–128)
+ * @param {'expanded'|'compressed'} format - Output format
+ */
+function coloredIPv6Html(bigIntVal, prefixLength, format = 'expanded') {
+  // Build the 8 expanded groups (each is a 4-char hex string)
+  const groups = [];
+  let temp = bigIntVal;
+  for (let i = 0; i < 8; i++) {
+    const part = Number(temp & BigInt(0xffff));
+    groups.unshift(part.toString(16).padStart(4, '0'));
+    temp = temp >> BigInt(16);
+  }
+
+  // Determine active nibble count per group.
+  // prefixLength nibbles-total = Math.ceil(prefixLength / 4)
+  const activeNibbles = prefixLength; // bits in prefix
+  // Each group has 16 bits = 4 nibbles
+  const fullyActiveGroups = Math.floor(prefixLength / 16);   // groups entirely in prefix
+  const partialGroupIdx   = fullyActiveGroups;               // group that may be split
+  const activeNibblesInPartial = Math.ceil((prefixLength % 16) / 4); // nibbles active in partial group
+
+  // Wrap each nibble character: returns HTML for one 4-char group at groupIdx
+  function colorGroup(hexGroup, groupIdx) {
+    let activeCount;
+    if (groupIdx < fullyActiveGroups) {
+      activeCount = 4; // all 4 nibbles active
+    } else if (groupIdx === partialGroupIdx && prefixLength % 16 !== 0) {
+      activeCount = activeNibblesInPartial;
+    } else {
+      activeCount = 0; // all host bits
+    }
+    // For compressed output, hexGroup may be shorter (leading zeros stripped)
+    // Work with the padded version and then reconstruct
+    const padded = hexGroup.padStart(4, '0');
+    let html = '';
+    for (let n = 0; n < padded.length; n++) {
+      const cls = n < activeCount ? 'bit-on' : 'bit-off';
+      html += `<span class="${cls}">${padded[n]}</span>`;
+    }
+    // If compressed format, strip leading zero spans that are also .bit-off
+    // (We keep them for visual alignment; compressed coloring still meaningful)
+    return html;
+  }
+
+  const dot = '<span class="bit-on">:</span>';
+
+  if (format === 'expanded') {
+    return groups.map((g, i) => colorGroup(g, i)).join(dot);
+  }
+
+  // Compressed: find longest run of all-zero groups to collapse to ::
+  const compressedParts = groups.map(g => g.replace(/^0+/, '') || '0');
+  let maxZeroStart = -1, maxZeroLen = 0, curStart = -1, curLen = 0;
+  for (let i = 0; i < compressedParts.length; i++) {
+    if (compressedParts[i] === '0') {
+      if (curStart === -1) curStart = i;
+      curLen++;
+      if (curLen > maxZeroLen) { maxZeroLen = curLen; maxZeroStart = curStart; }
+    } else { curStart = -1; curLen = 0; }
+  }
+
+  if (maxZeroLen > 1) {
+    // Left side
+    const leftHtml = groups
+      .slice(0, maxZeroStart)
+      .map((g, i) => {
+        const stripped = g.replace(/^0+/, '') || '0';
+        // For compressed, only show non-leading-zero nibbles but color correctly
+        return colorGroupCompressed(stripped, i, fullyActiveGroups, partialGroupIdx, activeNibblesInPartial, prefixLength);
+      })
+      .join(dot);
+
+    // Right side — group indices are maxZeroStart + maxZeroLen onward
+    const rightHtml = groups
+      .slice(maxZeroStart + maxZeroLen)
+      .map((g, i) => {
+        const realIdx = maxZeroStart + maxZeroLen + i;
+        const stripped = g.replace(/^0+/, '') || '0';
+        return colorGroupCompressed(stripped, realIdx, fullyActiveGroups, partialGroupIdx, activeNibblesInPartial, prefixLength);
+      })
+      .join(dot);
+
+    const dcDot = '<span class="bit-on">::</span>';
+    if (!leftHtml && !rightHtml) return dcDot;
+    if (!leftHtml) return `${dcDot}${rightHtml}`;
+    if (!rightHtml) return `${leftHtml}${dcDot}`;
+    return `${leftHtml}${dcDot}${rightHtml}`;
+  }
+
+  // No compression
+  return compressedParts
+    .map((g, i) => colorGroupCompressed(g, i, fullyActiveGroups, partialGroupIdx, activeNibblesInPartial, prefixLength))
+    .join(dot);
+}
+
+/** Color a compressed (leading-zeros-stripped) hex group */
+function colorGroupCompressed(stripped, groupIdx, fullyActiveGroups, partialGroupIdx, activeNibblesInPartial, prefixLength) {
+  let activeCount;
+  if (groupIdx < fullyActiveGroups) {
+    activeCount = 4;
+  } else if (groupIdx === partialGroupIdx && prefixLength % 16 !== 0) {
+    activeCount = activeNibblesInPartial;
+  } else {
+    activeCount = 0;
+  }
+  // Pad to 4 nibbles to correctly assign active/host role per position
+  const padded = stripped.padStart(4, '0');
+  let html = '';
+  for (let n = 0; n < padded.length; n++) {
+    const cls = n < activeCount ? 'bit-on' : 'bit-off';
+    html += `<span class="${cls}">${padded[n]}</span>`;
+  }
+  // Strip leading bit-off zero spans that were only present for padding
+  // For compressed display: remove leading '0' spans that aren't in original
+  const leadingZerosToStrip = 4 - stripped.length;
+  if (leadingZerosToStrip > 0) {
+    // Remove the first `leadingZerosToStrip` span elements
+    let remaining = html;
+    for (let k = 0; k < leadingZerosToStrip; k++) {
+      remaining = remaining.replace(/^<span class="[^"]+">0<\/span>/, '');
+    }
+    return remaining;
+  }
+  return html;
+}
+
+
+/**
+ * Renders the "Boundary View" of an IPv6 address:
+ * - All groups that are fully in the prefix or fully in the host are shown as
+ *   normal 4-hex-char groups with bit-on / bit-off coloring.
+ * - The one group where the prefix boundary falls mid-group is expanded to
+ *   16 binary digits, each colored at the bit level (bit-on for prefix bits,
+ *   bit-off for host bits).
+ * Only call this when prefixLength % 16 !== 0.
+ */
+function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
+  const groups = [];
+  let temp = bigIntVal;
+  for (let i = 0; i < 8; i++) {
+    const part = Number(temp & BigInt(0xffff));
+    groups.unshift(part.toString(16).padStart(4, '0'));
+    temp = temp >> BigInt(16);
+  }
+
+  const fullyActiveGroups = Math.floor(prefixLength / 16); // groups fully in prefix
+  const partialGroupIdx   = fullyActiveGroups;              // index of the split group
+  const activeBitsInPartial = prefixLength % 16;           // bits active within that group
+
+  const dot = '<span class="bit-on">:</span>';
+
+  const parts = groups.map((g, i) => {
+    if (i === partialGroupIdx) {
+      // Expand this group to 16 binary digits with per-bit coloring
+      const val = parseInt(g, 16);
+      const binStr = val.toString(2).padStart(16, '0');
+      return binStr.split('').map((bit, n) => {
+        const cls = n < activeBitsInPartial ? 'bit-on' : 'bit-off';
+        return `<span class="${cls}">${bit}</span>`;
+      }).join('');
+    } else {
+      // Normal 4-hex-char group with bit-on / bit-off per nibble
+      const activeCount = i < fullyActiveGroups ? 4 : 0;
+      return g.split('').map((ch, n) => {
+        const cls = n < activeCount ? 'bit-on' : 'bit-off';
+        return `<span class="${cls}">${ch}</span>`;
+      }).join('');
+    }
+  });
+
+  return parts.join(dot);
+}
+
+
 function calculateIPv6() {
   const ipInput = document.getElementById('ipv6-address').value.trim();
   const hostsInput = document.getElementById('ipv6-hosts').value.trim();
@@ -833,13 +1045,25 @@ function calculateIPv6() {
 
   // Populate fields
   document.getElementById('ipv6-badge-type').textContent = addrType;
-  document.getElementById('res6-compressed').textContent = formatIPv6Compressed(ipBigInt);
-  document.getElementById('res6-expanded').textContent = formatIPv6Expanded(ipBigInt);
+  document.getElementById('res6-compressed').innerHTML = coloredIPv6Html(ipBigInt, prefixLength, 'compressed');
+  document.getElementById('res6-expanded').innerHTML = coloredIPv6Html(ipBigInt, prefixLength, 'expanded');
   document.getElementById('res6-prefix').textContent = `/${prefixLength}`;
-  document.getElementById('res6-net-prefix').textContent = `${formatIPv6Compressed(networkPrefixVal)}/${prefixLength}`;
-  document.getElementById('res6-start').textContent = formatIPv6Compressed(networkPrefixVal);
-  document.getElementById('res6-end').textContent = formatIPv6Compressed(broadcastVal);
+  document.getElementById('res6-net-prefix').innerHTML =
+    coloredIPv6Html(networkPrefixVal, prefixLength, 'compressed') +
+    `<span class="bit-on">/</span><span class="bit-on">${prefixLength}</span>`;
+  document.getElementById('res6-start').innerHTML = coloredIPv6Html(networkPrefixVal, prefixLength, 'compressed');
+  document.getElementById('res6-end').innerHTML = coloredIPv6Html(broadcastVal, prefixLength, 'compressed');
   document.getElementById('res6-total').textContent = totalAddresses.toLocaleString();
+
+  // Boundary View: show only when the prefix cuts through a group (not a multiple of 16)
+  const bitExpandedRow = document.getElementById('res6-bitexpanded-row');
+  if (prefixLength % 16 !== 0) {
+    document.getElementById('res6-bitexpanded').innerHTML = coloredIPv6BitExpanded(ipBigInt, prefixLength);
+    bitExpandedRow.classList.remove('hidden');
+  } else {
+    bitExpandedRow.classList.add('hidden');
+  }
+
 
   resultsCard.classList.remove('hidden');
 
@@ -1315,11 +1539,11 @@ function saveIpv4Note() {
 // Format IPv6 data to string
 function saveIpv6Note() {
   const input = document.getElementById('ipv6-address').value.trim();
-  const compressed = document.getElementById('res6-compressed').textContent;
+  const compressed = document.getElementById('res6-compressed').innerText;
   const prefix = document.getElementById('res6-prefix').textContent;
-  const netPrefix = document.getElementById('res6-net-prefix').textContent;
-  const start = document.getElementById('res6-start').textContent;
-  const end = document.getElementById('res6-end').textContent;
+  const netPrefix = document.getElementById('res6-net-prefix').innerText;
+  const start = document.getElementById('res6-start').innerText;
+  const end = document.getElementById('res6-end').innerText;
   const total = document.getElementById('res6-total').textContent;
   const typeText = document.getElementById('ipv6-badge-type').textContent;
 
@@ -1351,7 +1575,7 @@ function saveConvNote() {
 • Host Wildcard: ${wildcard}
 • Routing Prefix Mask: ${ipv6Mask}`;
   } else {
-    const binary = document.getElementById('conv-binary').textContent;
+    const binary = document.getElementById('conv-binary').innerText;
     noteContent = `• Prefix Length: ${prefix}
 • Subnet Mask: ${mask}
 • Wildcard Mask: ${wildcard}
@@ -1447,11 +1671,11 @@ function shareIpv4Result() {
 
 function shareIpv6Result() {
   const input = document.getElementById('ipv6-address').value.trim();
-  const compressed = document.getElementById('res6-compressed').textContent;
+  const compressed = document.getElementById('res6-compressed').innerText;
   const prefix = document.getElementById('res6-prefix').textContent;
-  const netPrefix = document.getElementById('res6-net-prefix').textContent;
-  const start = document.getElementById('res6-start').textContent;
-  const end = document.getElementById('res6-end').textContent;
+  const netPrefix = document.getElementById('res6-net-prefix').innerText;
+  const start = document.getElementById('res6-start').innerText;
+  const end = document.getElementById('res6-end').innerText;
   const total = document.getElementById('res6-total').textContent;
   const typeText = document.getElementById('ipv6-badge-type').textContent;
 
@@ -1486,7 +1710,7 @@ function shareConvResult() {
 • Host Wildcard: ${wildcard}
 • Routing Prefix Mask: ${ipv6Mask}`;
   } else {
-    const binary = document.getElementById('conv-binary').textContent;
+    const binary = document.getElementById('conv-binary').innerText;
     text = `Converter Results (${type}):
 • Prefix Length: ${prefix}
 • Subnet Mask: ${mask}
@@ -1584,6 +1808,38 @@ function setupEventListeners() {
   document.getElementById('btn-share-conv').addEventListener('click', shareConvResult);
   document.getElementById('btn-save-notes-conv-subnet').addEventListener('click', saveConvSubnetNote);
   document.getElementById('btn-share-conv-subnet').addEventListener('click', shareConvSubnetResult);
+
+  // Base converter save / share buttons
+  const btnSaveBase = document.getElementById('btn-save-notes-base');
+  if (btnSaveBase) {
+    btnSaveBase.addEventListener('click', () => {
+      const bin = document.getElementById('base-bin-input').value.trim();
+      const dec = document.getElementById('base-dec-input').value.trim();
+      const oct = document.getElementById('base-oct-input').value.trim();
+      const hex = document.getElementById('base-hex-input').value.trim();
+      if (!dec && !bin) return;
+      const label = dec ? `Base Converter: ${dec} (DEC)` : `Base Converter: ${bin} (BIN)`;
+      const body = `BIN: ${bin}\nOCT: ${oct}\nDEC: ${dec}\nHEX: ${hex}`;
+      recordHistoryDebounced('Converter', { input: dec || bin }, label);
+      flashConfirm(btnSaveBase, btnSaveBase.innerHTML);
+    });
+  }
+  const btnShareBase = document.getElementById('btn-share-base');
+  if (btnShareBase) {
+    btnShareBase.addEventListener('click', () => {
+      const bin = document.getElementById('base-bin-input').value.trim();
+      const dec = document.getElementById('base-dec-input').value.trim();
+      const oct = document.getElementById('base-oct-input').value.trim();
+      const hex = document.getElementById('base-hex-input').value.trim();
+      if (!dec && !bin) return;
+      const text = `iSubnet – Number Base Converter\nBIN: ${bin}\nOCT: ${oct}\nDEC: ${dec}\nHEX: ${hex}`;
+      if (navigator.share) {
+        navigator.share({ title: 'iSubnet Base Conversion', text });
+      } else {
+        navigator.clipboard.writeText(text).then(() => flashConfirm(btnShareBase, btnShareBase.innerHTML));
+      }
+    });
+  }
   
   // Reference guide copy & share bindings
   document.getElementById('btn-copy-ref-classes').addEventListener('click', () => {
@@ -1631,7 +1887,161 @@ function setupEventListeners() {
   });
 }
 
+// --- NUMBER BASE CONVERTER LOGIC ---
+
+/**
+ * Converts a number between base 2, 8, 10 and 16.
+ * Uses BigInt to handle arbitrarily large numbers without precision loss.
+ * @param {string} value  - The string representation of the number.
+ * @param {number} fromBase - The source base (2, 8, 10, or 16).
+ * @returns {{ bin: string, oct: string, dec: string, hex: string } | null}
+ */
+function convertBase(value, fromBase) {
+  if (!value || value.trim() === '') return null;
+  const v = value.trim().toUpperCase();
+  // Validate characters per base
+  const validators = { 2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/, 16: /^[0-9A-F]+$/ };
+  if (!validators[fromBase] || !validators[fromBase].test(v)) return null;
+  try {
+    // Parse digit-by-digit using BigInt for unlimited precision
+    const base = BigInt(fromBase);
+    let decimal = BigInt(0);
+    const digits = '0123456789ABCDEF';
+    for (const ch of v) {
+      decimal = decimal * base + BigInt(digits.indexOf(ch));
+    }
+    return {
+      bin: decimal.toString(2),
+      oct: decimal.toString(8),
+      dec: decimal.toString(10),
+      hex: decimal.toString(16).toUpperCase()
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+let _baseConverting = false; // guard against re-entrant updates
+
+function runBaseConverter(sourceId, fromBase) {
+  if (_baseConverting) return;
+  _baseConverting = true;
+
+  const inputs = {
+    bin: document.getElementById('base-bin-input'),
+    oct: document.getElementById('base-oct-input'),
+    dec: document.getElementById('base-dec-input'),
+    hex: document.getElementById('base-hex-input')
+  };
+  const errors = {
+    bin: document.getElementById('base-bin-error'),
+    oct: document.getElementById('base-oct-error'),
+    dec: document.getElementById('base-dec-error'),
+    hex: document.getElementById('base-hex-error')
+  };
+
+  // Clear all error states first
+  Object.values(errors).forEach(el => { if (el) el.textContent = ''; });
+  Object.values(inputs).forEach(el => { if (el) el.classList.remove('error'); });
+
+  const sourceEl = inputs[sourceId];
+  const rawValue = sourceEl ? sourceEl.value.trim() : '';
+
+  if (!rawValue) {
+    // If source is cleared, clear all others too
+    Object.entries(inputs).forEach(([key, el]) => {
+      if (el && key !== sourceId) el.value = '';
+    });
+    _baseConverting = false;
+    return;
+  }
+
+  const result = convertBase(rawValue, fromBase);
+
+  if (!result) {
+    // Show error on the active field
+    const errorEl = errors[sourceId];
+    if (errorEl) {
+      const baseNames = { bin: 'binary (0–1)', oct: 'octal (0–7)', dec: 'decimal (0–9)', hex: 'hex (0–9, A–F)' };
+      errorEl.textContent = `Invalid ${baseNames[sourceId]} value`;
+    }
+    if (sourceEl) sourceEl.classList.add('error');
+    // Clear other fields
+    Object.entries(inputs).forEach(([key, el]) => {
+      if (el && key !== sourceId) el.value = '';
+    });
+    _baseConverting = false;
+    return;
+  }
+
+  // Fill in all other fields
+  if (inputs.bin && sourceId !== 'bin') inputs.bin.value = result.bin;
+  if (inputs.oct && sourceId !== 'oct') inputs.oct.value = result.oct;
+  if (inputs.dec && sourceId !== 'dec') inputs.dec.value = result.dec;
+  if (inputs.hex && sourceId !== 'hex') inputs.hex.value = result.hex;
+
+  _baseConverting = false;
+}
+
+function setupBaseConverter() {
+  const fields = [
+    { id: 'base-bin-input', key: 'bin', base: 2 },
+    { id: 'base-oct-input', key: 'oct', base: 8 },
+    { id: 'base-dec-input', key: 'dec', base: 10 },
+    { id: 'base-hex-input', key: 'hex', base: 16 }
+  ];
+
+  fields.forEach(({ id, key, base }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => runBaseConverter(key, base));
+    // Force uppercase display for hex
+    if (key === 'hex') {
+      el.addEventListener('keyup', () => { el.value = el.value.toUpperCase(); });
+    }
+  });
+
+  // Copy buttons
+  const copyDefs = [
+    { btnId: 'btn-copy-base-bin', inputId: 'base-bin-input' },
+    { btnId: 'btn-copy-base-oct', inputId: 'base-oct-input' },
+    { btnId: 'btn-copy-base-dec', inputId: 'base-dec-input' },
+    { btnId: 'btn-copy-base-hex', inputId: 'base-hex-input' }
+  ];
+  copyDefs.forEach(({ btnId, inputId }) => {
+    const btn = document.getElementById(btnId);
+    const inp = document.getElementById(inputId);
+    if (!btn || !inp) return;
+    btn.addEventListener('click', () => {
+      const val = inp.value.trim();
+      if (!val) return;
+      navigator.clipboard.writeText(val).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!';
+        setTimeout(() => { btn.innerHTML = orig; }, 1500);
+      }).catch(() => {});
+    });
+  });
+
+  // Clear all button
+  const clearBtn = document.getElementById('btn-clear-base-converter');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      _baseConverting = false;
+      ['base-bin-input', 'base-oct-input', 'base-dec-input', 'base-hex-input'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.value = ''; el.classList.remove('error'); }
+      });
+      ['base-bin-error', 'base-oct-error', 'base-dec-error', 'base-hex-error'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+      });
+    });
+  }
+}
+
 // --- WILDCARD & PREFIX CONVERTER LOGIC ---
+
 
 function runSubnetCalculationIPv4(ipInput, cidrInput) {
   const ipVal = ipToUint32(ipInput);
@@ -1737,7 +2147,7 @@ function runConverter() {
         document.getElementById('conv-prefix').textContent = `/${cidr}`;
         document.getElementById('conv-mask').textContent = calc.mask;
         document.getElementById('conv-wildcard').textContent = calc.wildcard;
-        document.getElementById('conv-binary').textContent = calc.binary;
+        document.getElementById('conv-binary').innerHTML = coloredBinaryStr(calc.binary);
         document.getElementById('conv-ipv6-row').style.display = 'none';
         document.getElementById('conv-binary-row').style.display = 'flex';
         resultsDiv.classList.remove('hidden');
@@ -1875,7 +2285,7 @@ function runConverter() {
       document.getElementById('conv-prefix').textContent = `/${cidrNum}`;
       document.getElementById('conv-mask').textContent = uint32ToIp(maskVal);
       document.getElementById('conv-wildcard').textContent = uint32ToIp(wildcardVal);
-      document.getElementById('conv-binary').textContent = uint32ToBinaryStr(maskVal);
+      document.getElementById('conv-binary').innerHTML = coloredBinaryStr(uint32ToBinaryStr(maskVal));
       
       document.getElementById('conv-ipv6-row').style.display = 'none';
       document.getElementById('conv-binary-row').style.display = 'flex';
@@ -1936,7 +2346,7 @@ function runConverter() {
     document.getElementById('conv-prefix').textContent = (isCanonical && maskVal === standardMask) ? `/${calculatedCidr}` : 'Non-canonical';
     document.getElementById('conv-mask').textContent = uint32ToIp(maskVal);
     document.getElementById('conv-wildcard').textContent = uint32ToIp(wildcardVal);
-    document.getElementById('conv-binary').textContent = uint32ToBinaryStr(maskVal);
+    document.getElementById('conv-binary').innerHTML = coloredBinaryStr(uint32ToBinaryStr(maskVal));
     
     document.getElementById('conv-ipv6-row').style.display = 'none';
     document.getElementById('conv-binary-row').style.display = 'flex';
@@ -2456,9 +2866,45 @@ function hexToRgb(hex) {
     : '79, 70, 229';
 }
 
+// Convert hex color to [H (0-360), S (0-100), L (0-100)]
+function hexToHsl(hex) {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return [240, 68, 59]; // default indigo
+  let r = parseInt(m[1], 16) / 255;
+  let g = parseInt(m[2], 16) / 255;
+  let b = parseInt(m[3], 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    if (max === r)      h = ((g - b) / d + 6) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else                h = (r - g) / d + 4;
+    h = Math.round(h * 60);
+  }
+  return [h, Math.round(s * 100), Math.round(l * 100)];
+}
+
+/**
+ * Given the accent (active) hex color, returns a high-contrast CSS color
+ * for the inactive bits (0s). Rotates hue by 165° and inverts lightness
+ * so it always reads as clearly distinct from the active color.
+ */
+function computeBitOffColor(hex) {
+  const [h, s, l] = hexToHsl(hex);
+  const offH = (h + 165) % 360;          // rotate hue for clear distinction
+  const offS = Math.max(10, Math.min(s, 35)); // desaturate so it feels muted
+  const offL = l > 55 ? 30 : 68;         // invert brightness for contrast
+  return `hsl(${offH}, ${offS}%, ${offL}%)`;
+}
+
 function loadThemeColor() {
   document.documentElement.style.setProperty('--accent-primary', activeThemeColor);
   document.documentElement.style.setProperty('--accent-primary-rgb', hexToRgb(activeThemeColor));
+  // Update the inactive-bit contrast color whenever the theme changes
+  document.documentElement.style.setProperty('--bit-off-color', computeBitOffColor(activeThemeColor));
 
   // Update swatch active outline states
   const swatches = document.querySelectorAll('.theme-swatch');
@@ -3248,13 +3694,16 @@ function init() {
   if (clearHistBtn) {
     clearHistBtn.addEventListener('click', clearHistory);
   }
-  
+
   // Setup converter listener and init
   const convInput = document.getElementById('converter-input');
   if (convInput) {
     convInput.addEventListener('input', runConverter);
     runConverter(); // run initial converter on default load
   }
+
+  // Setup number base converter
+  setupBaseConverter();
 
   // --- Pro modal bindings ---
   const buyLifetimeBtn = document.getElementById('btn-pro-buy-lifetime');
@@ -3581,12 +4030,12 @@ function setupExporterListeners() {
       csv += `IP Address Type,${ipType}\n`;
     } else if (type === 'ipv6') {
       const ip = document.getElementById('ipv6-address').value.trim();
-      const compressed = document.getElementById('res6-compressed').textContent;
-      const expanded = document.getElementById('res6-expanded').textContent;
+      const compressed = document.getElementById('res6-compressed').innerText;
+      const expanded = document.getElementById('res6-expanded').innerText;
       const prefix = document.getElementById('res6-prefix').textContent;
-      const netPrefix = document.getElementById('res6-net-prefix').textContent;
-      const start = document.getElementById('res6-start').textContent;
-      const end = document.getElementById('res6-end').textContent;
+      const netPrefix = document.getElementById('res6-net-prefix').innerText;
+      const start = document.getElementById('res6-start').innerText;
+      const end = document.getElementById('res6-end').innerText;
       const total = document.getElementById('res6-total').textContent;
       const typeText = document.getElementById('ipv6-badge-type').textContent;
 
@@ -3720,7 +4169,8 @@ function setupExporterListeners() {
     { id: 'btn-export-pdf-conv', type: 'conv' },
     { id: 'btn-export-pdf-conv-subnet', type: 'conv-subnet' },
     { id: 'btn-export-pdf-bulk-ipv4', type: 'bulk-ipv4' },
-    { id: 'btn-export-pdf-bulk-ipv6', type: 'bulk-ipv6' }
+    { id: 'btn-export-pdf-bulk-ipv6', type: 'bulk-ipv6' },
+    { id: 'btn-export-pdf-base', type: 'base' }
   ];
   pdfIds.forEach(item => {
     const el = document.getElementById(item.id);
@@ -3739,7 +4189,8 @@ function setupExporterListeners() {
     { id: 'btn-export-csv-conv', type: 'conv' },
     { id: 'btn-export-csv-conv-subnet', type: 'conv-subnet' },
     { id: 'btn-export-csv-bulk-ipv4', type: 'bulk-ipv4' },
-    { id: 'btn-export-csv-bulk-ipv6', type: 'bulk-ipv6' }
+    { id: 'btn-export-csv-bulk-ipv6', type: 'bulk-ipv6' },
+    { id: 'btn-export-csv-base', type: 'base' }
   ];
   csvIds.forEach(item => {
     const el = document.getElementById(item.id);
