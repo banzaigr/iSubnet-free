@@ -1607,23 +1607,240 @@ function setupEventListeners() {
 
 // --- WILDCARD & PREFIX CONVERTER LOGIC ---
 
+function runSubnetCalculationIPv4(ipInput, cidrInput) {
+  const ipVal = ipToUint32(ipInput);
+  const maskVal = cidrInput === 0 ? 0 : (~0 << (32 - cidrInput)) >>> 0;
+  const wildcardVal = ~maskVal >>> 0;
+  const networkVal = (ipVal & maskVal) >>> 0;
+  const broadcastVal = (ipVal | wildcardVal) >>> 0;
+
+  const firstOctet = (ipVal >>> 24) & 255;
+  let ipClass = 'Unknown';
+  if (firstOctet >= 1 && firstOctet <= 126) ipClass = 'Class A';
+  else if (firstOctet === 127) ipClass = 'Class A (Loopback)';
+  else if (firstOctet >= 128 && firstOctet <= 191) ipClass = 'Class B';
+  else if (firstOctet >= 192 && firstOctet <= 223) ipClass = 'Class C';
+  else if (firstOctet >= 224 && firstOctet <= 239) ipClass = 'Class D (Multicast)';
+  else if (firstOctet >= 240 && firstOctet <= 255) ipClass = 'Class E (Experimental)';
+
+  let ipType = 'Public IP';
+  if (firstOctet === 10) ipType = 'Private IP (Class A)';
+  else if (firstOctet === 172 && ((ipVal >>> 16) & 255) >= 16 && ((ipVal >>> 16) & 255) <= 31) ipType = 'Private IP (Class B)';
+  else if (firstOctet === 192 && ((ipVal >>> 16) & 255) === 168) ipType = 'Private IP (Class C)';
+  else if (firstOctet === 169 && ((ipVal >>> 16) & 255) === 254) ipType = 'Link-Local Address';
+
+  let usableHosts = 0;
+  let usableRange = '';
+  if (cidrInput === 32) {
+    usableHosts = 1;
+    usableRange = `${uint32ToIp(networkVal)} (Single Host)`;
+  } else if (cidrInput === 31) {
+    usableHosts = 2;
+    usableRange = `${uint32ToIp(networkVal)} - ${uint32ToIp(broadcastVal)}`;
+  } else {
+    usableHosts = (broadcastVal - networkVal - 1);
+    usableRange = `${uint32ToIp(networkVal + 1)} - ${uint32ToIp(broadcastVal - 1)}`;
+  }
+
+  return {
+    cidr: cidrInput,
+    mask: uint32ToIp(maskVal),
+    wildcard: uint32ToIp(wildcardVal),
+    network: uint32ToIp(networkVal),
+    broadcast: uint32ToIp(broadcastVal),
+    usableRange: usableRange,
+    hosts: usableHosts.toLocaleString(),
+    ipClass: `${ipClass} / ${ipType}`,
+    binary: uint32ToBinaryStr(maskVal)
+  };
+}
+
 function runConverter() {
   const input = document.getElementById('converter-input').value.trim();
   const errorEl = document.getElementById('converter-error');
   const resultsDiv = document.getElementById('converter-results');
+  const subnetCard = document.getElementById('converter-subnet-card');
+  const subnetResults = document.getElementById('converter-subnet-results');
   
   errorEl.textContent = '';
+  if (subnetCard) {
+    subnetCard.classList.add('hidden');
+    subnetResults.innerHTML = '';
+  }
+
   if (input === '') {
     resultsDiv.classList.add('hidden');
     return;
   }
 
-  // Check if it matches CIDR prefix pattern: e.g. "/22" or "22"
+  // Check if matches combined IP + Mask or Prefix e.g. "83.235.0.0 0.0.7.255" or "192.168.1.1/24"
+  let parts = [];
+  if (input.includes('/')) {
+    const idx = input.lastIndexOf('/');
+    parts = [input.substring(0, idx).trim(), input.substring(idx + 1).trim()];
+  } else {
+    const normalized = input.replace(/\s+/g, ' ');
+    parts = normalized.split(' ');
+  }
+
+  if (parts.length === 2) {
+    const ipPart = parts[0];
+    const maskPart = parts[1];
+
+    if (validateIPv4(ipPart)) {
+      let cidr = null;
+      const prefixReg = /^\/?(\d{1,2})$/;
+      if (prefixReg.test(maskPart)) {
+        cidr = parseInt(maskPart.match(prefixReg)[1], 10);
+      } else if (validateIPv4(maskPart)) {
+        const maskVal = ipToUint32(maskPart);
+        const isWildcard = (maskVal & 0x80000000) === 0;
+        let actualMaskVal = 0;
+        if (isWildcard) {
+          actualMaskVal = ~maskVal >>> 0;
+        } else {
+          actualMaskVal = maskVal;
+        }
+        cidr = Math.clz32(~actualMaskVal);
+      }
+
+      if (cidr !== null && cidr >= 0 && cidr <= 32) {
+        const calc = runSubnetCalculationIPv4(ipPart, cidr);
+        
+        document.getElementById('conv-type').textContent = 'IPv4 Subnet Input';
+        document.getElementById('conv-prefix').textContent = `/${cidr}`;
+        document.getElementById('conv-mask').textContent = calc.mask;
+        document.getElementById('conv-wildcard').textContent = calc.wildcard;
+        document.getElementById('conv-binary').textContent = calc.binary;
+        document.getElementById('conv-ipv6-row').style.display = 'none';
+        document.getElementById('conv-binary-row').style.display = 'flex';
+        resultsDiv.classList.remove('hidden');
+
+        if (subnetResults && subnetCard) {
+          subnetResults.innerHTML = `
+            <div class="result-item">
+              <span class="label">CIDR Notation</span>
+              <span class="val highlight" style="color: var(--accent-primary);">${ipPart}/${cidr}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Subnet Mask</span>
+              <span class="val">${calc.mask}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Wildcard Mask</span>
+              <span class="val">${calc.wildcard}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Network Address</span>
+              <span class="val">${calc.network}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Broadcast Address</span>
+              <span class="val">${calc.broadcast}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Usable IP Range</span>
+              <span class="val" style="font-size: 13px; font-weight: 600; color: #10B981;">${calc.usableRange}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Total Usable Hosts</span>
+              <span class="val" style="font-weight: 700;">${calc.hosts}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">IP Class / Type</span>
+              <span class="val">${calc.ipClass}</span>
+            </div>
+          `;
+          subnetCard.classList.remove('hidden');
+        }
+        recordHistoryDebounced('Converter', { input: input }, `Calculated Subnet: ${ipPart}/${cidr}`);
+        return;
+      }
+    } else if (validateIPv6(ipPart)) {
+      let cidr = null;
+      const prefixReg = /^\/?(\d{1,3})$/;
+      if (prefixReg.test(maskPart)) {
+        cidr = parseInt(maskPart.match(prefixReg)[1], 10);
+      }
+
+      if (cidr !== null && cidr >= 0 && cidr <= 128) {
+        const ipFields = parseIPv6(ipPart);
+        if (ipFields) {
+          const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
+          const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
+          
+          const ipVal = ipFieldsToBigInt(ipFields);
+          const networkVal = ipVal & netMask;
+          const broadcastVal = ipVal | hostMask;
+
+          document.getElementById('conv-type').textContent = 'IPv6 Subnet Input';
+          document.getElementById('conv-prefix').textContent = `/${cidr}`;
+          document.getElementById('conv-mask').textContent = 'N/A (IPv6)';
+          document.getElementById('conv-wildcard').textContent = `::${formatIPv6Compressed(hostMask)}`;
+          document.getElementById('conv-ipv6-mask').textContent = `${formatIPv6Compressed(netMask)}`;
+          document.getElementById('conv-ipv6-row').style.display = 'flex';
+          document.getElementById('conv-binary-row').style.display = 'none';
+          resultsDiv.classList.remove('hidden');
+
+          let usableRange = '';
+          if (cidr === 128) {
+            usableRange = `${formatIPv6Compressed(networkVal)} (Single Host)`;
+          } else {
+            usableRange = `${formatIPv6Compressed(networkVal + BigInt(1))} - ${formatIPv6Compressed(broadcastVal)}`;
+          }
+
+          let totalHosts = '';
+          if (128 - cidr >= 120) {
+            totalHosts = `2^${128 - cidr}`;
+          } else {
+            totalHosts = (BigInt(1) << BigInt(128 - cidr)).toLocaleString();
+          }
+
+          let ipType = 'Global Unicast (Public)';
+          const firstWord = ipFields[0];
+          if ((firstWord & 0xe000) === 0x2000) ipType = 'Global Unicast (Public)';
+          else if (firstWord === 0xfe80) ipType = 'Link-Local Address';
+          else if ((firstWord & 0xfe00) === 0xfc00) ipType = 'Unique Local Address (Private)';
+          else if (firstWord === 0 && ipFields[1] === 0 && ipFields[2] === 0 && ipFields[3] === 0 && ipFields[4] === 0 && ipFields[5] === 0 && ipFields[6] === 0 && ipFields[7] === 1) ipType = 'Loopback Address';
+          else if (firstWord === 0xff00) ipType = 'Multicast Address';
+
+          if (subnetResults && subnetCard) {
+            subnetResults.innerHTML = `
+              <div class="result-item">
+                <span class="label">CIDR Notation</span>
+                <span class="val highlight" style="color: var(--accent-primary);">${formatIPv6Compressed(ipVal)}/${cidr}</span>
+              </div>
+              <div class="result-item">
+                <span class="label">Subnet Routing Prefix</span>
+                <span class="val">${formatIPv6Compressed(netMask)}</span>
+              </div>
+              <div class="result-item">
+                <span class="label">Network Range</span>
+                <span class="val" style="font-size: 13px; font-weight: 600; color: #10B981;">${usableRange}</span>
+              </div>
+              <div class="result-item">
+                <span class="label">Total IPs</span>
+                <span class="val" style="font-weight: 700;">${totalHosts}</span>
+              </div>
+              <div class="result-item">
+                <span class="label">Address Type</span>
+                <span class="val">${ipType}</span>
+              </div>
+            `;
+            subnetCard.classList.remove('hidden');
+          }
+          recordHistoryDebounced('Converter', { input: input }, `Calculated Subnet: ${ipPart}/${cidr}`);
+          return;
+        }
+      }
+    }
+  }
+
+  // Fallback to old behavior: Check if matches CIDR prefix pattern: e.g. "/22" or "22"
   const cidrReg = /^\/?(\d{1,3})$/;
   if (cidrReg.test(input)) {
     const cidrNum = parseInt(input.match(cidrReg)[1], 10);
     
-    // IPv4 Prefix
     if (cidrNum >= 0 && cidrNum <= 32) {
       const maskVal = cidrNum === 0 ? 0 : (~0 << (32 - cidrNum)) >>> 0;
       const wildcardVal = ~maskVal >>> 0;
@@ -1641,9 +1858,7 @@ function runConverter() {
       return;
     }
     
-    // IPv6 Prefix
     if (cidrNum > 32 && cidrNum <= 128) {
-      // Calculate IPv6 routing prefix mask
       const hostMask = (BigInt(1) << BigInt(128 - cidrNum)) - BigInt(1);
       const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
       
@@ -1665,12 +1880,9 @@ function runConverter() {
     return;
   }
 
-  // Check if it matches IPv4 format: e.g. "255.255.252.0" or "0.0.3.255"
+  // Fallback to old behavior: Check if matches IPv4 mask: e.g. "255.255.252.0"
   if (validateIPv4(input)) {
     const ipVal = ipToUint32(input);
-    
-    // Determine if it is a Subnet Mask or a Wildcard Mask
-    // Subnet masks start with 255 (top bit is 1), wildcards start with 0 (top bit is 0)
     const isWildcard = (ipVal & 0x80000000) === 0;
     
     let maskVal = 0;
@@ -1684,7 +1896,6 @@ function runConverter() {
       wildcardVal = ~maskVal >>> 0;
     }
     
-    // Check if the mask is a canonical subnet mask (contiguous bits)
     const inverted = ~maskVal >>> 0;
     const isCanonical = ((inverted + 1) & inverted) === 0;
     
@@ -1692,10 +1903,7 @@ function runConverter() {
       errorEl.textContent = 'Warning: This is a non-canonical mask (non-contiguous bits).';
     }
     
-    // Calculate CIDR prefix
     const calculatedCidr = Math.clz32(~maskVal);
-    
-    // Double check if it is truly canonical by matching it against standard mask
     const standardMask = calculatedCidr === 0 ? 0 : (~0 << (32 - calculatedCidr)) >>> 0;
     
     document.getElementById('conv-type').textContent = isWildcard ? 'IPv4 Wildcard' : 'IPv4 Subnet Mask';
@@ -1711,7 +1919,7 @@ function runConverter() {
     return;
   }
 
-  errorEl.textContent = 'Invalid format. Input a prefix (e.g. /22 or 22) or an IPv4 mask (e.g. 0.0.3.255 or 255.255.252.0).';
+  errorEl.textContent = 'Invalid format. Input a prefix (e.g. /22 or 22), IPv4 mask, or IP + mask (e.g. 83.235.0.0 0.0.7.255 or 192.168.1.1/24).';
   resultsDiv.classList.add('hidden');
 }
 
