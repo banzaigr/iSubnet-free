@@ -142,12 +142,18 @@ async function initRevenueCat() {
 
 async function updateRevenueCatSubscriptionState() {
   if (!useRevenueCat) return;
+function isProEntitlementActive(entitlements) {
+  if (!entitlements) return false;
+  return !!(entitlements["pro_features"] || entitlements["iSubnet Pro"] || Object.keys(entitlements).length > 0);
+}
+
+async function updateRevenueCatSubscriptionState() {
   try {
     const { Purchases } = window.Capacitor.Plugins;
     const customerInfo = await Purchases.getCustomerInfo();
     const activeEntitlements = customerInfo.entitlements.active;
     
-    if (activeEntitlements && activeEntitlements["pro_features"]) {
+    if (isProEntitlementActive(activeEntitlements)) {
       PRO_UNLOCKED = true;
       SafeStorage.setItem('isubnet_pro', 'true');
       applyProState();
@@ -167,25 +173,48 @@ async function updateRevenueCatSubscriptionState() {
   }
 }
 
-async function upgradeWithRevenueCat() {
-  if (!useRevenueCat) {
-    showProModal();
+async function purchaseProductByPlan(planType) {
+  const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
+  if (!isNative || !useRevenueCat) {
+    // Browser local test fallback
+    PRO_UNLOCKED = true;
+    SafeStorage.setItem('isubnet_pro', 'true');
+    applyProState();
+    alert(`[Browser Demo] Purchased ${planType} plan! Pro features unlocked.`);
+    closeProModal();
     return;
   }
-  
+
   try {
     const { Purchases } = window.Capacitor.Plugins;
     const offerings = await Purchases.getOfferings();
     if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
-      const packageToBuy = offerings.current.availablePackages[0];
+      let packageToBuy = null;
+      const packages = offerings.current.availablePackages;
+      
+      if (planType === 'monthly') {
+        packageToBuy = packages.find(p => p.packageType === 'MONTHLY');
+      } else if (planType === 'yearly') {
+        packageToBuy = packages.find(p => p.packageType === 'ANNUAL' || p.packageType === 'YEARLY');
+      } else if (planType === 'lifetime') {
+        packageToBuy = packages.find(p => p.packageType === 'LIFETIME');
+      }
+      
+      if (!packageToBuy) {
+        packageToBuy = packages[0];
+      }
+      
       const purchaseResult = await Purchases.purchasePackage({ aPackage: packageToBuy });
       
-      if (purchaseResult.customerInfo.entitlements.active["pro_features"]) {
+      if (isProEntitlementActive(purchaseResult.customerInfo.entitlements.active)) {
         PRO_UNLOCKED = true;
         SafeStorage.setItem('isubnet_pro', 'true');
         applyProState();
         alert("Thank you for upgrading! iSubnet Pro unlocked.");
+        closeProModal();
       }
+    } else {
+      alert("Billing Error: No packages available in current offering.");
     }
   } catch(err) {
     if (!err.userCancelled) {
@@ -2717,8 +2746,17 @@ function init() {
   }
 
   // --- Pro modal bindings ---
-  document.getElementById('btn-pro-unlock').addEventListener('click', unlockPro);
-  document.getElementById('btn-pro-dismiss').addEventListener('click', closeProModal);
+  const buyLifetimeBtn = document.getElementById('btn-pro-buy-lifetime');
+  if (buyLifetimeBtn) buyLifetimeBtn.addEventListener('click', () => purchaseProductByPlan('lifetime'));
+
+  const buyYearlyBtn = document.getElementById('btn-pro-buy-yearly');
+  if (buyYearlyBtn) buyYearlyBtn.addEventListener('click', () => purchaseProductByPlan('yearly'));
+
+  const buyMonthlyBtn = document.getElementById('btn-pro-buy-monthly');
+  if (buyMonthlyBtn) buyMonthlyBtn.addEventListener('click', () => purchaseProductByPlan('monthly'));
+
+  const dismissBtn = document.getElementById('btn-pro-dismiss');
+  if (dismissBtn) dismissBtn.addEventListener('click', closeProModal);
 
   // --- Locked Splitter tab click ---
   const splitterBtn = document.getElementById('tab-btn-splitter');
