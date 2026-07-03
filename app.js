@@ -140,14 +140,13 @@ async function initRevenueCat() {
   }
 }
 
-async function updateRevenueCatSubscriptionState() {
-  if (!useRevenueCat) return;
 function isProEntitlementActive(entitlements) {
   if (!entitlements) return false;
   return !!(entitlements["pro_features"] || entitlements["iSubnet Pro"] || Object.keys(entitlements).length > 0);
 }
 
 async function updateRevenueCatSubscriptionState() {
+  if (!useRevenueCat) return;
   try {
     const { Purchases } = window.Capacitor.Plugins;
     const customerInfo = await Purchases.getCustomerInfo();
