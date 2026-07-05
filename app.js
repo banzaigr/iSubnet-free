@@ -371,8 +371,8 @@ function applyProState() {
     // Switch to another tab if currently on Splitter
     const activeTab = document.querySelector('.tab-content.active');
     if (activeTab && activeTab.id === 'splitter-tab') {
-      const ipv4Btn = document.querySelector('.tab-btn[data-target="ipv4-tab"]');
-      if (ipv4Btn) ipv4Btn.click();
+      const calcBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
+      if (calcBtn) calcBtn.click();
     }
     
     // Re-render list templates to show limits
@@ -435,7 +435,43 @@ function setupTabNavigation() {
       
       // Activate target
       btn.classList.add('active');
-      document.getElementById(target).classList.add('active');
+      const el = document.getElementById(target);
+      if (el) el.classList.add('active');
+    });
+  });
+
+  // Inner sub-tab switcher for Calculator Tab (IPv4 / IPv6 Modes)
+  const subTabButtons = document.querySelectorAll('.calc-sub-tab-btn');
+  const subPanels = document.querySelectorAll('.calc-sub-panel');
+
+  subTabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-sub-target');
+      if (!target) return;
+
+      // Deactivate all sub-tabs and hide sub-panels
+      subTabButtons.forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'none';
+        b.style.color = 'var(--text-secondary)';
+        b.style.fontWeight = '500';
+      });
+      subPanels.forEach(p => {
+        p.classList.remove('active-panel');
+        p.style.display = 'none';
+      });
+
+      // Activate clicked sub-tab and show target panel
+      btn.classList.add('active');
+      btn.style.background = 'var(--bg-card)';
+      btn.style.color = 'var(--text-primary)';
+      btn.style.fontWeight = '600';
+
+      const panel = document.getElementById(target);
+      if (panel) {
+        panel.classList.add('active-panel');
+        panel.style.display = 'block';
+      }
     });
   });
 }
@@ -1395,16 +1431,21 @@ function restoreHistoryItem(id) {
     document.getElementById('ipv4-hosts').value = item.data.hosts;
     calculateIPv4();
     // Navigate tab
-    const tabBtn = document.querySelector('.tab-btn[data-target="ipv4-tab"]');
+    // Navigate tab
+    const tabBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
     if (tabBtn) tabBtn.click();
+    const subBtn = document.querySelector('.calc-sub-tab-btn[data-sub-target="ipv4-panel"]');
+    if (subBtn) subBtn.click();
   } else if (item.type === 'IPv6') {
     document.getElementById('ipv6-address').value = item.data.ip;
     document.getElementById('ipv6-cidr').value = item.data.cidr;
     document.getElementById('ipv6-hosts').value = item.data.hosts;
     calculateIPv6();
     // Navigate tab
-    const tabBtn = document.querySelector('.tab-btn[data-target="ipv6-tab"]');
+    const tabBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
     if (tabBtn) tabBtn.click();
+    const subBtn = document.querySelector('.calc-sub-tab-btn[data-sub-target="ipv6-panel"]');
+    if (subBtn) subBtn.click();
   } else if (item.type === 'Converter') {
     document.getElementById('converter-input').value = item.data.input;
     runConverter();
