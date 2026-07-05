@@ -35,6 +35,7 @@
   --text-muted: #94a3b8;
   --border-color: #e2e8f0;
   --logo-border: #0f172a;
+  --logo-bg: #ffffff;
   --gradient-accent: linear-gradient(135deg, #4f46e5 0%, #a855f7 100%);
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.06);
@@ -52,6 +53,7 @@ body.dark-mode {
   --text-muted: #94a3b8;
   --border-color: #242e42;
   --logo-border: #ffffff;
+  --logo-bg: #090d16;
   --shadow-lg: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
 }
 
@@ -257,9 +259,10 @@ body.dark-mode {
   width: 44px !important;
   height: 44px !important;
   border-radius: 10px !important;
-  object-fit: cover !important;
   border: 2px solid var(--logo-border) !important;
-  padding: 0 !important;
+  background-color: var(--logo-bg) !important;
+  padding: 5px !important;
+  box-sizing: border-box !important;
   margin: 0 !important;
   transition: var(--transition-smooth) !important;
 }
@@ -908,38 +911,81 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
 .isub-pg__select-option { background: var(--pg-bg); }
 
 .isub-pg__slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 5px;
-  background: var(--pg-border);
-  border-radius: 3px;
-  outline: none;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 100% !important;
+  height: 24px !important;
+  background: transparent !important;
+  background-color: transparent !important;
   border: none !important;
+  padding: 0 !important;
+  margin: 10px 0 !important;
   box-shadow: none !important;
-  cursor: pointer;
-  margin: 6px 0;
+  outline: none !important;
+  min-height: 0 !important;
 }
 
+/* WebKit Track styling */
+.isub-pg__slider::-webkit-slider-runnable-track {
+  width: 100% !important;
+  height: 6px !important;
+  background: var(--pg-border) !important;
+  border-radius: 3px !important;
+  border: none !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1) !important;
+}
+
+/* WebKit Thumb styling */
 .isub-pg__slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--pg-accent);
-  border: 3px solid var(--pg-bg);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  cursor: pointer;
-  transition: transform 0.1s ease;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50% !important;
+  background: var(--pg-accent) !important;
+  border: 4px solid var(--pg-bg) !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35) !important;
+  cursor: pointer !important;
+  margin-top: -7px !important; /* Centering math: (6px/2) - (20px/2) = 3px - 10px = -7px */
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-.isub-pg__slider::-webkit-slider-thumb:active { transform: scale(1.25); }
+.isub-pg__slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15) !important;
+}
+
+.isub-pg__slider::-webkit-slider-thumb:active {
+  transform: scale(1.25) !important;
+}
+
+/* Mozilla Track styling */
+.isub-pg__slider::-moz-range-track {
+  width: 100% !important;
+  height: 6px !important;
+  background: var(--pg-border) !important;
+  border-radius: 3px !important;
+  border: none !important;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1) !important;
+}
+
+/* Mozilla Thumb styling */
 .isub-pg__slider::-moz-range-thumb {
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: var(--pg-accent);
-  border: 3px solid var(--pg-bg);
-  cursor: pointer;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: var(--pg-accent) !important;
+  border: 4px solid var(--pg-bg) !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35) !important;
+  cursor: pointer !important;
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.isub-pg__slider::-moz-range-thumb:hover {
+  transform: scale(1.15) !important;
+}
+
+.isub-pg__slider::-moz-range-thumb:active {
+  transform: scale(1.25) !important;
 }
 
 .isub-pg__error {
@@ -1441,7 +1487,30 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
   <nav class="isubnet-navbar">
     <div class="isubnet-nav-container">
       <a href="#" class="isubnet-logo" style="text-decoration: none !important;">
-        <img src="https://banzai.gr/wp-content/uploads/2026/06/app_logo.jpg" alt="iSubnet Logo" class="isubnet-logo-img">
+        <svg viewBox="0 0 100 100" class="isubnet-logo-img" aria-label="iSubnet Logo">
+          <defs>
+            <linearGradient id="isubnet-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#3b82f6" />
+              <stop offset="100%" stop-color="#10b981" />
+            </linearGradient>
+          </defs>
+          <polygon points="85,50 67.5,80.3 32.5,80.3 15,50 32.5,19.7 67.5,19.7" fill="none" stroke="url(#isubnet-grad)" stroke-width="3.5" stroke-linejoin="round" />
+          <polygon points="85,50 32.5,80.3 32.5,19.7" fill="none" stroke="url(#isubnet-grad)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+          <polygon points="15,50 67.5,80.3 67.5,19.7" fill="none" stroke="url(#isubnet-grad)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+          <line x1="50" y1="50" x2="85" y2="50" stroke="url(#isubnet-grad)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="67.5" y2="80.3" stroke="url(#isubnet-grad)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="32.5" y2="80.3" stroke="url(#isubnet-grad)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="15" y2="50" stroke="url(#isubnet-grad)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="32.5" y2="19.7" stroke="url(#isubnet-grad)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="67.5" y2="19.7" stroke="url(#isubnet-grad)" stroke-width="3.5" />
+          <circle cx="50" cy="50" r="7" fill="var(--logo-bg)" stroke="url(#isubnet-grad)" stroke-width="3.5" />
+          <circle cx="85" cy="50" r="5" fill="var(--logo-bg)" stroke="url(#isubnet-grad)" stroke-width="3" />
+          <circle cx="67.5" cy="80.3" r="5" fill="var(--logo-bg)" stroke="url(#isubnet-grad)" stroke-width="3" />
+          <circle cx="32.5" cy="80.3" r="5" fill="var(--logo-bg)" stroke="url(#isubnet-grad)" stroke-width="3" />
+          <circle cx="15" cy="50" r="5" fill="var(--logo-bg)" stroke="url(#isubnet-grad)" stroke-width="3" />
+          <circle cx="32.5" cy="19.7" r="5" fill="var(--logo-bg)" stroke="url(#isubnet-grad)" stroke-width="3" />
+          <circle cx="67.5" cy="19.7" r="5" fill="var(--logo-bg)" stroke="url(#isubnet-grad)" stroke-width="3" />
+        </svg>
         <span class="isubnet-logo-text">iSubnet</span>
       </a>
       <div class="isubnet-nav-links">
@@ -2785,6 +2854,7 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
     }
     var btn=document.getElementById('isubnet-theme-toggle');
     if(btn) btn.textContent=isDark?'☀️':'🌙';
+    
     applyAstraBackgroundOverride(isDark);
   }
 
