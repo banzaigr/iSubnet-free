@@ -54,8 +54,92 @@
       return false;
     };
   </script>
+  <script>
+    // Read and apply theme instantly to prevent color flashes on the splash screen
+    (function() {
+      try {
+        const savedTheme = localStorage.getItem('isubnet_landing_theme') || 'dark';
+        const isDark = savedTheme === 'dark';
+        const bg = isDark ? '#090d16' : '#ffffff';
+        const textColor = isDark ? '#ffffff' : '#1e293b';
+        const subColor = isDark ? '#94a3b8' : '#64748b';
+        const ringBorder = isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9';
+        
+        document.write('<style>' +
+          '#isubnet-splash-screen { background-color: ' + bg + ' !important; }' +
+          '#isubnet-splash-screen .splash-title { color: ' + textColor + ' !important; }' +
+          '#isubnet-splash-screen .splash-sub { color: ' + subColor + ' !important; }' +
+          '#isubnet-splash-screen .circle-node { fill: ' + bg + ' !important; }' +
+          '#isubnet-splash-screen .splash-spinner { border-color: ' + ringBorder + ' !important; border-top-color: #3b82f6 !important; border-right-color: #10b981 !important; }' +
+          '</style>');
+      } catch(e) {}
+    })();
+  </script>
 </head>
 <body>
+  <!-- HTML5 WEB SPLASH SCREEN OVERLAY (METHOD 1) -->
+  <div id="isubnet-splash-screen" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #ffffff; z-index: 999999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.4s ease, visibility 0.4s ease; opacity: 1; visibility: visible;">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 80px;">
+      <!-- Vector SVG Logo -->
+      <svg viewBox="0 0 100 100" style="width: 84px; height: 84px;" aria-label="iSubnet Logo">
+        <defs>
+          <linearGradient id="splash-logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#3b82f6" />
+            <stop offset="100%" stop-color="#10b981" />
+          </linearGradient>
+        </defs>
+        <polygon points="85,50 67.5,80.3 32.5,80.3 15,50 32.5,19.7 67.5,19.7" fill="none" stroke="url(#splash-logo-grad)" stroke-width="3.5" stroke-linejoin="round" />
+        <polygon points="85,50 32.5,80.3 32.5,19.7" fill="none" stroke="url(#splash-logo-grad)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+        <polygon points="15,50 67.5,80.3 67.5,19.7" fill="none" stroke="url(#splash-logo-grad)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+        <line x1="50" y1="50" x2="85" y2="50" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="67.5" y2="80.3" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="32.5" y2="80.3" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="15" y2="50" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="32.5" y2="19.7" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="67.5" y2="19.7" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <circle cx="50" cy="50" r="7" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <circle cx="85" cy="50" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="67.5" cy="80.3" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="32.5" cy="80.3" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="15" cy="50" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="32.5" cy="19.7" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="67.5" cy="19.7" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+      </svg>
+      <div class="splash-title" style="font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 38px; font-weight: 800; color: #1e293b; letter-spacing: -1.2px; margin-top: 12px; line-height: 1;">iSubnet</div>
+      <div class="splash-sub" style="font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: #64748b; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">Connecting Professionals</div>
+    </div>
+    <!-- Spinner Ring -->
+    <div class="splash-spinner" style="position: absolute; bottom: 80px; width: 32px; height: 32px; border: 3.5px solid #f1f5f9; border-top-color: #3b82f6; border-right-color: #10b981; border-radius: 50%; animation: isubnet-splash-spin 1s linear infinite;"></div>
+  </div>
+
+  <style>
+  @keyframes isubnet-splash-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  </style>
+
+  <script>
+    // Fade out splash overlay immediately when page is loaded
+    (function() {
+      function hideSplash() {
+        var splash = document.getElementById('isubnet-splash-screen');
+        if (splash) {
+          splash.style.opacity = '0';
+          splash.style.visibility = 'hidden';
+          setTimeout(function() { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 400);
+        }
+      }
+      if (document.readyState === 'complete') {
+        hideSplash();
+      } else {
+        window.addEventListener('load', hideSplash);
+        // Fallback to guarantee it goes away
+        setTimeout(hideSplash, 1500);
+      }
+    })();
+  </script>
+
   <div class="phone-wrapper">
     <!-- Status Bar Simulation for iOS vibe -->
     <div class="status-bar">
