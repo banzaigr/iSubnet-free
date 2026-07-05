@@ -4,17 +4,35 @@
     try {
       const savedTheme = localStorage.getItem('isubnet_landing_theme') || 'dark';
       const isDark = savedTheme === 'dark';
+      
+      // Apply theme to documentElement immediately (always exists)
       if (isDark) {
         document.documentElement.classList.add('dark-mode');
         document.documentElement.classList.remove('light-mode');
-        document.body.classList.add('dark-mode');
-        document.body.classList.remove('light-mode');
       } else {
         document.documentElement.classList.add('light-mode');
         document.documentElement.classList.remove('dark-mode');
-        document.body.classList.add('light-mode');
-        document.body.classList.remove('dark-mode');
       }
+      
+      // Safely apply to body if it exists, or defer to DOMContentLoaded
+      const applyToBody = () => {
+        if (document.body) {
+          if (isDark) {
+            document.body.classList.add('dark-mode');
+            document.body.classList.remove('light-mode');
+          } else {
+            document.body.classList.add('light-mode');
+            document.body.classList.remove('dark-mode');
+          }
+        }
+      };
+      
+      if (document.body) {
+        applyToBody();
+      } else {
+        document.addEventListener('DOMContentLoaded', applyToBody);
+      }
+      
       const bg = isDark ? '#090d16' : '#f8fafc';
       // Write overrides immediately into document style stream
       document.write('<style>html,body,.ast-plain-container,.ast-container,.site,.site-content,.entry-content,.post-inner,#primary,#main,.wp-block-html { background-color: ' + bg + ' !important; background: ' + bg + ' !important; }</style>');
@@ -23,6 +41,7 @@
 </script>
 
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 /* --- DESIGN SYSTEM & CSS TOKENS (LIGHT MODE DEFAULT) --- */
 :root {
   --bg-primary: #ffffff;
@@ -41,6 +60,22 @@
   --shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.06);
   --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --playground-accent: #4f46e5;
+}
+
+/* --- DISSOLVE ASTRA SEPARATE CONTAINER CARD (REMOVES WHITE BORDER FRAME) --- */
+article, 
+.ast-article-single, 
+.ast-separate-container .ast-article-single, 
+.entry-content, 
+.post-inner, 
+.ast-container, 
+.wp-block-post-content {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
 }
 
 /* --- DARK MODE OVERRIDES --- */
@@ -287,7 +322,8 @@ body.dark-mode {
   color: var(--text-secondary) !important;
   text-decoration: none !important;
   font-size: 16px !important;
-  font-weight: 600;
+  font-weight: 600 !important; /* Forces bold weight on both pages */
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif !important; /* Locks identical font on both pages */
   transition: var(--transition-smooth) !important;
   flex-shrink: 0 !important;
   padding: 0 !important;
@@ -2060,9 +2096,9 @@ body.dark-mode .calc-sub-tab-btn.active {
         <p style="font-size: 18px; line-height: 1.6; color: var(--text-secondary); margin: 0;">Have an idea for improvements, a new networking tool, or want to report a bug? Send us a message and shape the roadmap directly.</p>
       </div>
 
-      <form id="landing-feedback-form" action="https://formsubmit.co/info@banzai.gr" method="POST" style="display: flex; flex-direction: column; gap: 24px;">
+      <form id="landing-feedback-form" action="https://formsubmit.co/info@isubnet.net" method="POST" style="display: flex; flex-direction: column; gap: 24px;">
         <input type="hidden" name="_subject" value="iSubnet Landing Page Feedback">
-        <input type="hidden" name="_next" value="https://banzai.gr/">
+        <input type="hidden" name="_next" value="https://isubnet.net/">
         
         <!-- Row 1: Name and Email -->
         <div class="isubnet-form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
@@ -2102,8 +2138,9 @@ body.dark-mode .calc-sub-tab-btn.active {
   <!-- SITE FOOTER -->
   <footer class="site-footer-landing" style="padding: 40px 0; background-color: transparent; border-top: none; color: var(--text-secondary); font-size: 14px; text-align: center; transition: var(--transition-smooth); width: 100%;">
     <div style="max-width: 1000px; margin: 0 auto; padding: 0 24px; text-align: center; line-height: 1.6;">
-      <span style="color: var(--text-secondary);">&copy; 2026 Banzai GR &middot; iSubnet. All rights reserved. | </span>
-      <a href="https://banzai.gr/privacy-policy/" target="_blank" style="color: var(--text-primary); text-decoration: none; font-weight: 700;">Privacy Policy</a>
+      <span style="color: var(--text-secondary);">&copy; 2026 iSubnet. All rights reserved. | </span>
+      <a href="https://www.paypal.com/ncp/payment/5UQN4UJPN5GUL" target="_blank" style="color: #10b981; text-decoration: none; font-weight: 700; margin-right: 8px;">Support Development ☕</a> | 
+      <a href="https://isubnet.net/privacy-policy/" target="_blank" style="color: var(--text-primary); text-decoration: none; font-weight: 700;">Privacy Policy</a>
     </div>
   </footer>
   </div>

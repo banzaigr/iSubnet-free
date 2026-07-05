@@ -517,7 +517,7 @@ th {
   background: var(--bg-card);
   border-top: 1px solid var(--border-color);
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   padding-bottom: 15px;
   z-index: 100;
   box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
@@ -1359,5 +1359,21 @@ body.dark-mode .phone-wrapper {
   line-height: 1.4;
   min-width: 34px;
   text-align: center;
+}
+
+/* Unified Calculator Sub-Tab Bar */
+.calc-sub-tab-btn {
+  box-shadow: none;
+  border: 1px solid transparent;
+  outline: none;
+}
+.calc-sub-tab-btn:hover {
+  color: var(--text-primary) !important;
+}
+.calc-sub-tab-btn.active {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+body.dark-mode .calc-sub-tab-btn.active {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
 

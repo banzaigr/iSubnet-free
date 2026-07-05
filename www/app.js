@@ -3410,7 +3410,7 @@ function initSettings() {
       const categoryVal = document.getElementById('fb-app-type').value;
       const messageVal = document.getElementById('fb-app-message').value.trim();
       
-      fetch("https://formsubmit.co/ajax/info@banzai.gr", {
+      fetch("https://formsubmit.co/ajax/info@isubnet.net", {
         method: "POST",
         headers: {
           'Content-Type': 'application/json',
@@ -4210,7 +4210,7 @@ function setupExporterListeners() {
     });
     
     report += `\n========================================\n`;
-    report += `Banzai GR - https://banzai.gr\n`;
+    report += `iSubnet - https://isubnet.net\n`;
     return report;
   }
 
