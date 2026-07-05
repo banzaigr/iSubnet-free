@@ -433,7 +433,7 @@
       <section id="splitter-tab" class="tab-content">
         <div class="card input-card">
           <h2 class="card-title">Subnet Splitter (VLSM)</h2>
-          <div class="input-row" style="display: flex; gap: 12px; margin-bottom: 10px;">
+          <div class="input-row" style="display: flex; gap: 12px; margin-bottom: 10px; align-items: flex-end;">
             <div class="input-group" style="flex: 2;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <label for="split-base-ip" style="margin: 0;">Base Network IP</label>
@@ -451,8 +451,10 @@
               <input type="text" id="split-base-ip" placeholder="e.g. 192.168.1.0" value="192.168.1.0">
             </div>
             <div class="input-group" style="flex: 1;">
-              <label for="split-base-cidr">Base Prefix</label>
-              <input type="number" id="split-base-cidr" min="0" max="30" value="24" style="padding: 10px;">
+              <div style="margin-bottom: 6px;">
+                <label for="split-base-cidr" style="margin: 0;">Base Prefix</label>
+              </div>
+              <input type="number" id="split-base-cidr" min="0" max="30" value="24">
             </div>
           </div>
           <span class="error-msg" id="split-error"></span>
@@ -460,7 +462,7 @@
           <div class="input-group" style="margin-top: 10px;">
             <label>Split Mode</label>
             <div class="segmented-control" style="display: flex; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 3px; margin-top: 5px;">
-              <button class="method-btn active" data-method="equal" style="flex: 1; background: var(--card-bg); border: none; border-radius: 6px; padding: 6px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Equal Split</button>
+              <button class="method-btn active" data-method="equal" style="flex: 1; background: var(--card-bg); border: none; border-radius: 6px; padding: 6px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Equal Split (FLSM)</button>
               <button class="method-btn" data-method="vlsm" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 6px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;">Host Count (VLSM)</button>
             </div>
           </div>
@@ -559,7 +561,7 @@
                 <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 0;">Prefix Length</label>
                 <span id="ipv6-cidr-val" class="highlight" style="font-size: 16px; font-weight: bold; color: var(--accent-primary);">/64</span>
               </div>
-              <input type="range" id="ipv6-cidr" min="1" max="128" value="64">
+              <input type="range" id="ipv6-cidr" min="0" max="128" value="64">
             </div>
 
             <div class="input-group">
