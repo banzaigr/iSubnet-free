@@ -1479,6 +1479,22 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
     padding: 24px 0 16px !important;
   }
 }
+
+/* Unified Calculator Sub-Tab Bar */
+.calc-sub-tab-btn {
+  box-shadow: none;
+  border: 1px solid transparent;
+  outline: none;
+}
+.calc-sub-tab-btn:hover {
+  color: var(--text-primary) !important;
+}
+.calc-sub-tab-btn.active {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+body.dark-mode .calc-sub-tab-btn.active {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
 </style>
 
 <div class="isubnet-wrap">
@@ -1625,17 +1641,24 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
             <button class="isub-pg__dot" data-color="#64748b" style="background:#64748b" onclick="pgSetAccent('#64748b',this)" aria-label="Slate"></button>
           </div>
           <div class="isub-pg__tabs" role="tablist">
-            <button class="isub-pg__tab is-active" onclick="pgTab('ipv4',this)" role="tab">IPv4 Calc</button>
-            <button class="isub-pg__tab" onclick="pgTab('ipv6',this)" role="tab">IPv6 Calc</button>
+            <button class="isub-pg__tab is-active" onclick="pgTab('calculator',this)" role="tab">Calculator</button>
             <button class="isub-pg__tab" onclick="pgTab('split',this)" role="tab">Subnet Splitter</button>
             <button class="isub-pg__tab" onclick="pgTab('conv',this)" role="tab">Converter</button>
           </div>
         </div>
 
         <div class="isub-pg__panels">
-          <!-- PANEL 1: IPv4 CALCULATOR -->
-          <div id="pg-panel-ipv4" class="isub-pg__panel is-active" role="tabpanel">
-            <div class="isub-pg__row">
+          <!-- PANEL 1: UNIFIED CALCULATOR -->
+          <div id="pg-panel-calculator" class="isub-pg__panel is-active" role="tabpanel">
+            <!-- Mode switcher for IPv4 / IPv6 inside the Calculator tab -->
+            <div class="calc-sub-tab-bar" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 20px; gap: 4px; width: 100%; max-width: 320px; margin-left: auto; margin-right: auto;">
+              <button class="calc-sub-tab-btn active" data-sub-target="pg-v4-subpanel" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth); outline: none; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">IPv4 Mode</button>
+              <button class="calc-sub-tab-btn" data-sub-target="pg-v6-subpanel" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); outline: none; box-shadow: none;">IPv6 Mode</button>
+            </div>
+
+            <!-- IPv4 Subpanel -->
+            <div id="pg-v4-subpanel" class="calc-sub-panel active-panel">
+              <div class="isub-pg__row">
               <div class="isub-pg__field">
                 <label class="isub-pg__label" for="pg-v4-ip">IP Address</label>
                 <input class="isub-pg__input" type="text" id="pg-v4-ip" value="192.168.1.1" oninput="pgV4Calc()" autocomplete="off" spellcheck="false">
@@ -1696,10 +1719,10 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
                 <div class="isub-pg__out-val isub-pg__out-val--normal" id="pg-v4-type"></div>
               </div>
             </div>
-          </div>
+            </div> <!-- End of pg-v4-subpanel -->
 
-          <!-- PANEL 2: IPv6 CALCULATOR -->
-          <div id="pg-panel-ipv6" class="isub-pg__panel" role="tabpanel">
+            <!-- IPv6 Subpanel -->
+            <div id="pg-v6-subpanel" class="calc-sub-panel hidden-panel" style="display: none;">
             <div class="isub-pg__row">
               <div class="isub-pg__field">
                 <label class="isub-pg__label" for="pg-v6-ip">IPv6 Address</label>
@@ -1749,7 +1772,8 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
                 <div class="isub-pg__out-val" id="pg-v6-total" style="font-size:12px;"></div>
               </div>
             </div>
-          </div>
+            </div> <!-- End of pg-v6-subpanel -->
+          </div> <!-- End of pg-panel-calculator -->
 
           <!-- PANEL 3: SUBNET SPLITTER -->
           <div id="pg-panel-split" class="isub-pg__panel" role="tabpanel">
@@ -1820,7 +1844,7 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
             <div class="isub-pg__row">
               <div class="isub-pg__field isub-pg__field--full">
                 <label class="isub-pg__label" for="pg-conv-input">Input Value</label>
-                <input class="isub-pg__input" type="text" id="pg-conv-input" value="255.255.255.0" placeholder="e.g. 255.255.240.0, 0.0.15.255, 24, or 2001:db8::/64" oninput="pgConvRun()" autocomplete="off" spellcheck="false">
+                <input class="isub-pg__input" type="text" id="pg-conv-input" value="0.0.0.255" placeholder="e.g. 255.255.240.0, 0.0.15.255, 24, or 2001:db8::/64" oninput="pgConvRun()" autocomplete="off" spellcheck="false">
               </div>
             </div>
             <span class="isub-pg__error" id="pg-conv-err"></span>
@@ -2857,6 +2881,41 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
     if(btn) btn.textContent=isDark?'☀️':'🌙';
     
     applyAstraBackgroundOverride(isDark);
+
+    // Inner sub-tab switcher for Calculator Tab (IPv4 / IPv6 Modes)
+    var subTabButtons = document.querySelectorAll('.calc-sub-tab-btn');
+    var subPanels = document.querySelectorAll('.calc-sub-panel');
+
+    subTabButtons.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var target = btn.getAttribute('data-sub-target');
+        if (!target) return;
+
+        subTabButtons.forEach(function(b) {
+          b.classList.remove('active');
+          b.style.background = 'none';
+          b.style.color = 'var(--text-secondary)';
+          b.style.fontWeight = '500';
+          b.style.boxShadow = 'none';
+        });
+        subPanels.forEach(function(p) {
+          p.classList.remove('active-panel');
+          p.style.display = 'none';
+        });
+
+        btn.classList.add('active');
+        btn.style.background = 'var(--bg-card)';
+        btn.style.color = 'var(--text-primary)';
+        btn.style.fontWeight = '600';
+        btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+
+        var panel = document.getElementById(target);
+        if (panel) {
+          panel.classList.add('active-panel');
+          panel.style.display = 'block';
+        }
+      });
+    });
   }
 
   function applyAstraBackgroundOverride(isDark) {
