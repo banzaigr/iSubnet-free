@@ -1257,6 +1257,182 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
   .isub-pg__out-grid { grid-template-columns: 1fr; }
   .isub-pg__tab { font-size: 12px; padding: 8px 12px; }
 }
+
+/* --- RESPONSIVE LAYOUT OVERRIDES FOR TABLETS & MOBILES --- */
+@media (max-width: 900px) {
+  .isubnet-logo {
+    margin-right: 0 !important;
+  }
+}
+
+@media (max-width: 960px) {
+  .isubnet-wrap {
+    padding: 24px 16px !important;
+    margin: 16px auto !important;
+    border-radius: 16px !important;
+  }
+  .isubnet-inner-card {
+    padding: 20px 14px !important;
+    border-radius: 12px !important;
+  }
+  .isubnet-nav-container {
+    flex-direction: column !important;
+    gap: 16px !important;
+    padding: 0 !important;
+    text-align: center !important;
+  }
+  .isubnet-nav-links {
+    justify-content: center !important;
+    width: 100% !important;
+    flex-wrap: wrap !important;
+    gap: 12px 18px !important;
+    padding: 0 !important;
+  }
+  .isubnet-logo {
+    justify-content: center !important;
+  }
+  .hero {
+    padding: 60px 0 40px !important;
+  }
+  .hero-content h1 {
+    font-size: 38px !important;
+    line-height: 1.25 !important;
+  }
+  .hero-desc {
+    font-size: 15px !important;
+    margin-bottom: 24px !important;
+  }
+  .hero-actions {
+    flex-direction: column !important;
+    gap: 12px !important;
+    width: 100% !important;
+  }
+  .hero-actions > * {
+    width: 100% !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+  }
+  .hero-preview {
+    margin-top: 20px !important;
+  }
+  .isubnet-usecases-grid {
+    grid-template-columns: 1fr !important;
+    gap: 32px !important;
+  }
+  .usecases-section {
+    padding: 40px 20px !important;
+  }
+  .feedback-section {
+    padding: 40px 20px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .isubnet-wrap {
+    padding: 16px 8px !important;
+    margin: 8px auto !important;
+    border-radius: 12px !important;
+  }
+  .isubnet-inner-card {
+    padding: 14px 10px !important;
+    border-radius: 8px !important;
+  }
+  .hero-content h1 {
+    font-size: 30px !important;
+  }
+  .isubnet-logo-text {
+    font-size: 18px !important;
+  }
+  .isubnet-logo-img {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  .isubnet-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .usecases-section, .feedback-section {
+    padding: 24px 12px !important;
+  }
+  .isubnet-comparison-box {
+    padding: 18px 14px !important;
+    border-radius: 16px !important;
+  }
+  .isubnet-comparison-box h3 {
+    font-size: 18px !important;
+    margin-bottom: 16px !important;
+  }
+  .isubnet-comparison-row {
+    padding: 12px 14px !important;
+    gap: 8px !important;
+  }
+  .isubnet-comparison-row span {
+    font-size: 13px !important;
+  }
+  .isubnet-features-grid, .isubnet-roadmap-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .isubnet-features-grid > div {
+    padding: 24px 16px !important;
+    border-radius: 16px !important;
+  }
+  .isubnet-roadmap-grid > div {
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+  .features-section, .upcoming-section {
+    padding: 40px 12px !important;
+  }
+}
+
+/* --- DYNAMIC SLIM NAVBAR FOR MOBILE LANDSCAPE (HORIZONTAL) --- */
+@media (max-height: 500px) {
+  .isubnet-navbar {
+    padding: 6px 12px !important;
+    position: sticky !important;
+    top: 5px !important;
+  }
+  .isubnet-nav-container {
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+    gap: 16px !important;
+    padding: 0 4px !important;
+  }
+  .isubnet-logo {
+    flex-direction: row !important;
+    gap: 8px !important;
+    justify-content: flex-start !important;
+  }
+  .isubnet-logo-img {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+  }
+  .isubnet-logo-text {
+    font-size: 16px !important;
+  }
+  .isubnet-nav-links {
+    flex-direction: row !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    width: auto !important;
+    margin: 0 auto !important;
+  }
+  .isubnet-nav-links a {
+    font-size: 13px !important;
+  }
+  .isubnet-theme-toggle-btn {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    font-size: 13px !important;
+  }
+  .hero {
+    padding: 24px 0 16px !important;
+  }
+}
 </style>
 
 <div class="isubnet-wrap">
@@ -1264,10 +1440,10 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
   <!-- NAVIGATION -->
   <nav class="isubnet-navbar">
     <div class="isubnet-nav-container">
-      <div class="isubnet-logo">
+      <a href="#" class="isubnet-logo" style="text-decoration: none !important;">
         <img src="https://banzai.gr/wp-content/uploads/2026/06/app_logo.jpg" alt="iSubnet Logo" class="isubnet-logo-img">
         <span class="isubnet-logo-text">iSubnet</span>
-      </div>
+      </a>
       <div class="isubnet-nav-links">
         <a href="#playground">Try Live</a>
         <a href="#features">Features</a>
@@ -1649,7 +1825,7 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
         <h2 style="font-size: 38px; font-weight: 800; letter-spacing: -1px; margin: 12px 0 20px; color: var(--text-primary);">Designed for Modern Workflows</h2>
         <p style="font-size: 18px; line-height: 1.6; color: var(--text-secondary); margin: 0;">Everything you need to plan, segment, and troubleshoot networks of any scale — from a single home router to enterprise clouds.</p>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px;">
+      <div class="isubnet-features-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 32px;">
         <!-- Feature 1 -->
         <div style="background: var(--bg-card); border: 2px solid var(--border-color); padding: 32px; border-radius: 20px; box-shadow: var(--shadow-lg); transition: var(--transition-smooth);">
           <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(79, 70, 229, 0.08); color: #4f46e5; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 24px;">📡</div>
@@ -1693,7 +1869,7 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
   <!-- USE CASES SECTION -->
   <section id="usecases" class="usecases-section" style="padding: 60px 40px; background-color: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: 22px; box-shadow: var(--shadow-lg); transition: var(--transition-smooth); margin-bottom: 40px;">
     <div style="max-width: 1000px; margin: 0 auto; padding: 0;">
-      <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 64px; align-items: center;">
+      <div class="isubnet-usecases-grid" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 64px; align-items: center;">
         <div>
           <span class="badge alt">REAL WORLD SCENARIOS</span>
           <h2 style="font-size: 38px; font-weight: 800; letter-spacing: -1px; margin: 12px 0 20px; color: var(--text-primary);">Engineered to Solve Network Problems</h2>
@@ -1715,22 +1891,22 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
             </div>
           </div>
         </div>
-        <div style="background: var(--bg-primary); border: none; padding: 32px; border-radius: 24px; box-shadow: var(--shadow-lg); width: 100%; box-sizing: border-box;">
+        <div class="isubnet-comparison-box" style="background: var(--bg-primary); border: none; padding: 32px; border-radius: 24px; box-shadow: var(--shadow-lg); width: 100%; box-sizing: border-box;">
           <h3 style="font-size: 22px; font-weight: 800; margin-bottom: 24px; color: var(--text-primary); text-align: left;">Why Network Engineers Choose iSubnet</h3>
           <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
+            <div class="isubnet-comparison-row" style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
               <span style="font-weight: 600; color: var(--text-primary); text-align: left; flex: 1;">Zero Ads &amp; Premium Copy Actions</span>
               <span style="color: #10b981; font-weight: 700; text-align: right; flex-shrink: 0;">Included</span>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
+            <div class="isubnet-comparison-row" style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
               <span style="font-weight: 600; color: var(--text-primary); text-align: left; flex: 1;">128-bit BigInt IPv6 Compressions</span>
               <span style="color: #10b981; font-weight: 700; text-align: right; flex-shrink: 0;">Included</span>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
+            <div class="isubnet-comparison-row" style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
               <span style="font-weight: 600; color: var(--text-primary); text-align: left; flex: 1;">Variable Length Subnet Masking (VLSM)</span>
               <span style="color: #6366f1; font-weight: 700; text-align: right; flex-shrink: 0;">Pro Feature</span>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
+            <div class="isubnet-comparison-row" style="display: flex; justify-content: space-between; align-items: center; border: none; padding: 16px 20px; border-radius: 12px; background: var(--bg-secondary); gap: 12px; width: 100%;">
               <span style="font-weight: 600; color: var(--text-primary); text-align: left; flex: 1;">Bulk Calculator &amp; Report Exporter</span>
               <span style="color: #6366f1; font-weight: 700; text-align: right; flex-shrink: 0;">Pro Feature</span>
             </div>
@@ -1750,7 +1926,7 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
       </div>
 
       <!-- Roadmap Grid -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; max-width: 1000px; margin: 0 auto 40px; text-align: left;">
+      <div class="isubnet-roadmap-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; max-width: 1000px; margin: 0 auto 40px; text-align: left;">
         <!-- iRoute -->
         <div style="background: var(--bg-primary); border: 1.5px solid var(--border-color); padding: 24px 30px; border-radius: 16px; display: flex; align-items: center; gap: 20px; transition: var(--transition-smooth); box-shadow: var(--shadow-lg);">
           <div style="font-size: 32px; flex-shrink: 0; line-height: 1;">📡</div>
@@ -1794,7 +1970,7 @@ body.dark-mode .isub-pg__eyebrow { background: rgba(79,70,229,0.18); color: #818
         <input type="hidden" name="_subject" value="iSubnet Landing Page Feedback">
         
         <!-- Row 1: Name and Email -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
+        <div class="isubnet-form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <label style="font-size: 14px; font-weight: 700; color: var(--text-primary); text-align: left;">Your Name</label>
             <input type="text" name="name" placeholder="John Doe" required style="padding: 14px 18px; border-radius: 10px; border: 1.5px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); font-size: 15px; outline: none; transition: var(--transition-smooth); width: 100%;">
