@@ -312,20 +312,22 @@ function unlockPro() {
 }
 
 // Global helpers for testing/debugging Pro features in the browser
-window.unlockProDemo = function() {
-  PRO_UNLOCKED = true;
-  SafeStorage.setItem('isubnet_pro', 'true');
-  applyProState();
-  console.log("iSubnet Pro unlocked successfully for testing!");
-  return "Pro unlocked!";
-};
+if (typeof window !== 'undefined' && (!window.Capacitor || !window.Capacitor.isNativePlatform())) {
+  window.unlockProDemo = function() {
+    PRO_UNLOCKED = true;
+    SafeStorage.setItem('isubnet_pro', 'true');
+    applyProState();
+    console.log("iSubnet Pro unlocked successfully for testing!");
+    return "Pro unlocked!";
+  };
 
-window.lockProDemo = function() {
-  PRO_UNLOCKED = false;
-  SafeStorage.setItem('isubnet_pro', 'false');
-  location.reload();
-  return "Pro locked!";
-};
+  window.lockProDemo = function() {
+    PRO_UNLOCKED = false;
+    SafeStorage.setItem('isubnet_pro', 'false');
+    location.reload();
+    return "Pro locked!";
+  };
+}
 
 function applyProState() {
   const badge = document.querySelector('.free-badge') || document.querySelector('.pro-badge');
@@ -999,7 +1001,7 @@ function calculateIPv6() {
       }
 
       const targetPrefix = 128 - bitsNeeded;
-      if (targetPrefix < 1 || targetPrefix > 128) {
+      if (targetPrefix < 0 || targetPrefix > 128) {
         errorEl.textContent = 'Unable to accommodate host size in IPv6.';
         return;
       }
@@ -2200,74 +2202,83 @@ function runConverter() {
       }
 
       if (cidr !== null && cidr >= 0 && cidr <= 128) {
-        const ipFields = parseIPv6(ipPart);
-        if (ipFields) {
-          const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
-          const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
-          
-          const ipVal = ipFieldsToBigInt(ipFields);
-          const networkVal = ipVal & netMask;
-          const broadcastVal = ipVal | hostMask;
+        // parseIPv6 returns a 128-bit BigInt (not an array of fields)
+        const ipVal = parseIPv6(ipPart);
 
-          document.getElementById('conv-type').textContent = 'IPv6 Subnet Input';
-          document.getElementById('conv-prefix').textContent = `/${cidr}`;
-          document.getElementById('conv-mask').textContent = 'N/A (IPv6)';
-          document.getElementById('conv-wildcard').textContent = `::${formatIPv6Compressed(hostMask)}`;
-          document.getElementById('conv-ipv6-mask').textContent = `${formatIPv6Compressed(netMask)}`;
-          document.getElementById('conv-ipv6-row').style.display = 'flex';
-          document.getElementById('conv-binary-row').style.display = 'none';
-          resultsDiv.classList.remove('hidden');
+        const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
+        const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
 
-          let usableRange = '';
-          if (cidr === 128) {
-            usableRange = `${formatIPv6Compressed(networkVal)} (Single Host)`;
-          } else {
-            usableRange = `${formatIPv6Compressed(networkVal + BigInt(1))} - ${formatIPv6Compressed(broadcastVal)}`;
-          }
+        const networkVal = ipVal & netMask;
+        const broadcastVal = ipVal | hostMask;
 
-          let totalHosts = '';
-          if (128 - cidr >= 120) {
-            totalHosts = `2^${128 - cidr}`;
-          } else {
-            totalHosts = (BigInt(1) << BigInt(128 - cidr)).toLocaleString();
-          }
+        document.getElementById('conv-type').textContent = 'IPv6 Subnet Input';
+        document.getElementById('conv-prefix').textContent = `/${cidr}`;
+        document.getElementById('conv-mask').textContent = 'N/A (IPv6)';
+        // formatIPv6Compressed already emits leading '::' when needed — no manual prefix
+        document.getElementById('conv-wildcard').textContent = formatIPv6Compressed(hostMask);
+        document.getElementById('conv-ipv6-mask').textContent = formatIPv6Compressed(netMask);
+        document.getElementById('conv-ipv6-row').style.display = 'flex';
+        document.getElementById('conv-binary-row').style.display = 'none';
+        resultsDiv.classList.remove('hidden');
 
-          let ipType = 'Global Unicast (Public)';
-          const firstWord = ipFields[0];
-          if ((firstWord & 0xe000) === 0x2000) ipType = 'Global Unicast (Public)';
-          else if (firstWord === 0xfe80) ipType = 'Link-Local Address';
-          else if ((firstWord & 0xfe00) === 0xfc00) ipType = 'Unique Local Address (Private)';
-          else if (firstWord === 0 && ipFields[1] === 0 && ipFields[2] === 0 && ipFields[3] === 0 && ipFields[4] === 0 && ipFields[5] === 0 && ipFields[6] === 0 && ipFields[7] === 1) ipType = 'Loopback Address';
-          else if (firstWord === 0xff00) ipType = 'Multicast Address';
-
-          if (subnetResults && subnetCard) {
-            subnetResults.innerHTML = `
-              <div class="result-item">
-                <span class="label">CIDR Notation</span>
-                <span class="val highlight" style="color: var(--accent-primary);">${formatIPv6Compressed(ipVal)}/${cidr}</span>
-              </div>
-              <div class="result-item">
-                <span class="label">Subnet Routing Prefix</span>
-                <span class="val">${formatIPv6Compressed(netMask)}</span>
-              </div>
-              <div class="result-item">
-                <span class="label">Network Range</span>
-                <span class="val" style="font-size: 13px; font-weight: 600; color: #10B981;">${usableRange}</span>
-              </div>
-              <div class="result-item">
-                <span class="label">Total IPs</span>
-                <span class="val" style="font-weight: 700;">${totalHosts}</span>
-              </div>
-              <div class="result-item">
-                <span class="label">Address Type</span>
-                <span class="val">${ipType}</span>
-              </div>
-            `;
-            subnetCard.classList.remove('hidden');
-          }
-          recordHistoryDebounced('Converter', { input: input }, `Calculated Subnet: ${ipPart}/${cidr}`);
-          return;
+        let usableRange = '';
+        if (cidr === 128) {
+          usableRange = `${formatIPv6Compressed(networkVal)} (Single Host)`;
+        } else {
+          usableRange = `${formatIPv6Compressed(networkVal)} - ${formatIPv6Compressed(broadcastVal)}`;
         }
+
+        let totalHosts = '';
+        if (128 - cidr >= 120) {
+          totalHosts = `2^${128 - cidr}`;
+        } else {
+          totalHosts = (BigInt(1) << BigInt(128 - cidr)).toLocaleString();
+        }
+
+        // Derive the top 16 bits from the BigInt for address-type detection
+        const firstWord = Number(ipVal >> BigInt(112)) & 0xffff;
+        let ipType = 'Global Unicast (Public)';
+        if (ipVal === BigInt(0)) {
+          ipType = 'Unspecified Address (::)';
+        } else if (ipVal === BigInt(1)) {
+          ipType = 'Loopback Address';
+        } else if ((firstWord & 0xff00) === 0xff00) {        // ff00::/8
+          ipType = 'Multicast Address';
+        } else if ((firstWord & 0xffc0) === 0xfe80) {        // fe80::/10
+          ipType = 'Link-Local Address';
+        } else if ((firstWord & 0xfe00) === 0xfc00) {        // fc00::/7
+          ipType = 'Unique Local Address (Private)';
+        } else if ((firstWord & 0xe000) === 0x2000) {        // 2000::/3
+          ipType = 'Global Unicast (Public)';
+        }
+
+        if (subnetResults && subnetCard) {
+          subnetResults.innerHTML = `
+            <div class="result-item">
+              <span class="label">CIDR Notation</span>
+              <span class="val highlight" style="color: var(--accent-primary);">${formatIPv6Compressed(ipVal)}/${cidr}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Subnet Routing Prefix</span>
+              <span class="val">${formatIPv6Compressed(netMask)}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Network Range</span>
+              <span class="val" style="font-size: 13px; font-weight: 600; color: #10B981;">${usableRange}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Total IPs</span>
+              <span class="val" style="font-weight: 700;">${totalHosts}</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Address Type</span>
+              <span class="val">${ipType}</span>
+            </div>
+          `;
+          subnetCard.classList.remove('hidden');
+        }
+        recordHistoryDebounced('Converter', { input: input }, `Calculated Subnet: ${ipPart}/${cidr}`);
+        return;
       }
     }
   }
@@ -2301,8 +2312,8 @@ function runConverter() {
       document.getElementById('conv-type').textContent = 'IPv6 Prefix';
       document.getElementById('conv-prefix').textContent = `/${cidrNum}`;
       document.getElementById('conv-mask').textContent = 'N/A (IPv6)';
-      document.getElementById('conv-wildcard').textContent = `::${formatIPv6Compressed(hostMask)}`;
-      document.getElementById('conv-ipv6-mask').textContent = `${formatIPv6Compressed(netMask)}`;
+      document.getElementById('conv-wildcard').textContent = formatIPv6Compressed(hostMask);
+      document.getElementById('conv-ipv6-mask').textContent = formatIPv6Compressed(netMask);
       
       document.getElementById('conv-ipv6-row').style.display = 'flex';
       document.getElementById('conv-binary-row').style.display = 'none';
@@ -2811,7 +2822,7 @@ function runSplitter() {
     resultsCard.classList.remove('hidden');
   }
   
-  const methodLabel = currentSplitMethod === 'equal' ? 'Equal Split' : 'VLSM';
+  const methodLabel = currentSplitMethod === 'equal' ? 'Equal Split (FLSM)' : 'VLSM';
   recordHistoryDebounced('Splitter', { baseIp, baseCidr, method: currentSplitMethod }, 'Splitter: ' + baseIp + '/' + baseCidr + ' (' + methodLabel + ')');
 }
 
@@ -2820,7 +2831,7 @@ function runSplitter() {
 function getFormattedSplitOutput() {
   const baseIp = document.getElementById('split-base-ip').value.trim();
   const baseCidr = document.getElementById('split-base-cidr').value;
-  const method = currentSplitMethod === 'equal' ? 'Equal Split' : 'VLSM (by Host Count)';
+  const method = currentSplitMethod === 'equal' ? 'Equal Split (FLSM)' : 'VLSM (by Host Count)';
   
   let content = `Subnet Split Results (${method}):\nBase Network: ${baseIp}/${baseCidr}\n\nAllocated Subnets:\n`;
   
