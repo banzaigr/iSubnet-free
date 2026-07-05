@@ -24,8 +24,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install CocoaPods
-        run: gem install cocoapods
 
       - name: Build Web Assets
         run: |
