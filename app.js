@@ -3020,12 +3020,25 @@ function initSettings() {
   if (chkDarkMode) {
     chkDarkMode.checked = document.body.classList.contains('dark-mode');
     chkDarkMode.addEventListener('change', () => {
-      if (chkDarkMode.checked) {
+      const isDark = chkDarkMode.checked;
+      if (isDark) {
         document.body.classList.add('dark-mode');
         SafeStorage.setItem('isubnet_dark_mode', 'true');
       } else {
         document.body.classList.remove('dark-mode');
         SafeStorage.setItem('isubnet_dark_mode', 'false');
+      }
+
+      // Save theme preference natively using Capacitor Preferences
+      try {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences) {
+          window.Capacitor.Plugins.Preferences.set({
+            key: 'isubnet_dark_mode',
+            value: isDark ? 'true' : 'false'
+          });
+        }
+      } catch (e) {
+        console.error('Failed to save native theme preference', e);
       }
     });
   }

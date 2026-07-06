@@ -1,6 +1,6 @@
 {
   "name": "subnet-calculator",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "![iSubnet Banner](https://img.shields.io/badge/iSubnet-v1.1.0-blue?style=for-the-badge) ![License](https://img.shields.io/badge/license-Proprietary-red?style=for-the-badge) ![Platform](https://img.shields.io/badge/platform-Web%20%7C%20Mobile-lightgrey?style=for-the-badge)",
   "main": "app.js",
   "scripts": {
@@ -25,6 +25,7 @@
     "@capacitor/core": "^8.4.1",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/ios": "^8.4.1",
+    "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@revenuecat/purchases-capacitor": "^13.2.0"

@@ -4,7 +4,7 @@
   "webDir": "www",
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 1000,
+      "launchShowDuration": 0,
       "launchAutoHide": true,
       "backgroundColor": "#090d16",
       "androidScaleType": "CENTER_CROP",
