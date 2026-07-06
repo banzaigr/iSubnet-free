@@ -595,6 +595,12 @@ th {
   z-index: 10;
 }
 
+body.dark-mode .tab-btn.active {
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.25),
+    inset 0 0 12px rgba(var(--accent-primary-rgb), 0.45);
+}
+
 .tab-btn.active .tab-icon-wrap {
   width: 32px;
   height: 28px;
@@ -1138,9 +1144,9 @@ input[type="range"]::-moz-range-thumb:active {
 
 /* Dark Mode Override variables */
 body.dark-mode {
-  --bg-primary: #090d16;        /* Deep Slate Dark background */
-  --bg-card: #131926;           /* Slate Dark Card background */
-  --border-color: #242e42;      /* Slate Dark border color */
+  --bg-primary: #0f1524;        /* Deep Slate Dark background */
+  --bg-card: #1c2336;           /* Slate Dark Card background */
+  --border-color: #2b354d;      /* Slate Dark border color */
   --text-primary: #ffffff;      /* Pure white primary text */
   --text-secondary: #f1f5f9;    /* Crisp off-white secondary text (not grey) */
   --text-muted: #94a3b8;        /* Slate muted text */

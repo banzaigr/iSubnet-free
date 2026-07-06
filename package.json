@@ -1,6 +1,6 @@
 {
   "name": "subnet-calculator",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "![iSubnet Banner](https://img.shields.io/badge/iSubnet-v1.1.0-blue?style=for-the-badge) ![License](https://img.shields.io/badge/license-Proprietary-red?style=for-the-badge) ![Platform](https://img.shields.io/badge/platform-Web%20%7C%20Mobile-lightgrey?style=for-the-badge)",
   "main": "app.js",
   "scripts": {
