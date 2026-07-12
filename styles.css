@@ -1517,6 +1517,25 @@ body.dark-mode .calc-sub-tab-btn.active {
     box-shadow: var(--shadow-soft) !important;
     border-color: var(--border-color) !important;
   }
+
+  /* Make modal overlays scrollable in landscape */
+  .pro-modal-overlay {
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    padding: 20px 0 !important;
+    display: flex !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  .pro-modal-overlay.hidden {
+    display: none !important;
+  }
+
+  .pro-modal {
+    margin-top: 10px !important;
+    margin-bottom: 20px !important;
+    max-height: none !important;
+  }
 }
 
 /* Tablets in landscape — let the wrapper stretch without the phone frame */
