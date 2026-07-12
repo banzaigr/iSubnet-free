@@ -1231,6 +1231,7 @@ body.dark-mode .phone-wrapper {
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+    padding-top: env(safe-area-inset-top, 24px) !important;
   }
   .status-bar {
     display: none !important;
@@ -1441,6 +1442,7 @@ body.dark-mode .calc-sub-tab-btn.active {
     flex-direction: column !important;
     overflow: hidden !important;
     clip-path: none !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
   /* Hide status bar — wastes precious vertical space in landscape */
