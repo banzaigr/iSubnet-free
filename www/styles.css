@@ -1383,3 +1383,158 @@ body.dark-mode .calc-sub-tab-btn.active {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
 
+/* Adjust Buttons (+ / -) for Prefix Range Sliders */
+.btn-adjust {
+  display: inline-flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 50% !important;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  font-size: 14px !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+.btn-adjust:active {
+  transform: scale(0.88) !important;
+  background: var(--accent-primary) !important;
+  color: #ffffff !important;
+  border-color: var(--accent-primary) !important;
+}
+
+
+/* =====================================================
+   LANDSCAPE ORIENTATION — Mobile phones (short screens)
+   ===================================================== */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  html, body {
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  body {
+    display: flex !important;
+    align-items: stretch !important;
+  }
+
+  /* Remove phone frame — fill the screen edge-to-edge */
+  .phone-wrapper {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    clip-path: none !important;
+  }
+
+  /* Hide status bar — wastes precious vertical space in landscape */
+  .status-bar {
+    display: none !important;
+  }
+
+  /* Compact the header into a tight single row */
+  .app-header {
+    padding: 6px 16px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    border-bottom: 1px solid var(--border-color) !important;
+  }
+
+  .app-header h1 {
+    font-size: 18px !important;
+    white-space: nowrap !important;
+  }
+
+  .app-header .subtitle {
+    display: none !important;
+  }
+
+  /* Content fills all remaining vertical space and scrolls */
+  .app-content {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 8px 14px 70px !important;
+  }
+
+  /* Compact bottom nav */
+  .app-tab-bar {
+    height: 52px !important;
+    padding: 0 !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    flex-shrink: 0 !important;
+  }
+
+  .tab-item {
+    padding: 6px 0 !important;
+    gap: 2px !important;
+  }
+
+  .tab-item svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .tab-item span {
+    font-size: 9px !important;
+  }
+
+  /* Tighten card padding */
+  .card {
+    padding: 14px !important;
+    margin-bottom: 12px !important;
+    border-radius: 14px !important;
+  }
+
+  /* Tighten result items */
+  .result-item {
+    padding: 6px 0 !important;
+  }
+
+  /* Disable hover effects on touch */
+  .card:hover {
+    box-shadow: var(--shadow-soft) !important;
+    border-color: var(--border-color) !important;
+  }
+}
+
+/* Tablets in landscape — let the wrapper stretch without the phone frame */
+@media (orientation: landscape) and (min-height: 501px) and (max-width: 1024px) {
+  .phone-wrapper {
+    max-width: 100% !important;
+    height: 100% !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    clip-path: none !important;
+  }
+
+  body {
+    padding: 0 !important;
+    align-items: stretch !important;
+    min-height: 100vh !important;
+  }
+
+  .app-content {
+    padding-bottom: 80px !important;
+  }
+}

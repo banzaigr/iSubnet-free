@@ -590,6 +590,8 @@ function calculateIPv4() {
 
   // Update the visual CIDR label
   document.getElementById('ipv4-cidr-val').textContent = `/${cidrInput} (${cidrToSubnetMask(cidrInput)})`;
+  const ipv4BtnVal = document.getElementById('ipv4-cidr-btn-val');
+  if (ipv4BtnVal) ipv4BtnVal.textContent = `/${cidrInput}`;
 
   const ipVal = ipToUint32(ipInput);
   const maskVal = cidrInput === 0 ? 0 : (~0 << (32 - cidrInput)) >>> 0;
@@ -1053,6 +1055,8 @@ function calculateIPv6() {
 
   // Update the visual Prefix label
   document.getElementById('ipv6-cidr-val').textContent = `/${prefixLength}`;
+  const ipv6BtnVal = document.getElementById('ipv6-cidr-btn-val');
+  if (ipv6BtnVal) ipv6BtnVal.textContent = `/${prefixLength}`;
 
   // Calculate 128-bit mask ranges
   const hostMask = (BigInt(1) << BigInt(128 - prefixLength)) - BigInt(1);
@@ -2555,6 +2559,8 @@ function updateEqualSplitSliderVal() {
   }
   
   valSpan.textContent = '/' + targetCidr + ' (' + subnetCountStr + ' subnets of ' + hostCapacity + ' hosts)';
+  const splitBtnVal = document.getElementById('split-equal-btn-val');
+  if (splitBtnVal) splitBtnVal.textContent = '/' + targetCidr;
 }
 
 function blocksToIpStr(blocks) {
@@ -2647,13 +2653,21 @@ function runSplitter() {
           }
         }
         
+        // Compute host counts with BigInt for IPv6 precision
+        const hostBits6 = 128 - targetCidr;
+        const totalAddr6 = BigInt(1) << BigInt(hostBits6);
+        const usable6 = totalAddr6 > BigInt(1) ? totalAddr6 - BigInt(1) : totalAddr6;
+        const hostsDisplay6 = hostBits6 >= 48
+          ? `${usable6.toLocaleString()} / 2^${hostBits6}`
+          : `${usable6.toLocaleString()} / ${totalAddr6.toLocaleString()}`;
+
         subnets.push({
           name: `Subnet #${i + 1}`,
           cidr: targetCidr,
           network: blocksToIpStr(subnetNetBlocks),
           mask: 'N/A',
           range: blocksToIpStr(subnetNetBlocks) + ' -\n' + blocksToIpStr(subnetLastBlocks),
-          hosts: 'N/A',
+          hosts: hostsDisplay6,
           required: 'Equal size'
         });
       }
@@ -2713,13 +2727,16 @@ function runSplitter() {
           tempEnd = tempEnd >> BigInt(16);
         }
         
+        // Usable = blockSize - 1 (no broadcast in IPv6; only network/anycast address reserved)
+        const usableV6 = blockSize - BigInt(1);
+
         subnets.push({
           name: `Subnet #${sortedHosts[i].origIndex + 1}`,
           cidr: targetCidr,
           network: blocksToIpStr(subNetBlocks),
           mask: 'N/A',
           range: blocksToIpStr(subNetBlocks) + ' -\n' + blocksToIpStr(subEndBlocks),
-          hosts: (BigInt(1) << BigInt(power)).toLocaleString() + ' (req. ' + hostsCount + ')',
+          hosts: `${usableV6.toLocaleString()} / ${blockSize.toLocaleString()} (req. ${hostsCount})`,
           required: hostsCount.toString()
         });
         
@@ -3925,7 +3942,6 @@ function initBulkCalculator() {
   document.getElementById('btn-calc-bulk-ipv4').addEventListener('click', calculateBulkIPv4);
   document.getElementById('btn-calc-bulk-ipv6').addEventListener('click', calculateBulkIPv6);
 }
-
 function calculateBulkIPv4() {
   const input = document.getElementById('ipv4-bulk-input').value.trim();
   const errorEl = document.getElementById('ipv4-bulk-error');
@@ -3945,7 +3961,7 @@ function calculateBulkIPv4() {
 
   lines.forEach(line => {
     let ip = line;
-    let cidr = 24;
+    let cidr = null;
 
     if (line.includes('/')) {
       const parts = line.split('/');
@@ -3961,47 +3977,91 @@ function calculateBulkIPv4() {
       }
     }
 
-    if (!validateIPv4(ip) || isNaN(cidr) || cidr < 0 || cidr > 32) {
+    const isV6 = ip.includes(':');
+    if (isV6) {
+      if (cidr === null) cidr = 64;
+      const ipBigInt = parseIPv6(ip);
+      if (ipBigInt === null || isNaN(cidr) || cidr < 1 || cidr > 128) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="3" style="color:#ef4444; padding:8px 4px;">Invalid IPv6/Prefix format</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+      hasValid = true;
+      const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
+      const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
+      const networkPrefixVal = ipBigInt & netMask;
+      const broadcastVal = networkPrefixVal | hostMask;
+      const totalAddresses = BigInt(2) ** BigInt(128 - cidr);
+      // First usable host = network address + 1 (skip network identifier)
+      const firstUsable = networkPrefixVal + BigInt(1);
+      // Usable = total - 1 (only network/anycast address is reserved; IPv6 has no broadcast)
+      const usableV6 = totalAddresses > BigInt(1) ? totalAddresses - BigInt(1) : totalAddresses;
+
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="3" style="color:#ef4444; padding:8px 4px;">Invalid IP/Prefix format</td>`;
+      tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+      tr.innerHTML = `
+        <td style="padding: 8px 4px; font-weight: 500; color: var(--accent-primary);">${formatIPv6Compressed(ipBigInt)}/${cidr}</td>
+        <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">
+          Network: ${formatIPv6Compressed(networkPrefixVal)}<br>
+          Start: ${formatIPv6Compressed(firstUsable)}<br>
+          End: ${formatIPv6Compressed(broadcastVal)}
+        </td>
+        <td style="padding: 8px 4px; font-weight: bold;">
+          <span style="color: var(--accent-primary);">${usableV6.toLocaleString()}</span><br>
+          <span style="color: var(--bit-off-color); font-size: 10px;">${totalAddresses.toLocaleString()}</span>
+        </td>
+      `;
       tbody.appendChild(tr);
-      return;
-    }
-
-    hasValid = true;
-    const ipVal = ipToUint32(ip);
-    const maskVal = cidr === 0 ? 0 : (~0 << (32 - cidr)) >>> 0;
-    const wildcardVal = ~maskVal >>> 0;
-    const networkVal = (ipVal & maskVal) >>> 0;
-    const broadcastVal = (ipVal | wildcardVal) >>> 0;
-
-    let rangeStart = '', rangeEnd = '', usableHosts = 0;
-    if (cidr === 32) {
-      usableHosts = 1; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(networkVal);
-    } else if (cidr === 31) {
-      usableHosts = 2; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(broadcastVal);
     } else {
-      usableHosts = (2 ** (32 - cidr)) - 2;
-      rangeStart = uint32ToIp(networkVal + 1);
-      rangeEnd = uint32ToIp(broadcastVal - 1);
-    }
+      if (cidr === null) cidr = 24;
+      if (!validateIPv4(ip) || isNaN(cidr) || cidr < 0 || cidr > 32) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="3" style="color:#ef4444; padding:8px 4px;">Invalid IP/Prefix format</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+      hasValid = true;
+      const ipVal = ipToUint32(ip);
+      const maskVal = cidr === 0 ? 0 : (~0 << (32 - cidr)) >>> 0;
+      const wildcardVal = ~maskVal >>> 0;
+      const networkVal = (ipVal & maskVal) >>> 0;
+      const broadcastVal = (ipVal | wildcardVal) >>> 0;
 
-    const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
-    tr.innerHTML = `
-      <td style="padding: 8px 4px; font-weight: 500;">${escapeHTML(ip)}/${cidr}</td>
-      <td style="padding: 8px 4px; font-family: monospace;">${uint32ToIp(networkVal)}</td>
-      <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">${rangeStart} - ${rangeEnd}</td>
-      <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-primary);">${usableHosts.toLocaleString()}</td>
-    `;
-    tbody.appendChild(tr);
+      let rangeStart = '', rangeEnd = '', usableHosts = 0;
+      if (cidr === 32) {
+        usableHosts = 1; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(networkVal);
+      } else if (cidr === 31) {
+        usableHosts = 2; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(broadcastVal);
+      } else {
+        usableHosts = (2 ** (32 - cidr)) - 2;
+        rangeStart = uint32ToIp(networkVal + 1);
+        rangeEnd = uint32ToIp(broadcastVal - 1);
+      }
+
+      const totalAddr = 2 ** (32 - cidr);
+
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+      tr.innerHTML = `
+        <td style="padding: 8px 4px; font-weight: 500; color: var(--accent-primary);">${escapeHTML(ip)}/${cidr}</td>
+        <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">
+          Network: ${uint32ToIp(networkVal)}<br>
+          Range: ${rangeStart} - ${rangeEnd}
+        </td>
+        <td style="padding: 8px 4px; font-weight: bold;">
+          <span style="color: var(--accent-primary);">${usableHosts.toLocaleString()}</span><br>
+          <span style="color: var(--bit-off-color); font-size: 10px;">${totalAddr.toLocaleString()}</span>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
   });
 
   if (hasValid) {
     card.classList.remove('hidden');
   }
 }
-
 function calculateBulkIPv6() {
   const input = document.getElementById('ipv6-bulk-input').value.trim();
   const errorEl = document.getElementById('ipv6-bulk-error');
@@ -4021,7 +4081,7 @@ function calculateBulkIPv6() {
 
   lines.forEach(line => {
     let ip = line;
-    let cidr = 64;
+    let cidr = null;
 
     if (line.includes('/')) {
       const parts = line.split('/');
@@ -4029,32 +4089,84 @@ function calculateBulkIPv6() {
       cidr = parseInt(parts[1], 10);
     }
 
-    const ipBigInt = parseIPv6(ip);
-    if (ipBigInt === null || isNaN(cidr) || cidr < 1 || cidr > 128) {
+    const isV6 = ip.includes(':');
+    if (isV6) {
+      if (cidr === null) cidr = 64;
+      const ipBigInt = parseIPv6(ip);
+      if (ipBigInt === null || isNaN(cidr) || cidr < 1 || cidr > 128) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="2" style="color:#ef4444; padding:8px 4px;">Invalid IPv6/Prefix format</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      hasValid = true;
+      const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
+      const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
+      const networkPrefixVal = ipBigInt & netMask;
+      const broadcastVal = networkPrefixVal | hostMask;
+      const totalAddresses = BigInt(2) ** BigInt(128 - cidr);
+      // First usable host = network address + 1 (skip network identifier)
+      const firstUsable = networkPrefixVal + BigInt(1);
+
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="2" style="color:#ef4444; padding:8px 4px;">Invalid IPv6/Prefix format</td>`;
+      tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+      tr.innerHTML = `
+        <td style="padding: 8px 4px; font-weight: 500; color: var(--accent-primary);">${formatIPv6Compressed(ipBigInt)}/${cidr}</td>
+        <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">
+          Network: ${formatIPv6Compressed(networkPrefixVal)}<br>
+          Start: ${formatIPv6Compressed(firstUsable)}<br>
+          End: ${formatIPv6Compressed(broadcastVal)}
+        </td>
+        <td style="padding: 8px 4px; font-weight: bold;">
+          <span style="color: var(--accent-primary);">${(totalAddresses > BigInt(1) ? totalAddresses - BigInt(1) : totalAddresses).toLocaleString()}</span><br>
+          <span style="color: var(--bit-off-color); font-size: 10px;">${totalAddresses.toLocaleString()}</span>
+        </td>
+      `;
       tbody.appendChild(tr);
-      return;
+    } else {
+      if (cidr === null) cidr = 24;
+      if (!validateIPv4(ip) || isNaN(cidr) || cidr < 0 || cidr > 32) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="color:#ef4444; padding:8px 4px;">${escapeHTML(line)}</td><td colspan="2" style="color:#ef4444; padding:8px 4px;">Invalid IP/Prefix format</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      hasValid = true;
+      const ipVal = ipToUint32(ip);
+      const maskVal = cidr === 0 ? 0 : (~0 << (32 - cidr)) >>> 0;
+      const wildcardVal = ~maskVal >>> 0;
+      const networkVal = (ipVal & maskVal) >>> 0;
+      const broadcastVal = (ipVal | wildcardVal) >>> 0;
+
+      let rangeStart = '', rangeEnd = '', usableHosts = 0;
+      if (cidr === 32) {
+        usableHosts = 1; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(networkVal);
+      } else if (cidr === 31) {
+        usableHosts = 2; rangeStart = uint32ToIp(networkVal); rangeEnd = uint32ToIp(broadcastVal);
+      } else {
+        usableHosts = (2 ** (32 - cidr)) - 2;
+        rangeStart = uint32ToIp(networkVal + 1);
+        rangeEnd = uint32ToIp(broadcastVal - 1);
+      }
+
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+      tr.innerHTML = `
+        <td style="padding: 8px 4px; font-weight: 500; color: var(--accent-primary);">${escapeHTML(ip)}/${cidr}</td>
+        <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">
+          Network: ${uint32ToIp(networkVal)}<br>
+          Start: ${rangeStart}<br>
+          End: ${rangeEnd}
+        </td>
+        <td style="padding: 8px 4px; font-weight: bold;">
+          <span style="color: var(--accent-primary);">${usableHosts.toLocaleString()}</span><br>
+          <span style="color: var(--bit-off-color); font-size: 10px;">${(2 ** (32 - cidr)).toLocaleString()}</span>
+        </td>
+      `;
+      tbody.appendChild(tr);
     }
-
-    hasValid = true;
-    const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
-    const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
-    const networkPrefixVal = ipBigInt & netMask;
-    const broadcastVal = networkPrefixVal | hostMask;
-    const totalAddresses = BigInt(2) ** BigInt(128 - cidr);
-
-    const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
-    tr.innerHTML = `
-      <td style="padding: 8px 4px; font-weight: 500;">${formatIPv6Compressed(ipBigInt)}/${cidr}</td>
-      <td style="padding: 8px 4px; font-family: monospace; font-size: 11px;">
-        Start: ${formatIPv6Compressed(networkPrefixVal)}<br>
-        End: ${formatIPv6Compressed(broadcastVal)}
-      </td>
-      <td style="padding: 8px 4px; font-weight: bold; color: var(--accent-cyan);">${totalAddresses.toLocaleString()}</td>
-    `;
-    tbody.appendChild(tr);
   });
 
   if (hasValid) {
@@ -4142,16 +4254,16 @@ function setupExporterListeners() {
         csv += `"${label}","${val}"\n`;
       });
     } else if (type === 'bulk-ipv4') {
-      csv = `Input IP,Network,Range,Usable Hosts\n`;
+      csv = `Input IP,Network / Range,Hosts / Addresses\n`;
       const rows = document.querySelectorAll('#ipv4-bulk-results-tbody tr');
       rows.forEach(row => {
         const tds = row.querySelectorAll('td');
-        if (tds.length >= 4) {
-          csv += `"${tds[0].textContent}","${tds[1].textContent}","${tds[2].textContent}","${tds[3].textContent}"\n`;
+        if (tds.length >= 3) {
+          csv += `"${tds[0].textContent.trim()}","${tds[1].textContent.replace(/\s+/g, ' ').trim()}","${tds[2].textContent.trim()}"\n`;
         }
       });
     } else if (type === 'bulk-ipv6') {
-      csv = `Input IP,Prefix / Range,Total Addresses\n`;
+      csv = `Input IP,Prefix / Range,Hosts / Addresses\n`;
       const rows = document.querySelectorAll('#ipv6-bulk-results-tbody tr');
       rows.forEach(row => {
         const tds = row.querySelectorAll('td');
@@ -4301,4 +4413,15 @@ async function downloadCSV(filename, content) {
   link.click();
   document.body.removeChild(link);
 }
+
+// Global helper function to adjust range slider inputs by a delta unit
+window.adjustCidr = function(id, delta) {
+  const slider = document.getElementById(id);
+  if (!slider) return;
+  const newValue = parseInt(slider.value, 10) + delta;
+  if (newValue >= parseInt(slider.min, 10) && newValue <= parseInt(slider.max, 10)) {
+    slider.value = newValue;
+    slider.dispatchEvent(new Event('input'));
+  }
+};
 
