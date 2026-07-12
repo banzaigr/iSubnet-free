@@ -2995,6 +2995,23 @@ function setThemeColor(color) {
   loadThemeColor();
 }
 
+function updateNativeStatusBar(isDark) {
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+      const StatusBar = window.Capacitor.Plugins.StatusBar;
+      if (isDark) {
+        StatusBar.setStyle({ style: 'DARK' });
+        StatusBar.setBackgroundColor({ color: '#0f1524' });
+      } else {
+        StatusBar.setStyle({ style: 'LIGHT' });
+        StatusBar.setBackgroundColor({ color: '#f8fafc' });
+      }
+    }
+  } catch (e) {
+    console.error('Failed to update native StatusBar', e);
+  }
+}
+
 function initSettings() {
   const btnSettings = document.getElementById('btn-settings');
   const modalSettings = document.getElementById('settings-modal');
@@ -3032,10 +3049,14 @@ function initSettings() {
   
   loadThemeColor();
 
+  // Set initial status bar theme
+  const isDarkInitial = document.body.classList.contains('dark-mode');
+  updateNativeStatusBar(isDarkInitial);
+
   // Dark Mode Switch Handler
   const chkDarkMode = document.getElementById('chk-dark-mode');
   if (chkDarkMode) {
-    chkDarkMode.checked = document.body.classList.contains('dark-mode');
+    chkDarkMode.checked = isDarkInitial;
     chkDarkMode.addEventListener('change', () => {
       const isDark = chkDarkMode.checked;
       if (isDark) {
@@ -3045,6 +3066,8 @@ function initSettings() {
         document.body.classList.remove('dark-mode');
         SafeStorage.setItem('isubnet_dark_mode', 'false');
       }
+
+      updateNativeStatusBar(isDark);
 
       // Save theme preference natively using Capacitor Preferences
       try {
