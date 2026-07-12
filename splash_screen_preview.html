@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iSubnet - Loading Splash Screen Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 40px;
+      background-color: #f1f5f9;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    h1 {
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+    p {
+      color: #475569;
+      margin-top: 0;
+      margin-bottom: 40px;
+    }
+    .preview-container {
+      display: flex;
+      gap: 40px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .phone-mockup {
+      width: 360px;
+      height: 740px;
+      border-radius: 40px;
+      border: 12px solid #0f172a;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+      position: relative;
+      overflow: hidden;
+      background-color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .phone-mockup.dark {
+      background-color: #090d16;
+      border-color: #1e293b;
+    }
+    .splash-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 80px;
+    }
+    .splash-title {
+      font-size: 38px;
+      font-weight: 800;
+      color: #1e293b;
+      letter-spacing: -1.2px;
+      margin-top: 12px;
+      line-height: 1;
+    }
+    .dark .splash-title {
+      color: #ffffff;
+    }
+    .splash-sub {
+      font-size: 13px;
+      color: #64748b;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .dark .splash-sub {
+      color: #94a3b8;
+    }
+    .splash-spinner {
+      position: absolute;
+      bottom: 80px;
+      width: 32px;
+      height: 32px;
+      border: 3.5px solid #f1f5f9;
+      border-top-color: #3b82f6;
+      border-right-color: #10b981;
+      border-radius: 50%;
+      animation: isubnet-splash-spin 1s linear infinite;
+    }
+    .dark .splash-spinner {
+      border-color: rgba(255, 255, 255, 0.06);
+      border-top-color: #3b82f6;
+      border-right-color: #10b981;
+    }
+    @keyframes isubnet-splash-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h1>iSubnet Splash Screen Preview</h1>
+  <p>This page simulates how your loading screen displays inside the actual mobile app wrapper.</p>
+  
+  <div class="preview-container">
+    <!-- Light Mode Preview -->
+    <div class="phone-mockup">
+      <div class="splash-content">
+        <!-- Vector SVG Logo -->
+        <svg viewBox="0 0 100 100" style="width: 84px; height: 84px;" aria-label="iSubnet Logo">
+          <defs>
+            <linearGradient id="splash-logo-grad-l" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#3b82f6" />
+              <stop offset="100%" stop-color="#10b981" />
+            </linearGradient>
+          </defs>
+          <polygon points="85,50 67.5,80.3 32.5,80.3 15,50 32.5,19.7 67.5,19.7" fill="none" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" stroke-linejoin="round" />
+          <polygon points="85,50 32.5,80.3 32.5,19.7" fill="none" stroke="url(#splash-logo-grad-l)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+          <polygon points="15,50 67.5,80.3 67.5,19.7" fill="none" stroke="url(#splash-logo-grad-l)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+          <line x1="50" y1="50" x2="85" y2="50" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="67.5" y2="80.3" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="32.5" y2="80.3" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="15" y2="50" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="32.5" y2="19.7" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="67.5" y2="19.7" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" />
+          <circle cx="50" cy="50" r="7" fill="#ffffff" stroke="url(#splash-logo-grad-l)" stroke-width="3.5" />
+          <circle cx="85" cy="50" r="5" fill="#ffffff" stroke="url(#splash-logo-grad-l)" stroke-width="3" />
+          <circle cx="67.5" cy="80.3" r="5" fill="#ffffff" stroke="url(#splash-logo-grad-l)" stroke-width="3" />
+          <circle cx="32.5" cy="80.3" r="5" fill="#ffffff" stroke="url(#splash-logo-grad-l)" stroke-width="3" />
+          <circle cx="15" cy="50" r="5" fill="#ffffff" stroke="url(#splash-logo-grad-l)" stroke-width="3" />
+          <circle cx="32.5" cy="19.7" r="5" fill="#ffffff" stroke="url(#splash-logo-grad-l)" stroke-width="3" />
+          <circle cx="67.5" cy="19.7" r="5" fill="#ffffff" stroke="url(#splash-logo-grad-l)" stroke-width="3" />
+        </svg>
+        <div class="splash-title">iSubnet</div>
+        <div class="splash-sub">Connecting Professionals</div>
+      </div>
+      <div class="splash-spinner"></div>
+    </div>
+
+    <!-- Dark Mode Preview -->
+    <div class="phone-mockup dark">
+      <div class="splash-content">
+        <!-- Vector SVG Logo -->
+        <svg viewBox="0 0 100 100" style="width: 84px; height: 84px;" aria-label="iSubnet Logo">
+          <defs>
+            <linearGradient id="splash-logo-grad-d" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#3b82f6" />
+              <stop offset="100%" stop-color="#10b981" />
+            </linearGradient>
+          </defs>
+          <polygon points="85,50 67.5,80.3 32.5,80.3 15,50 32.5,19.7 67.5,19.7" fill="none" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" stroke-linejoin="round" />
+          <polygon points="85,50 32.5,80.3 32.5,19.7" fill="none" stroke="url(#splash-logo-grad-d)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+          <polygon points="15,50 67.5,80.3 67.5,19.7" fill="none" stroke="url(#splash-logo-grad-d)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+          <line x1="50" y1="50" x2="85" y2="50" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="67.5" y2="80.3" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="32.5" y2="80.3" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="15" y2="50" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="32.5" y2="19.7" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" />
+          <line x1="50" y1="50" x2="67.5" y2="19.7" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" />
+          <circle cx="50" cy="50" r="7" fill="#090d16" stroke="url(#splash-logo-grad-d)" stroke-width="3.5" />
+          <circle cx="85" cy="50" r="5" fill="#090d16" stroke="url(#splash-logo-grad-d)" stroke-width="3" />
+          <circle cx="67.5" cy="80.3" r="5" fill="#090d16" stroke="url(#splash-logo-grad-d)" stroke-width="3" />
+          <circle cx="32.5" cy="80.3" r="5" fill="#090d16" stroke="url(#splash-logo-grad-d)" stroke-width="3" />
+          <circle cx="15" cy="50" r="5" fill="#090d16" stroke="url(#splash-logo-grad-d)" stroke-width="3" />
+          <circle cx="32.5" cy="19.7" r="5" fill="#090d16" stroke="url(#splash-logo-grad-d)" stroke-width="3" />
+          <circle cx="67.5" cy="19.7" r="5" fill="#090d16" stroke="url(#splash-logo-grad-d)" stroke-width="3" />
+        </svg>
+        <div class="splash-title">iSubnet</div>
+        <div class="splash-sub">Connecting Professionals</div>
+      </div>
+      <div class="splash-spinner"></div>
+    </div>
+  </div>
+</body>
+</html>
