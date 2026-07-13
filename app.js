@@ -2172,8 +2172,41 @@ function runSubnetCalculationIPv4(ipInput, cidrInput) {
   };
 }
 
+function updateConvHosts(cidr, isV6) {
+  const hostsEl = document.getElementById('conv-hosts');
+  if (!hostsEl) return;
+  
+  if (isV6) {
+    if (cidr === 128) {
+      hostsEl.textContent = '1 host (1 total)';
+    } else {
+      const hostBits = 128 - cidr;
+      const total = BigInt(1) << BigInt(hostBits);
+      const usable = total - BigInt(1);
+      
+      if (hostBits >= 80) {
+        hostsEl.textContent = `2^${hostBits} - 1 = ${usable.toLocaleString()} hosts (2^${hostBits} total)`;
+      } else {
+        hostsEl.textContent = `${total.toLocaleString()} - 1 = ${usable.toLocaleString()} hosts`;
+      }
+    }
+  } else {
+    if (cidr === 32) {
+      hostsEl.textContent = '1 host (1 total)';
+    } else if (cidr === 31) {
+      hostsEl.textContent = '2 hosts (2 total)';
+    } else {
+      const total = Math.pow(2, 32 - cidr);
+      const usable = total - 2;
+      hostsEl.textContent = `${total.toLocaleString()} - 2 = ${usable.toLocaleString()} hosts`;
+    }
+  }
+}
+
 function runConverter() {
-  const input = document.getElementById('converter-input').value.trim();
+  const inputEl = document.getElementById('converter-input');
+  if (!inputEl) return;
+  const input = inputEl.value.trim();
   const errorEl = document.getElementById('converter-error');
   const resultsDiv = document.getElementById('converter-results');
   const subnetCard = document.getElementById('converter-subnet-card');
@@ -2231,6 +2264,7 @@ function runConverter() {
         document.getElementById('conv-binary').innerHTML = coloredBinaryStr(calc.binary);
         document.getElementById('conv-ipv6-row').style.display = 'none';
         document.getElementById('conv-binary-row').style.display = 'flex';
+        updateConvHosts(cidr, false);
         resultsDiv.classList.remove('hidden');
 
         if (subnetResults && subnetCard) {
@@ -2298,6 +2332,7 @@ function runConverter() {
         document.getElementById('conv-ipv6-mask').textContent = formatIPv6Compressed(netMask);
         document.getElementById('conv-ipv6-row').style.display = 'flex';
         document.getElementById('conv-binary-row').style.display = 'none';
+        updateConvHosts(cidr, true);
         resultsDiv.classList.remove('hidden');
 
         let usableRange = '';
@@ -2379,6 +2414,7 @@ function runConverter() {
       
       document.getElementById('conv-ipv6-row').style.display = 'none';
       document.getElementById('conv-binary-row').style.display = 'flex';
+      updateConvHosts(cidrNum, false);
       resultsDiv.classList.remove('hidden');
       recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
       return;
@@ -2396,6 +2432,7 @@ function runConverter() {
       
       document.getElementById('conv-ipv6-row').style.display = 'flex';
       document.getElementById('conv-binary-row').style.display = 'none';
+      updateConvHosts(cidrNum, true);
       resultsDiv.classList.remove('hidden');
       recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
       return;
@@ -2440,6 +2477,7 @@ function runConverter() {
     
     document.getElementById('conv-ipv6-row').style.display = 'none';
     document.getElementById('conv-binary-row').style.display = 'flex';
+    updateConvHosts(calculatedCidr, false);
     resultsDiv.classList.remove('hidden');
     recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
     return;
