@@ -534,7 +534,24 @@ function validateIPv4(ipStr) {
 
 // Perform calculations for IPv4
 function calculateIPv4() {
-  const ipInput = document.getElementById('ipv4-address').value.trim();
+  let ipInput = document.getElementById('ipv4-address').value.trim();
+  
+  if (ipInput.includes('/')) {
+    const parts = ipInput.split('/');
+    const cleanIp = parts[0].trim();
+    const maskStr = parts[1].trim();
+    const mask = parseInt(maskStr, 10);
+    if (!isNaN(mask) && mask >= 0 && mask <= 32) {
+      document.getElementById('ipv4-address').value = cleanIp;
+      document.getElementById('ipv4-cidr').value = mask;
+      const cidrValEl = document.getElementById('ipv4-cidr-val');
+      if (cidrValEl) cidrValEl.textContent = `/${mask} (${cidrToSubnetMask(mask)})`;
+      const btnValEl = document.getElementById('ipv4-cidr-btn-val');
+      if (btnValEl) btnValEl.textContent = `/${mask}`;
+      ipInput = cleanIp;
+    }
+  }
+
   const hostsInput = document.getElementById('ipv4-hosts').value.trim();
   const errorEl = document.getElementById('ipv4-error');
   const resultsCard = document.getElementById('ipv4-results');
@@ -993,7 +1010,24 @@ function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
 
 
 function calculateIPv6() {
-  const ipInput = document.getElementById('ipv6-address').value.trim();
+  let ipInput = document.getElementById('ipv6-address').value.trim();
+  
+  if (ipInput.includes('/')) {
+    const parts = ipInput.split('/');
+    const cleanIp = parts[0].trim();
+    const maskStr = parts[1].trim();
+    const mask = parseInt(maskStr, 10);
+    if (!isNaN(mask) && mask >= 0 && mask <= 128) {
+      document.getElementById('ipv6-address').value = cleanIp;
+      document.getElementById('ipv6-cidr').value = mask;
+      const cidrValEl = document.getElementById('ipv6-cidr-val');
+      if (cidrValEl) cidrValEl.textContent = `/${mask}`;
+      const btnValEl = document.getElementById('ipv6-cidr-btn-val');
+      if (btnValEl) btnValEl.textContent = `/${mask}`;
+      ipInput = cleanIp;
+    }
+  }
+
   const hostsInput = document.getElementById('ipv6-hosts').value.trim();
   const errorEl = document.getElementById('ipv6-error');
   const resultsCard = document.getElementById('ipv6-results');
@@ -2483,11 +2517,30 @@ let appSplitIpType = 'v4';
 function handleAppSplitIpChange() {
   const ipEl = document.getElementById('split-base-ip');
   if (!ipEl) return;
-  const ip = ipEl.value.trim();
+  let ip = ipEl.value.trim();
+  const cidrEl = document.getElementById('split-base-cidr');
+
+  if (ip.includes('/')) {
+    const parts = ip.split('/');
+    const cleanIp = parts[0].trim();
+    const maskStr = parts[1].trim();
+    const mask = parseInt(maskStr, 10);
+    if (!isNaN(mask)) {
+      ipEl.value = cleanIp;
+      ip = cleanIp;
+      if (cidrEl) {
+        const isV6 = ip.indexOf(':') !== -1;
+        const maxVal = isV6 ? 127 : 30;
+        if (mask >= 0 && mask <= maxVal) {
+          cidrEl.value = mask;
+        }
+      }
+    }
+  }
+
   const isV6 = ip.indexOf(':') !== -1;
   const currentType = isV6 ? 'v6' : 'v4';
   
-  const cidrEl = document.getElementById('split-base-cidr');
   if (cidrEl) {
     if (currentType !== appSplitIpType) {
       appSplitIpType = currentType;
