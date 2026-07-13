@@ -1452,7 +1452,7 @@ body.dark-mode .calc-sub-tab-btn.active {
 
   /* Compact the header into a tight single row */
   .app-header {
-    padding: 6px 16px !important;
+    padding: 4px 12px !important;
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
@@ -1460,8 +1460,14 @@ body.dark-mode .calc-sub-tab-btn.active {
     border-bottom: 1px solid var(--border-color) !important;
   }
 
+  .app-header .app-logo {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+  }
+
   .app-header h1 {
-    font-size: 18px !important;
+    font-size: 15px !important;
     white-space: nowrap !important;
   }
 
@@ -1480,25 +1486,25 @@ body.dark-mode .calc-sub-tab-btn.active {
 
   /* Compact bottom nav */
   .app-tab-bar {
-    height: calc(48px + env(safe-area-inset-bottom, 0px)) !important;
-    padding: 2px 0 !important;
-    padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)) !important;
+    height: calc(40px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 1px 0 !important;
+    padding-bottom: calc(1px + env(safe-area-inset-bottom, 0px)) !important;
     flex-shrink: 0 !important;
     align-items: center !important;
   }
 
   .tab-btn {
-    padding: 4px 0 !important;
+    padding: 2px 0 !important;
     gap: 1px !important;
   }
 
   .tab-btn .tab-icon {
-    width: 18px !important;
-    height: 18px !important;
+    width: 16px !important;
+    height: 16px !important;
   }
 
   .tab-btn span {
-    font-size: 9px !important;
+    font-size: 8px !important;
     display: inline !important; /* ensure labels are visible */
   }
 
