@@ -3894,6 +3894,10 @@ function init() {
   // Setup converter listener and init
   const convInput = document.getElementById('converter-input');
   if (convInput) {
+    const randomCidr = Math.floor(Math.random() * (30 - 8 + 1)) + 8; // Random CIDR from 8 to 30
+    const maskVal = (~0 << (32 - randomCidr)) >>> 0;
+    const wildcardVal = ~maskVal >>> 0;
+    convInput.value = uint32ToIp(wildcardVal);
     convInput.addEventListener('input', runConverter);
     runConverter(); // run initial converter on default load
   }
