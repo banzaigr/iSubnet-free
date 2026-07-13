@@ -1482,7 +1482,7 @@ body.dark-mode .calc-sub-tab-btn.active {
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
     padding: 8px 14px 70px !important;
-    max-width: 640px !important;
+    max-width: 720px !important;
     margin: 0 auto !important;
     width: 100% !important;
   }
