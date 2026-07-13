@@ -1480,24 +1480,26 @@ body.dark-mode .calc-sub-tab-btn.active {
 
   /* Compact bottom nav */
   .app-tab-bar {
-    height: 52px !important;
-    padding: 0 !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    height: calc(48px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 2px 0 !important;
+    padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)) !important;
     flex-shrink: 0 !important;
+    align-items: center !important;
   }
 
-  .tab-item {
-    padding: 6px 0 !important;
-    gap: 2px !important;
+  .tab-btn {
+    padding: 4px 0 !important;
+    gap: 1px !important;
   }
 
-  .tab-item svg {
+  .tab-btn .tab-icon {
     width: 18px !important;
     height: 18px !important;
   }
 
-  .tab-item span {
+  .tab-btn span {
     font-size: 9px !important;
+    display: inline !important; /* ensure labels are visible */
   }
 
   /* Tighten card padding */
