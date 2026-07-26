@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>iSubnet - Network Calculator</title>
+  <link rel="stylesheet" href="styles.css?v=1.0.7">
+  <!-- Import premium font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      var container = document.getElementById('fatal-error-overlay');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'fatal-error-overlay';
+        container.style.position = 'fixed';
+        container.style.top = '0';
+        container.style.left = '0';
+        container.style.width = '100%';
+        container.style.height = '100%';
+        container.style.background = 'rgba(15, 23, 42, 0.95)';
+        container.style.color = '#F8FAFC';
+        container.style.zIndex = '999999';
+        container.style.padding = '40px 20px';
+        container.style.fontFamily = 'monospace';
+        container.style.fontSize = '14px';
+        container.style.lineHeight = '1.6';
+        container.style.overflowY = 'auto';
+        
+        var header = document.createElement('h2');
+        header.style.color = '#EF4444';
+        header.style.marginBottom = '20px';
+        header.textContent = '⚠️ Application Diagnostic Error';
+        container.appendChild(header);
+        
+        var body = document.createElement('div');
+        body.id = 'fatal-error-body';
+        container.appendChild(body);
+        
+        document.body.appendChild(container);
+      }
+      
+      var errDiv = document.createElement('div');
+      errDiv.style.background = 'rgba(239, 68, 68, 0.1)';
+      errDiv.style.borderLeft = '4px solid #EF4444';
+      errDiv.style.padding = '15px';
+      errDiv.style.marginBottom = '15px';
+      errDiv.innerHTML = '<strong>Message:</strong> ' + message + '<br>' +
+                         '<strong>File:</strong> ' + source + '<br>' +
+                         '<strong>Line:</strong> ' + lineno + ':' + colno;
+      document.getElementById('fatal-error-body').appendChild(errDiv);
+      return false;
+    };
+  </script>
+  <script>
+    // Read and apply theme instantly to prevent color flashes on the splash screen
+    (function() {
+      try {
+        const savedTheme = localStorage.getItem('isubnet_dark_mode') || 'false';
+        const isDark = savedTheme === 'true'; // Default to light mode (false) if null or 'false'
+        const bg = isDark ? '#090d16' : '#ffffff';
+        const textColor = isDark ? '#ffffff' : '#1e293b';
+        const subColor = isDark ? '#94a3b8' : '#64748b';
+        const ringBorder = isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9';
+        
+        document.write('<style>' +
+          '#isubnet-splash-screen { background-color: ' + bg + ' !important; }' +
+          '#isubnet-splash-screen .splash-title { color: ' + textColor + ' !important; }' +
+          '#isubnet-splash-screen .splash-sub { color: ' + subColor + ' !important; }' +
+          '#isubnet-splash-screen .circle-node { fill: ' + bg + ' !important; }' +
+          '#isubnet-splash-screen .splash-spinner { border-color: ' + ringBorder + ' !important; border-top-color: #3b82f6 !important; border-right-color: #10b981 !important; }' +
+          '</style>');
+      } catch(e) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- HTML5 WEB SPLASH SCREEN OVERLAY (METHOD 1) -->
+  <div id="isubnet-splash-screen" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #ffffff; z-index: 999999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.8s ease, visibility 0.8s ease; opacity: 1; visibility: visible;">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 16px; margin-bottom: 80px;">
+      <!-- Vector SVG Logo -->
+      <svg viewBox="0 0 100 100" style="width: 84px; height: 84px;" aria-label="iSubnet Logo">
+        <defs>
+          <linearGradient id="splash-logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#3b82f6" />
+            <stop offset="100%" stop-color="#10b981" />
+          </linearGradient>
+        </defs>
+        <polygon points="85,50 67.5,80.3 32.5,80.3 15,50 32.5,19.7 67.5,19.7" fill="none" stroke="url(#splash-logo-grad)" stroke-width="3.5" stroke-linejoin="round" />
+        <polygon points="85,50 32.5,80.3 32.5,19.7" fill="none" stroke="url(#splash-logo-grad)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+        <polygon points="15,50 67.5,80.3 67.5,19.7" fill="none" stroke="url(#splash-logo-grad)" stroke-width="2.5" stroke-linejoin="round" opacity="0.8" />
+        <line x1="50" y1="50" x2="85" y2="50" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="67.5" y2="80.3" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="32.5" y2="80.3" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="15" y2="50" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="32.5" y2="19.7" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <line x1="50" y1="50" x2="67.5" y2="19.7" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <circle cx="50" cy="50" r="7" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3.5" />
+        <circle cx="85" cy="50" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="67.5" cy="80.3" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="32.5" cy="80.3" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="15" cy="50" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="32.5" cy="19.7" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+        <circle cx="67.5" cy="19.7" r="5" class="circle-node" fill="#ffffff" stroke="url(#splash-logo-grad)" stroke-width="3" />
+      </svg>
+      <div class="splash-title" style="font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 38px; font-weight: 800; color: #1e293b; letter-spacing: -1.2px; margin-top: 12px; line-height: 1;">iSubnet</div>
+      <div class="splash-sub" style="font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 13px; color: #64748b; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;">The Pro Network Engineer's Toolset</div>
+    </div>
+    <!-- Spinner Ring -->
+    <div class="splash-spinner" style="position: absolute; bottom: 80px; width: 32px; height: 32px; border: 3.5px solid #f1f5f9; border-top-color: #3b82f6; border-right-color: #10b981; border-radius: 50%; animation: isubnet-splash-spin 1s linear infinite;"></div>
+  </div>
+
+  <style>
+  @keyframes isubnet-splash-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  </style>
+
+  <script>
+    // Fade out splash overlay after 1.4 seconds when page is loaded
+    (function() {
+      var splashHidden = false;
+      function hideSplash() {
+        if (splashHidden) return;
+        splashHidden = true;
+        var splash = document.getElementById('isubnet-splash-screen');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(function() { 
+            splash.style.visibility = 'hidden';
+            if (splash.parentNode) splash.parentNode.removeChild(splash); 
+          }, 800);
+        }
+      }
+      
+      const triggerHide = () => {
+        setTimeout(hideSplash, 1400); // Keep visible for exactly 1.4 seconds
+      };
+
+      if (document.readyState === 'complete') {
+        triggerHide();
+      } else {
+        window.addEventListener('load', triggerHide);
+        // Fallback to guarantee it goes away after 2.9 seconds
+        setTimeout(hideSplash, 2900);
+      }
+    })();
+  </script>
+
+  <div class="phone-wrapper">
+    <!-- Status Bar Simulation for iOS vibe -->
+    <div class="status-bar">
+      <span class="time" id="status-time">9:41</span>
+      <div class="icons">
+        <svg class="icon-signal" viewBox="0 0 24 24"><path fill="currentColor" d="M2 18h2v2H2v-2zm4-4h2v6H6v-6zm4-4h2v10h-2V10zm4-4h2v14h-2V6zm4-4h2v18h-2V2z"/></svg>
+        <svg class="icon-wifi" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21l-12-12c2-2 5.5-4 12-4s10 2 12 4l-12 12z"/></svg>
+        <div class="battery"><div class="battery-level"></div></div>
+      </div>
+    </div>
+
+    <!-- Header Section -->
+    <header class="app-header">
+      <div style="flex: 1;">
+        <div class="brand" style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+          <img src="app_logo.jpg?v=6" alt="iSubnet Logo" class="app-logo" style="width: 64px; height: 64px; border-radius: 16px; object-fit: cover;">
+          <h1 style="margin: 0; line-height: 1;">iSubnet</h1>
+          <span class="free-badge" style="margin-top: 0;">FREE</span>
+        </div>
+        <p class="subtitle">Subnetting Engine for Network Engineers</p>
+      </div>
+      <button id="btn-settings" class="btn-settings-toggle" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 6px; margin-top: 2px; transition: var(--transition-smooth); outline: none;">
+        <svg style="width: 22px; height: 22px;" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Settings Panel -->
+    <div id="settings-modal" class="pro-modal-overlay hidden">
+      <div class="pro-modal" style="text-align: left; max-width: 380px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+          <h2 style="font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary);">Settings</h2>
+          <button id="btn-settings-close" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; outline: none;">&times;</button>
+        </div>
+        
+        <!-- Theme customization section -->
+        <div style="margin-bottom: 20px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; display: block; margin-bottom: 10px;">Theme Colors</label>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;" id="theme-swatch-container">
+            <button class="theme-swatch active" data-color="#4f46e5" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #1e293b; background: #4f46e5; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#00b4d8" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #00b4d8; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#10b981" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #10b981; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#f59e0b" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #f59e0b; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#ef4444" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #ef4444; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#ff1e77" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #ff1e77; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#64748b" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #64748b; cursor: pointer; outline: none;"></button>
+          </div>
+          
+          <!-- Dark Mode Switch -->
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px;">
+            <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin: 0;">Dark Theme</label>
+            <label class="switch-container" style="position: relative; display: inline-block; width: 46px; height: 24px; margin: 0;">
+              <input type="checkbox" id="chk-dark-mode" style="opacity: 0; width: 0; height: 0; margin: 0;">
+              <span class="switch-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .25s; border-radius: 24px;"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Account section -->
+        <div style="margin-bottom: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; display: block; margin-bottom: 8px;">Account Settings</label>
+          <div id="settings-account-info" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">Not signed in</div>
+          <button id="btn-settings-account" class="btn-primary" style="padding: 10px; font-size: 13px; font-weight: 600; width: 100%;">Sign In / Register</button>
+          <button id="btn-settings-delete-account" class="btn-primary hidden" style="padding: 10px; font-size: 13px; font-weight: 600; width: 100%; margin-top: 10px; background: transparent; color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.4); box-shadow: none;">Delete Account</button>
+        </div>
+
+        <!-- Plan / Subscription section -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-bottom: 16px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; display: block; margin-bottom: 8px;">Subscription</label>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div id="settings-plan-status" style="font-size: 13px; color: var(--text-secondary);">Current Plan: <strong>Free Plan</strong></div>
+            <button id="btn-settings-plan" class="btn-upgrade-inline" style="padding: 6px 12px; font-size: 12px;">Change Plan</button>
+          </div>
+        </div>
+
+        <!-- Feedback & Suggestions section -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-bottom: 10px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; display: block; margin-bottom: 8px;">Feedback &amp; Suggestions</label>
+          <button id="btn-settings-feedback" class="btn-primary" style="padding: 10px; font-size: 13px; font-weight: 600; width: 100%; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none;">Send App Feedback</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback / Suggestion Modal -->
+    <div id="feedback-modal" class="pro-modal-overlay hidden">
+      <div class="pro-modal" style="text-align: left; max-width: 380px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+          <h2 style="font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary);">Send Feedback</h2>
+          <button id="btn-feedback-close" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; outline: none;">&times;</button>
+        </div>
+        <form id="form-app-feedback" style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="input-group">
+            <label for="fb-app-name">Your Name</label>
+            <input type="text" id="fb-app-name" placeholder="John Doe" required style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); outline: none;">
+          </div>
+          <div class="input-group">
+            <label for="fb-app-email">Your Email</label>
+            <input type="email" id="fb-app-email" placeholder="john@example.com" required style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); outline: none;">
+          </div>
+          <div class="input-group">
+            <label for="fb-app-type">Feedback Type</label>
+            <select id="fb-app-type" required style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); outline: none;">
+              <option value="improvement">Idea for Improvement / Changes</option>
+              <option value="newapp">Idea for a New App</option>
+              <option value="bug">Report a Bug / Issue</option>
+              <option value="other">Other Request</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="fb-app-message">Message</label>
+            <textarea id="fb-app-message" rows="4" placeholder="Describe your suggestion or bug report in detail..." required style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); resize: vertical; font-family: inherit; outline: none;"></textarea>
+          </div>
+          <button type="submit" class="btn-primary" style="padding: 12px; font-size: 14px; font-weight: 600; width: 100%;">Submit Feedback</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Create / Sign In Account Modal -->
+    <div id="account-modal" class="pro-modal-overlay hidden">
+      <div class="pro-modal" style="text-align: left; max-width: 380px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+          <h2 id="account-modal-title" style="font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary);">Create Account</h2>
+          <button id="btn-account-close" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; outline: none;">&times;</button>
+        </div>
+        <form id="form-signup" style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="input-group" id="signup-name-group">
+            <label for="signup-name">Full Name</label>
+            <input type="text" id="signup-name" placeholder="John Doe" required style="padding: 10px;">
+          </div>
+          <div class="input-group">
+            <label for="signup-email">Email Address</label>
+            <input type="text" id="signup-email" placeholder="john@example.com" required style="padding: 10px;">
+          </div>
+          <div class="input-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" placeholder="••••••••" required style="padding: 10px;">
+          </div>
+          <span class="error-msg" id="signup-error" style="margin-top: 0; margin-bottom: 0;"></span>
+          <button type="submit" id="btn-account-submit" class="btn-primary" style="margin-top: 8px;">Sign Up</button>
+          <div style="text-align: center; margin-top: 10px;">
+            <a href="#" id="link-toggle-auth" style="font-size: 13px; color: var(--accent-primary); text-decoration: none; font-weight: 500;">Already have an account? Sign In</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Plan Modal -->
+    <div id="plan-modal" class="pro-modal-overlay hidden">
+      <div class="pro-modal" style="max-width: 380px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; text-align: left;">
+          <h2 style="font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary);">Manage Subscription</h2>
+          <button id="btn-plan-close" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; outline: none;">&times;</button>
+        </div>
+        
+        <!-- Toggle Monthly/Annual/Lifetime -->
+        <div style="display: flex; background: var(--bg-primary); padding: 4px; border-radius: 10px; margin-bottom: 20px; gap: 4px;">
+          <button class="billing-toggle active" data-cycle="monthly" style="flex: 1; border: none; background: var(--bg-card); padding: 8px 4px; border-radius: 8px; font-size: 11px; font-weight: 600; color: var(--text-primary); cursor: pointer; outline: none;">Monthly</button>
+          <button class="billing-toggle" data-cycle="annual" style="flex: 1; border: none; background: none; padding: 8px 4px; border-radius: 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; outline: none;">Annual</button>
+          <button class="billing-toggle" data-cycle="lifetime" style="flex: 1; border: none; background: none; padding: 8px 4px; border-radius: 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; outline: none;">Lifetime</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <!-- Free Plan -->
+          <div class="plan-card active-plan" style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; text-align: left; background: var(--bg-card);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 700; font-size: 15px;">Free Plan</span>
+              <span class="badge" style="font-size: 9px; padding: 2px 6px;">Active</span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">Basic parameters, limited to 2 notes and 2 history items.</p>
+          </div>
+
+          <!-- Pro Plan -->
+          <div class="plan-card" style="border: 1px solid var(--border-color); padding: 15px; border-radius: 12px; text-align: left; background: var(--bg-card); cursor: pointer; transition: var(--transition-smooth);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 700; font-size: 15px; color: #F59E0B;">iSubnet Pro</span>
+              <span id="plan-modal-price" style="font-weight: 700; font-size: 15px; color: #F59E0B;">€0.49/mo</span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">Unlimited notes/history, subnet splitter engine, and export functions.</p>
+            <button class="btn-primary" id="btn-plan-select-pro" style="padding: 10px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #F59E0B, #D97706); border: none; width: 100%;">Upgrade to Pro</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pro Upgrade Modal -->
+    <div id="pro-modal" class="pro-modal-overlay hidden">
+      <div class="pro-modal">
+        <div class="pro-modal-header">
+          <span class="pro-crown">👑</span>
+          <h2>Upgrade to Pro</h2>
+          <p>Unlock the full iSubnet toolkit</p>
+        </div>
+        <ul class="pro-features-list">
+          <li><span class="pro-check">✓</span> Subnet Splitter (Equal &amp; VLSM)</li>
+          <li><span class="pro-check">✓</span> Unlimited History</li>
+          <li><span class="pro-check">✓</span> Unlimited Notes</li>
+          <li><span class="pro-check">✓</span> Export Reports &amp; CSV</li>
+          <li><span class="pro-check">✓</span> Bulk Subnet Calculator</li>
+          <li><span class="pro-check">✓</span> Light / Dark Theme</li>
+        </ul>
+        <div class="pro-price" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; width: 100%;">
+          <button class="btn-primary pro-unlock-btn" id="btn-pro-buy-lifetime" style="width: 100%; background: linear-gradient(135deg, #F59E0B, #D97706); border: none;">Lifetime Access — €4.99</button>
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button class="btn-primary pro-unlock-btn" id="btn-pro-buy-yearly" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 12px; font-weight: 600; padding: 10px; box-shadow: none;">€2.49 / Year</button>
+            <button class="btn-primary pro-unlock-btn" id="btn-pro-buy-monthly" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 12px; font-weight: 600; padding: 10px; box-shadow: none;">€0.49 / Month</button>
+          </div>
+        </div>
+        <button class="btn-dismiss" id="btn-pro-dismiss" style="width: 100%;">Maybe Later</button>
+      </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="app-content">
+      <!-- TAB 1: IPv4 CALCULATOR -->
+      <section id="calculator-tab" class="tab-content active">
+        <!-- Mode switcher for IPv4 / IPv6 inside the Calculator tab -->
+        <div class="calc-sub-tab-bar" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 20px; gap: 4px;">
+          <button class="calc-sub-tab-btn active" data-sub-target="ipv4-panel" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">IPv4 Mode</button>
+          <button class="calc-sub-tab-btn" data-sub-target="ipv6-panel" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth);">IPv6 Mode</button>
+        </div>
+
+        <!-- IPv4 Container -->
+        <div id="ipv4-panel" class="calc-sub-panel active-panel">
+          <div class="card input-card">
+          <h2 class="card-title">IPv4 Subnet Calculator</h2>
+
+          <div class="segmented-control" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 18px; gap: 4px;">
+            <button class="calc-mode-btn-v4 active" data-mode="single" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">Single IP</button>
+            <button class="calc-mode-btn-v4" data-mode="bulk" id="btn-bulk-mode-v4" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 4px;">Bulk IPs <span style="font-size: 10px;">👑</span></button>
+          </div>
+          
+          <div id="ipv4-single-panel">
+            <div class="input-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="ipv4-address" style="margin: 0;">IP Address</label>
+                <div class="quick-copy-paste hidden" id="copy-paste-ipv4" style="display: flex; gap: 6px; align-items: center;">
+                  <button id="btn-copy-ipv4" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    Copy
+                  </button>
+                  <button id="btn-paste-ipv4" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+                    Paste
+                  </button>
+                </div>
+              </div>
+              <input type="text" id="ipv4-address" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
+              <span class="error-msg" id="ipv4-error"></span>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 6px; padding: 0 4px;">
+              <button type="button" class="btn-adjust" onclick="adjustCidr('ipv4-cidr', -1)">-</button>
+              <span id="ipv4-cidr-btn-val" class="highlight" style="font-size: 15px; font-weight: bold; color: var(--accent-primary); min-width: 32px; text-align: center; display: inline-block;">/24</span>
+              <button type="button" class="btn-adjust" onclick="adjustCidr('ipv4-cidr', 1)">+</button>
+            </div>
+            <div class="cidr-slider-card-horizontal" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 15px; margin-bottom: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 0;">CIDR Prefix</label>
+                <span id="ipv4-cidr-val" class="highlight" style="font-size: 16px; font-weight: bold; color: var(--accent-primary);">/24</span>
+              </div>
+              <input type="range" id="ipv4-cidr" min="0" max="32" value="24">
+            </div>
+
+            <div class="input-group">
+              <label for="ipv4-hosts">Required Hosts (Optional)</label>
+              <input type="number" id="ipv4-hosts" placeholder="e.g. 50" min="1">
+            </div>
+          </div>
+
+          <!-- Bulk IPv4 Panel (hidden by default) -->
+          <div id="ipv4-bulk-panel" class="hidden">
+            <div class="input-group">
+              <label for="ipv4-bulk-input">IP Addresses (one per line or comma separated, e.g. 10.0.0.1/24)</label>
+              <textarea id="ipv4-bulk-input" rows="5" placeholder="192.168.1.1/24&#10;10.0.0.5/8&#10;172.16.1.10/16" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <span class="error-msg" id="ipv4-bulk-error"></span>
+            </div>
+            <button id="btn-calc-bulk-ipv4" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
+          </div>
+
+          <button id="btn-calc-ipv4" class="btn-primary" style="display: none;">Calculate</button>
+        </div>
+
+        <!-- Bulk Results Card -->
+        <div class="card result-card hidden" id="ipv4-bulk-results">
+          <div class="result-header" style="margin-bottom: 12px;">
+            <h3>Bulk Subnet Results</h3>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-export-pdf-bulk-ipv4" class="btn-action" style="font-size: 11px; padding: 4px 8px;">Report</button>
+              <button id="btn-export-csv-bulk-ipv4" class="btn-action" style="font-size: 11px; padding: 4px 8px;">CSV</button>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary);">
+                  <th style="padding: 8px 4px;">Input IP</th>
+                  <th style="padding: 8px 4px;">Network / Range</th>
+                  <th style="padding: 8px 4px;">Hosts / Addresses</th>
+                </tr>
+              </thead>
+              <tbody id="ipv4-bulk-results-tbody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card result-card hidden" id="ipv4-results">
+          <div class="result-header">
+            <h3>Calculated Parameters</h3>
+            <span class="badge" id="ipv4-badge-class">Class C</span>
+          </div>
+          
+          <div class="result-grid">
+            <div class="result-item">
+              <span class="label">CIDR Notation</span>
+              <span class="val" id="res-cidr">/24</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Subnet Mask</span>
+              <span class="val" id="res-mask">255.255.255.0</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Wildcard Mask</span>
+              <span class="val" id="res-wildcard">0.0.0.255</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Network Address</span>
+              <span class="val" id="res-network">192.168.1.0</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">Broadcast Address</span>
+              <span class="val" id="res-broadcast">192.168.1.255</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">Usable IP Range</span>
+              <span class="val highlight" id="res-range">192.168.1.1 - 192.168.1.254</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Total Usable Hosts</span>
+              <span class="val font-large" id="res-hosts">254</span>
+            </div>
+            <div class="result-item">
+              <span class="label">IP Type</span>
+              <span class="val" id="res-type">Private IP (Class C)</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">Binary IP Address</span>
+              <span class="val" id="bin-ip" style="font-family: monospace; font-size: 11px;">11000000.10101000.00000001.00000001</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">Binary Subnet Mask</span>
+              <span class="val" id="bin-mask" style="font-family: monospace; font-size: 11px;">11111111.11111111.11111111.00000000</span>
+            </div>
+          </div>
+
+          <!-- Subnet Breakdown Section -->
+          <div class="subnet-breakdown hidden" id="ipv4-subnets-container">
+            <h4>Subnet Partition Results</h4>
+            <p class="helper-text">Calculated to support the requested number of hosts per subnet:</p>
+            <div class="subnet-list" id="res-subnet-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-export-pdf-ipv4" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>Report</span>
+            </button>
+            <button id="btn-export-csv-ipv4" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-ipv4" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-ipv4" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+        </div>
+
+        <!-- IPv6 Container -->
+        <div id="ipv6-panel" class="calc-sub-panel hidden-panel" style="display: none;">
+          <div class="card input-card">
+          <h2 class="card-title">IPv6 Subnet Calculator</h2>
+
+          <div class="segmented-control" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 18px; gap: 4px;">
+            <button class="calc-mode-btn-v6 active" data-mode="single" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">Single IP</button>
+            <button class="calc-mode-btn-v6" data-mode="bulk" id="btn-bulk-mode-v6" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 4px;">Bulk IPs <span style="font-size: 10px;">👑</span></button>
+          </div>
+          
+          <div id="ipv6-single-panel">
+            <div class="input-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="ipv6-address" style="margin: 0;">IPv6 Address</label>
+                <div class="quick-copy-paste hidden" id="copy-paste-ipv6" style="display: flex; gap: 6px; align-items: center;">
+                  <button id="btn-copy-ipv6" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    Copy
+                  </button>
+                  <button id="btn-paste-ipv6" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+                    Paste
+                  </button>
+                </div>
+              </div>
+              <input type="text" id="ipv6-address" placeholder="e.g. 2001:db8::" value="2001:db8::">
+              <span class="error-msg" id="ipv6-error"></span>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 6px; padding: 0 4px;">
+              <button type="button" class="btn-adjust" onclick="adjustCidr('ipv6-cidr', -1)">-</button>
+              <span id="ipv6-cidr-btn-val" class="highlight" style="font-size: 15px; font-weight: bold; color: var(--accent-primary); min-width: 32px; text-align: center; display: inline-block;">/64</span>
+              <button type="button" class="btn-adjust" onclick="adjustCidr('ipv6-cidr', 1)">+</button>
+            </div>
+            <div class="cidr-slider-card-horizontal" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 15px; margin-bottom: 15px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 0;">Prefix Length</label>
+                <span id="ipv6-cidr-val" class="highlight" style="font-size: 16px; font-weight: bold; color: var(--accent-primary);">/64</span>
+              </div>
+              <input type="range" id="ipv6-cidr" min="0" max="128" value="64">
+            </div>
+
+            <div class="input-group">
+              <label for="ipv6-hosts">Required Hosts (Optional)</label>
+              <input type="text" id="ipv6-hosts" placeholder="e.g. 18446744073709551616">
+            </div>
+          </div>
+
+          <!-- Bulk IPv6 Panel (hidden by default) -->
+          <div id="ipv6-bulk-panel" class="hidden">
+            <div class="input-group">
+              <label for="ipv6-bulk-input">IPv6 Addresses (one per line or comma separated, e.g. 2001:db8::/64)</label>
+              <textarea id="ipv6-bulk-input" rows="5" placeholder="2001:db8::/64&#10;fe80::1/10&#10;2001:db8:a::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <span class="error-msg" id="ipv6-bulk-error"></span>
+            </div>
+            <button id="btn-calc-bulk-ipv6" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
+          </div>
+
+          <button id="btn-calc-ipv6" class="btn-primary" style="display: none;">Calculate</button>
+        </div>
+
+        <!-- Bulk Results Card IPv6 -->
+        <div class="card result-card hidden" id="ipv6-bulk-results">
+          <div class="result-header" style="margin-bottom: 12px;">
+            <h3>Bulk Subnet Results (IPv6)</h3>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-export-pdf-bulk-ipv6" class="btn-action" style="font-size: 11px; padding: 4px 8px;">Report</button>
+              <button id="btn-export-csv-bulk-ipv6" class="btn-action" style="font-size: 11px; padding: 4px 8px;">CSV</button>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 11px;">
+              <thead>
+                <tr style="border-bottom: 2px solid var(--border-color); color: var(--text-secondary);">
+                  <th style="padding: 8px 4px;">Input IP</th>
+                  <th style="padding: 8px 4px;">Prefix / Range</th>
+                  <th style="padding: 8px 4px;">Hosts / Addresses</th>
+                </tr>
+              </thead>
+              <tbody id="ipv6-bulk-results-tbody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card result-card hidden" id="ipv6-results">
+          <div class="result-header">
+            <h3>Calculated Parameters</h3>
+            <span class="badge" id="ipv6-badge-type">Global Unicast</span>
+          </div>
+
+          <div class="result-grid">
+            <div class="result-item full-width">
+              <span class="label">Compressed Address</span>
+              <span class="val highlight" id="res6-compressed">2001:db8::</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">Expanded Address</span>
+              <span class="val" id="res6-expanded" style="font-family: monospace; font-size: 11px;">2001:0db8:0000:0000:0000:0000:0000:0000</span>
+            </div>
+            <div class="result-item full-width hidden" id="res6-bitexpanded-row">
+              <span class="label" style="display:flex; align-items:center; gap:5px;">
+                Network Boundary
+                <span style="font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(var(--accent-primary-rgb),0.12); color: var(--accent-primary); letter-spacing: 0.03em;">BIT LEVEL</span>
+              </span>
+              <span class="val" id="res6-bitexpanded" style="font-family: monospace; font-size: 10px; word-break: break-all; line-height: 1.6;"></span>
+            </div>
+            <div class="result-item">
+              <span class="label">Prefix CIDR</span>
+              <span class="val" id="res6-prefix">/64</span>
+            </div>
+            <div class="result-item">
+              <span class="label">Network Prefix</span>
+              <span class="val" id="res6-net-prefix">2001:db8::/64</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">IPv6 Range Start</span>
+              <span class="val" id="res6-start">2001:db8::</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">IPv6 Range End</span>
+              <span class="val" id="res6-end">2001:db8::ffff:ffff:ffff:ffff</span>
+            </div>
+            <div class="result-item full-width">
+              <span class="label">Total Addresses</span>
+              <span class="val font-large" id="res6-total">18,446,744,073,709,551,616</span>
+            </div>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-export-pdf-ipv6" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>Report</span>
+            </button>
+            <button id="btn-export-csv-ipv6" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-ipv6" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-ipv6" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: SUBNET SPLITTER -->
+      <section id="splitter-tab" class="tab-content">
+        <div class="card input-card">
+          <h2 class="card-title">Subnet Splitter (VLSM)</h2>
+          <div class="input-row" style="display: flex; gap: 12px; margin-bottom: 10px; align-items: flex-end;">
+            <div class="input-group" style="flex: 2;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label for="split-base-ip" style="margin: 0;">Base Network IP</label>
+                <div class="quick-copy-paste hidden" id="copy-paste-split" style="display: flex; gap: 6px; align-items: center;">
+                  <button id="btn-copy-split" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    Copy
+                  </button>
+                  <button id="btn-paste-split" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                    <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+                    Paste
+                  </button>
+                </div>
+              </div>
+              <input type="text" id="split-base-ip" placeholder="e.g. 192.168.1.0" value="192.168.1.0">
+            </div>
+            <div class="input-group" style="flex: 1;">
+              <div style="margin-bottom: 6px;">
+                <label for="split-base-cidr" style="margin: 0;">Base Prefix</label>
+              </div>
+              <input type="number" id="split-base-cidr" min="0" max="30" value="24">
+            </div>
+          </div>
+          <span class="error-msg" id="split-error"></span>
+
+          <div class="input-group" style="margin-top: 10px;">
+            <label>Split Mode</label>
+            <div class="segmented-control" style="display: flex; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 3px; margin-top: 5px;">
+              <button class="method-btn active" data-method="equal" style="flex: 1; background: var(--card-bg); border: none; border-radius: 6px; padding: 6px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Equal Split (FLSM)</button>
+              <button class="method-btn" data-method="vlsm" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 6px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;">Host Count (VLSM)</button>
+            </div>
+          </div>
+
+          <!-- Panel for Equal Split Method -->
+          <div id="split-equal-panel" style="margin-top: 15px;">
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 6px; padding: 0 4px;">
+              <button type="button" class="btn-adjust" onclick="adjustCidr('split-equal-range', -1)">-</button>
+              <span id="split-equal-btn-val" style="color: var(--accent-primary); font-weight: 700; font-size: 14px; min-width: 32px; text-align: center; display: inline-block;">/25</span>
+              <button type="button" class="btn-adjust" onclick="adjustCidr('split-equal-range', 1)">+</button>
+            </div>
+            <div class="input-group" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 14px; border-radius: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label style="margin: 0; font-size: 13px; font-weight: 600; color: var(--text-secondary);">Target Prefix</label>
+                <span id="split-equal-val" style="color: var(--accent-primary); font-weight: 700; font-size: 14px;">/25 (2 subnets)</span>
+              </div>
+              <input type="range" id="split-equal-range" min="25" max="32" value="25" class="isubnet-slider" style="width: 100%;">
+            </div>
+          </div>
+
+          <!-- Panel for VLSM Method -->
+          <div id="split-vlsm-panel" class="hidden" style="margin-top: 15px;">
+            <div class="input-group">
+              <label for="split-vlsm-hosts">Required Host Sizes (comma-separated):</label>
+              <input type="text" id="split-vlsm-hosts" placeholder="e.g. 50, 30, 10, 2" value="50, 30, 10, 2">
+              <p class="helper-text" style="margin-top: 5px;">Enter hosts needed for each subnet, separated by commas.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card result-card hidden" id="split-results">
+          <h3 class="card-title">Partition Results</h3>
+          <div class="table-container" style="overflow-x: auto; margin-top: 10px;">
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+              <thead>
+                <tr style="border-bottom: 2px solid rgba(255,255,255,0.08); color: var(--text-secondary);">
+                  <th style="padding: 8px 4px;">#</th>
+                  <th style="padding: 8px 4px;">Subnet</th>
+                  <th style="padding: 8px 4px;">CIDR / Mask</th>
+                  <th style="padding: 8px 4px;">Range</th>
+                  <th style="padding: 8px 4px;">Hosts</th>
+                </tr>
+              </thead>
+              <tbody id="split-results-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-export-pdf-split" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>Report</span>
+            </button>
+            <button id="btn-export-csv-split" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-split" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-split" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: IPv6 CALCULATOR -->
+      
+
+      <!-- TAB 3: WILDCARD CONVERTER -->
+      <section id="converter-tab" class="tab-content">
+        <!-- Interactive Wildcard & Prefix Converter -->
+        <div class="card ref-card">
+          <h2 class="card-title">Wildcard & Prefix Converter</h2>
+          <p class="helper-text" style="margin-bottom: 12px;">Convert CIDR prefix (/22), subnet mask (255.255.255.0), or wildcard mask (0.0.0.255) instantly:</p>
+          <div class="input-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label for="converter-input" style="margin: 0;">Input Value</label>
+              <div class="quick-copy-paste hidden" id="copy-paste-converter" style="display: flex; gap: 6px; align-items: center;">
+                <button id="btn-copy-converter" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                  Copy
+                </button>
+                <button id="btn-paste-converter" class="btn-action" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                  <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+                  Paste
+                </button>
+              </div>
+            </div>
+            <input type="text" id="converter-input" placeholder="e.g. /22 or 0.0.3.255" value="/24">
+            <span class="error-msg" id="converter-error"></span>
+          </div>
+
+          <div class="conv-result-list hidden" id="converter-results" style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+            <div class="conv-result-row">
+              <span class="conv-result-label">Detected Type</span>
+              <span class="conv-result-val highlight" id="conv-type">IPv4 Prefix</span>
+            </div>
+            <div class="conv-result-row">
+              <span class="conv-result-label">Prefix Length</span>
+              <span class="conv-result-val" id="conv-prefix">/24</span>
+            </div>
+            <div class="conv-result-row">
+              <span class="conv-result-label">Subnet Mask</span>
+              <span class="conv-result-val" id="conv-mask">255.255.255.0</span>
+            </div>
+            <div class="conv-result-row">
+              <span class="conv-result-label">Wildcard Mask</span>
+              <span class="conv-result-val" id="conv-wildcard">0.0.0.255</span>
+            </div>
+            <div class="conv-result-row" id="conv-ipv6-row" style="display: none;">
+              <span class="conv-result-label">IPv6 Canonical Mask</span>
+              <span class="conv-result-val" id="conv-ipv6-mask">ffff:ffff:ffff:ffff::</span>
+            </div>
+            <div class="conv-result-row" id="conv-hosts-row">
+              <span class="conv-result-label">Available Hosts</span>
+              <span class="conv-result-val highlight" id="conv-hosts" style="color: var(--accent-primary);">254 hosts (256 total)</span>
+            </div>
+            <div class="conv-result-row" id="conv-binary-row">
+              <span class="conv-result-label">Binary Subnet Mask</span>
+              <span class="conv-result-val" id="conv-binary" style="font-family: monospace; font-size: 12px;">11111111.11111111.11111111.00000000</span>
+            </div>
+            <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+              <button id="btn-export-pdf-conv" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+                <span>Report</span>
+              </button>
+              <button id="btn-export-csv-conv" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+                <span>CSV</span>
+              </button>
+              <button id="btn-save-notes-conv" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+                <span>Save</span>
+              </button>
+              <button id="btn-share-conv" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+                <span>Share</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Subnet Calculator Card (dynamically shown) -->
+        <div class="card ref-card hidden" id="converter-subnet-card" style="margin-top: 20px;">
+          <h2 class="card-title" style="display: flex; align-items: center; gap: 8px;">
+            <svg style="width: 20px; height: 20px; color: var(--accent-primary);" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4 6h-2v2h2v2h-2v2h2v2h-4v-2H9v-2h2v-2H9V9h2V7h4v2zm4 10H5V5h14v14z"/></svg>
+            <span>Subnet Calculation Results</span>
+          </h2>
+          <div class="result-grid" id="converter-subnet-results" style="margin-top: 10px;">
+            <!-- Dynamically populated subnet details -->
+          </div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-export-pdf-conv-subnet" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>Report</span>
+            </button>
+            <button id="btn-export-csv-conv-subnet" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-conv-subnet" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-conv-subnet" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Base Converter Card -->
+        <div class="card ref-card" id="base-converter-card" style="margin-top: 20px;">
+          <h2 class="card-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <svg style="width: 20px; height: 20px; flex-shrink: 0; color: var(--accent-primary);" viewBox="0 0 24 24"><path fill="currentColor" d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm1 4v2h4v8h2V9h4V7H6z"/></svg>
+            <span>Number Base Converter</span>
+          </h2>
+          <p class="helper-text" style="margin-bottom: 14px;">Type in any base — Binary (2), Octal (8), Decimal (10), or Hex (16) — to instantly convert to all others.</p>
+
+          <!-- Binary -->
+          <div class="input-group" style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-bin-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(79,70,229,0.12); color: var(--accent-primary);">BIN</span>
+                Binary <span style="color: var(--text-muted); font-size: 11px;">(Base 2)</span>
+              </label>
+              <button id="btn-copy-base-bin" class="btn-action" title="Copy Binary" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-bin-input" placeholder="e.g. 11001010" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <span class="error-msg" id="base-bin-error"></span>
+          </div>
+
+          <!-- Octal -->
+          <div class="input-group" style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-oct-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(14,165,233,0.12); color: var(--accent-cyan);">OCT</span>
+                Octal <span style="color: var(--text-muted); font-size: 11px;">(Base 8)</span>
+              </label>
+              <button id="btn-copy-base-oct" class="btn-action" title="Copy Octal" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-oct-input" placeholder="e.g. 312" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <span class="error-msg" id="base-oct-error"></span>
+          </div>
+
+          <!-- Decimal -->
+          <div class="input-group" style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-dec-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(16,185,129,0.12); color: var(--accent-success);">DEC</span>
+                Decimal <span style="color: var(--text-muted); font-size: 11px;">(Base 10)</span>
+              </label>
+              <button id="btn-copy-base-dec" class="btn-action" title="Copy Decimal" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-dec-input" placeholder="e.g. 202" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <span class="error-msg" id="base-dec-error"></span>
+          </div>
+
+          <!-- Hexadecimal -->
+          <div class="input-group" style="margin-bottom: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label for="base-hex-input" style="margin:0; display:flex; align-items:center; gap:6px;">
+                <span class="base-badge" style="background: rgba(239,68,68,0.10); color: var(--accent-danger);">HEX</span>
+                Hexadecimal <span style="color: var(--text-muted); font-size: 11px;">(Base 16)</span>
+              </label>
+              <button id="btn-copy-base-hex" class="btn-action" title="Copy Hex" style="font-size: 10px; padding: 2px 7px; display: flex; align-items: center; gap: 3px;">
+                <svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                Copy
+              </button>
+            </div>
+            <input type="text" id="base-hex-input" placeholder="e.g. CA" autocomplete="off" spellcheck="false" style="font-family: monospace; text-transform: uppercase;">
+            <span class="error-msg" id="base-hex-error"></span>
+          </div>
+
+          <!-- Action buttons row -->
+          <div style="display: flex; gap: 8px; margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 12px; align-items: center;">
+            <button id="btn-export-pdf-base" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>Report</span>
+            </button>
+            <button id="btn-export-csv-base" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+              <span>CSV</span>
+            </button>
+            <button id="btn-save-notes-base" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-share-base" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+            <button id="btn-clear-base-converter" class="btn-action" title="Clear all fields" style="padding: 6px 8px; font-size: 12px; display: flex; justify-content: center; align-items: center; color: var(--accent-danger); border-color: rgba(239,68,68,0.25);">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: REFERENCE GUIDE -->
+      <section id="reference-tab" class="tab-content">
+        <div class="card ref-card">
+          <h2 class="card-title">IPv4 Address Classes</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Class</th>
+                  <th>IP Range Start</th>
+                  <th>IP Range End</th>
+                  <th>Default Mask</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="highlight-row">
+                  <td>Class A</td>
+                  <td>1.0.0.0</td>
+                  <td>126.255.255.255</td>
+                  <td>255.0.0.0 (/8)</td>
+                </tr>
+                <tr>
+                  <td>Class B</td>
+                  <td>128.0.0.0</td>
+                  <td>191.255.255.255</td>
+                  <td>255.255.0.0 (/16)</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class C</td>
+                  <td>192.0.0.0</td>
+                  <td>223.255.255.255</td>
+                  <td>255.255.255.0 (/24)</td>
+                </tr>
+                <tr>
+                  <td>Class D (Multicast)</td>
+                  <td>224.0.0.0</td>
+                  <td>239.255.255.255</td>
+                  <td>N/A</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class E (Research)</td>
+                  <td>240.0.0.0</td>
+                  <td>255.255.255.255</td>
+                  <td>N/A</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+            <button id="btn-copy-ref-classes" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-share-ref-classes" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="card ref-card">
+          <h2 class="card-title">Private IP Ranges (RFC 1918)</h2>
+          <div class="list-container">
+            <div class="list-item">
+              <span class="list-label">Class A Private</span>
+              <span class="list-val">10.0.0.0 - 10.255.255.255 (/8)</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Class B Private</span>
+              <span class="list-val">172.16.0.0 - 172.31.255.255 (/12)</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Class C Private</span>
+              <span class="list-val">192.168.0.0 - 192.168.255.255 (/16)</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Loopback Localhost</span>
+              <span class="list-val">127.0.0.0 - 127.255.255.255 (/8)</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Link-Local (APIPA)</span>
+              <span class="list-val">169.254.0.0 - 169.254.255.255 (/16)</span>
+            </div>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+            <button id="btn-copy-ref-private" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-share-ref-private" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="card ref-card">
+          <h2 class="card-title">IPv6 Common Types</h2>
+          <div class="list-container">
+            <div class="list-item">
+              <span class="list-label">Global Unicast (Public)</span>
+              <span class="list-val">2000::/3</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Link-Local (Auto-configured)</span>
+              <span class="list-val">fe80::/10</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Unique Local (Private LAN)</span>
+              <span class="list-val">fc00::/7</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Loopback Address</span>
+              <span class="list-val">::1/128</span>
+            </div>
+            <div class="list-item">
+              <span class="list-label">Multicast Range</span>
+              <span class="list-val">ff00::/8</span>
+            </div>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+            <button id="btn-copy-ref-ipv6" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-share-ref-ipv6" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: HISTORY -->
+      <section id="history-tab" class="tab-content">
+        <div class="card result-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 class="card-title" style="margin-bottom: 0;">Calculation History</h2>
+            <button id="btn-clear-history" class="btn-action" style="color: #EF4444;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              <span>Clear All</span>
+            </button>
+          </div>
+          <div id="history-list-empty" class="helper-text" style="text-align: center; padding: 20px 0;">
+            No calculations in history yet. Start calculating to record your history!
+          </div>
+          <div class="history-list" id="history-list" style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: NOTES -->
+      <section id="notes-tab" class="tab-content">
+        <div class="card input-card">
+          <h2 class="card-title">Add Custom Note</h2>
+          <div class="input-group">
+            <label for="note-title">Note Title</label>
+            <input type="text" id="note-title" placeholder="e.g. Floor 2 Router Subnet">
+          </div>
+          <div class="input-group">
+            <label for="note-text">Write note content</label>
+            <textarea id="note-text" placeholder="Type subnetting details, device descriptions, or other network engineering notes here..." rows="4"></textarea>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button id="btn-save-note-manual" class="btn-primary" style="flex: 2;">Save Note</button>
+            <button id="btn-paste-note-clipboard" class="btn-primary" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none; font-size: 12px; font-weight: 600; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+              <svg style="width:14px;height:14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/></svg>
+              Paste
+            </button>
+          </div>
+        </div>
+
+        <div class="card result-card">
+          <h2 class="card-title">My Saved Notes</h2>
+          <div id="notes-list-empty" class="helper-text" style="text-align: center; padding: 20px 0;">
+            No notes saved yet. Create a note above or click "Save to Notes" after calculating!
+          </div>
+          <div class="notes-container" id="notes-list">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Tab Bar Navigation (Simulating iOS) -->
+    <nav class="app-tab-bar">
+      <button class="tab-btn active" data-target="calculator-tab">
+        <div class="tab-icon-wrap">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+            <line x1="9" y1="22" x2="9" y2="16"></line>
+            <line x1="15" y1="22" x2="15" y2="16"></line>
+            <line x1="9" y1="16" x2="15" y2="16"></line>
+            <path d="M16 8h.01M12 8h.01M8 8h.01M16 12h.01M12 12h.01M8 12h.01"></path>
+          </svg>
+        </div>
+        <span>Calculator</span>
+      </button>
+      <button class="tab-btn" data-target="converter-tab">
+        <div class="tab-icon-wrap">
+          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></svg>
+        </div>
+        <span>Converter</span>
+      </button>
+      <button class="tab-btn tab-btn-locked" id="tab-btn-splitter" data-pro="true">
+        <div class="tab-icon-wrap" style="position: relative;">
+          <div class="tab-lock-icon">🔒</div>
+          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+        </div>
+        <span>Splitter</span>
+      </button>
+      <button class="tab-btn" data-target="reference-tab">
+        <div class="tab-icon-wrap">
+          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+        </div>
+        <span>Reference</span>
+      </button>
+      <button class="tab-btn" data-target="history-tab">
+        <div class="tab-icon-wrap">
+          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.53.85-1.07-3.63-2.16V8h-1.5z"/></svg>
+        </div>
+        <span>History</span>
+      </button>
+      <button class="tab-btn" data-target="notes-tab">
+        <div class="tab-icon-wrap">
+          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+        </div>
+        <span>Notes</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script src="app.js?v=1.0.6"></script>
+</body>
+</html>
