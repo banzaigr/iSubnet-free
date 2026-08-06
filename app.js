@@ -150,7 +150,7 @@ async function initRevenueCat() {
       const { Purchases } = window.Capacitor.Plugins;
       
       const apiKeyAndroid = "goog_RVInjInoGNBFdIqhouvUjuchGMr";
-      const apiKeyIOS = "test_HSrMVMPumumdDfciLiQfOSmszgC";
+      const apiKeyIOS = "appl_SUfiLPJdWqXeKDCpSWbiOIkTHcx";
       
       if (apiKeyAndroid === "goog_YOUR_API_KEY") {
         console.log("RevenueCat using mock mode (Configure credentials in app.js for store release)");
