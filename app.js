@@ -3087,20 +3087,22 @@ function setThemeColor(color) {
 }
 
 function updateNativeStatusBar(isDark) {
-  try {
-    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
-      const StatusBar = window.Capacitor.Plugins.StatusBar;
-      if (isDark) {
-        StatusBar.setStyle({ style: 'DARK' });
-        StatusBar.setBackgroundColor({ color: '#0f1524' });
-      } else {
-        StatusBar.setStyle({ style: 'LIGHT' });
-        StatusBar.setBackgroundColor({ color: '#f8fafc' });
+  setTimeout(() => {
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+        const StatusBar = window.Capacitor.Plugins.StatusBar;
+        if (isDark) {
+          StatusBar.setStyle({ style: 'DARK' });
+          StatusBar.setBackgroundColor({ color: '#0f1524' });
+        } else {
+          StatusBar.setStyle({ style: 'LIGHT' });
+          StatusBar.setBackgroundColor({ color: '#f8fafc' });
+        }
       }
+    } catch (e) {
+      console.error('Failed to update native StatusBar', e);
     }
-  } catch (e) {
-    console.error('Failed to update native StatusBar', e);
-  }
+  }, 300);
 }
 
 function initSettings() {
@@ -3873,7 +3875,7 @@ function initQuickPaste() {
 // --- Run Setup on page load ---
 function init() {
   initSettings();
-  initRevenueCat();
+  setTimeout(initRevenueCat, 800);
   setupTabNavigation();
   initQuickPaste();
   setupEventListeners();
