@@ -1606,3 +1606,64 @@ body.dark-mode .calc-sub-tab-btn.active {
     padding-bottom: 80px !important;
   }
 }
+
+/* Custom styles for IPv6 Compression and Reference Tables */
+.compression-example-box {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compression-example-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.compression-code-orig {
+  color: var(--text-primary);
+}
+
+.compression-code-step1 {
+  color: #0284c7;
+}
+body.dark-mode .compression-code-step1 {
+  color: #38bdf8;
+}
+
+.compression-code-final {
+  color: #15803d;
+  font-weight: bold;
+}
+body.dark-mode .compression-code-final {
+  color: #4ade80;
+}
+
+.ref-table-accent {
+  color: var(--accent-primary) !important;
+}
+
+/* Custom coloring for IPv6 Split-Group Bit View (Network Boundary) */
+.bit-level-on {
+  color: #d97706 !important;
+  font-weight: 700;
+}
+.bit-level-off {
+  color: #f59e0b !important;
+  opacity: 0.5;
+}
+body.dark-mode .bit-level-on {
+  color: #fbbf24 !important;
+}
+body.dark-mode .bit-level-off {
+  color: #fbbf24 !important;
+  opacity: 0.4;
+}
