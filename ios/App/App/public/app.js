@@ -150,7 +150,7 @@ async function initRevenueCat() {
       const { Purchases } = window.Capacitor.Plugins;
       
       const apiKeyAndroid = "goog_RVInjInoGNBFdIqhouvUjuchGMr";
-      const apiKeyIOS = "test_HSrMVMPumumdDfciLiQfOSmszgC";
+      const apiKeyIOS = "appl_SUfiLPJdWqXeKDCpSWbiOIkTHcx";
       
       if (apiKeyAndroid === "goog_YOUR_API_KEY") {
         console.log("RevenueCat using mock mode (Configure credentials in app.js for store release)");
@@ -971,6 +971,36 @@ function colorGroupCompressed(stripped, groupIdx, fullyActiveGroups, partialGrou
  *   bit-off for host bits).
  * Only call this when prefixLength % 16 !== 0.
  */
+function coloredIPv6Binary(bigIntVal, prefixLength) {
+  const groups = [];
+  let temp = bigIntVal;
+  for (let i = 0; i < 8; i++) {
+    const part = Number(temp & BigInt(0xffff));
+    groups.unshift(part.toString(2).padStart(16, '0'));
+    temp = temp >> BigInt(16);
+  }
+
+  const fullyActiveGroups = Math.floor(prefixLength / 16);
+  const partialGroupIdx   = fullyActiveGroups;
+  const activeBitsInPartial = prefixLength % 16;
+
+  const dot = '<span class="bit-on">:</span>';
+
+  const parts = groups.map((binStr, groupIdx) => {
+    return binStr.split('').map((bit, n) => {
+      let cls = 'bit-off';
+      if (groupIdx < fullyActiveGroups) {
+        cls = 'bit-on';
+      } else if (groupIdx === partialGroupIdx && prefixLength % 16 !== 0) {
+        cls = n < activeBitsInPartial ? 'bit-level-on' : 'bit-level-off';
+      }
+      return `<span class="${cls}">${bit}</span>`;
+    }).join('');
+  });
+
+  return parts.join(dot);
+}
+
 function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
   const groups = [];
   let temp = bigIntVal;
@@ -980,23 +1010,21 @@ function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
     temp = temp >> BigInt(16);
   }
 
-  const fullyActiveGroups = Math.floor(prefixLength / 16); // groups fully in prefix
-  const partialGroupIdx   = fullyActiveGroups;              // index of the split group
-  const activeBitsInPartial = prefixLength % 16;           // bits active within that group
+  const fullyActiveGroups = Math.floor(prefixLength / 16);
+  const partialGroupIdx   = fullyActiveGroups;
+  const activeBitsInPartial = prefixLength % 16;
 
   const dot = '<span class="bit-on">:</span>';
 
   const parts = groups.map((g, i) => {
     if (i === partialGroupIdx) {
-      // Expand this group to 16 binary digits with per-bit coloring
       const val = parseInt(g, 16);
       const binStr = val.toString(2).padStart(16, '0');
       return binStr.split('').map((bit, n) => {
-        const cls = n < activeBitsInPartial ? 'bit-on' : 'bit-off';
+        const cls = n < activeBitsInPartial ? 'bit-level-on' : 'bit-level-off';
         return `<span class="${cls}">${bit}</span>`;
       }).join('');
     } else {
-      // Normal 4-hex-char group with bit-on / bit-off per nibble
       const activeCount = i < fullyActiveGroups ? 4 : 0;
       return g.split('').map((ch, n) => {
         const cls = n < activeCount ? 'bit-on' : 'bit-off';
@@ -1007,7 +1035,6 @@ function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
 
   return parts.join(dot);
 }
-
 
 function calculateIPv6() {
   let ipInput = document.getElementById('ipv6-address').value.trim();
@@ -1139,6 +1166,9 @@ function calculateIPv6() {
   } else {
     bitExpandedRow.classList.add('hidden');
   }
+
+  // Full Binary Address View (Shows always)
+  document.getElementById('res6-binary').innerHTML = coloredIPv6Binary(ipBigInt, prefixLength);
 
 
   resultsCard.classList.remove('hidden');
@@ -1841,6 +1871,22 @@ const refIpv6Text = `IPv6 Common Address Types Reference:
 • Loopback Address: ::1/128
 • Multicast Range: ff00::/8`;
 
+const refCompressionText = `IPv6 Compression Rules (RFC 5952) Reference:
+• Rule 1 (Omit Leading Zeros): Omit leading zeros in each 16-bit field (e.g. 0db8 -> db8, 0000 -> 0).
+• Rule 2 (Compress Zero Runs): Replace consecutive all-zero fields with a single "::" (can only be done once per address).
+• Rule 3 (RFC 5952 Canonical Rules):
+  - Longest Run: Compress the longest run of consecutive all-zero fields.
+  - Leftmost First: If zero runs are equal in length, compress the leftmost (first) run.
+  - No Single Zeros: Do not shorten a single all-zero field to "::".
+  - Lowercase: Always write hex characters in lowercase.
+• Example:
+  - Uncompressed: 2001:0db8:0000:0000:0001:0000:0000:0000
+  - RFC 5952 Canonical: 2001:db8:0:0:1::`;
+
+function shareRefCompression() {
+  shareText('IPv6 Compression Rules', refCompressionText);
+}
+
 function copyTextWithToast(btnId, text) {
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById(btnId);
@@ -1937,6 +1983,11 @@ function setupEventListeners() {
     copyTextWithToast('btn-copy-ref-ipv6', refIpv6Text);
   });
   document.getElementById('btn-share-ref-ipv6').addEventListener('click', shareRefIpv6);
+
+  document.getElementById('btn-copy-ref-compression').addEventListener('click', () => {
+    copyTextWithToast('btn-copy-ref-compression', refCompressionText);
+  });
+  document.getElementById('btn-share-ref-compression').addEventListener('click', shareRefCompression);
   
   document.getElementById('btn-save-note-manual').addEventListener('click', () => {
     const titleInput = document.getElementById('note-title');
@@ -3087,20 +3138,22 @@ function setThemeColor(color) {
 }
 
 function updateNativeStatusBar(isDark) {
-  try {
-    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
-      const StatusBar = window.Capacitor.Plugins.StatusBar;
-      if (isDark) {
-        StatusBar.setStyle({ style: 'DARK' });
-        StatusBar.setBackgroundColor({ color: '#0f1524' });
-      } else {
-        StatusBar.setStyle({ style: 'LIGHT' });
-        StatusBar.setBackgroundColor({ color: '#f8fafc' });
+  setTimeout(() => {
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+        const StatusBar = window.Capacitor.Plugins.StatusBar;
+        if (isDark) {
+          StatusBar.setStyle({ style: 'DARK' });
+          StatusBar.setBackgroundColor({ color: '#0f1524' });
+        } else {
+          StatusBar.setStyle({ style: 'LIGHT' });
+          StatusBar.setBackgroundColor({ color: '#f8fafc' });
+        }
       }
+    } catch (e) {
+      console.error('Failed to update native StatusBar', e);
     }
-  } catch (e) {
-    console.error('Failed to update native StatusBar', e);
-  }
+  }, 300);
 }
 
 function initSettings() {
@@ -3873,7 +3926,7 @@ function initQuickPaste() {
 // --- Run Setup on page load ---
 function init() {
   initSettings();
-  initRevenueCat();
+  setTimeout(initRevenueCat, 800);
   setupTabNavigation();
   initQuickPaste();
   setupEventListeners();
