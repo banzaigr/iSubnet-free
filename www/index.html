@@ -190,12 +190,16 @@
         <div style="margin-bottom: 20px;">
           <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; display: block; margin-bottom: 10px;">Theme Colors</label>
           <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;" id="theme-swatch-container">
-            <button class="theme-swatch active" data-color="#4f46e5" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #1e293b; background: #4f46e5; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch active" data-color="#1e3a8a" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid #1e293b; background: #1e3a8a; cursor: pointer; outline: none;"></button>
             <button class="theme-swatch" data-color="#00b4d8" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #00b4d8; cursor: pointer; outline: none;"></button>
             <button class="theme-swatch" data-color="#10b981" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #10b981; cursor: pointer; outline: none;"></button>
             <button class="theme-swatch" data-color="#f59e0b" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #f59e0b; cursor: pointer; outline: none;"></button>
             <button class="theme-swatch" data-color="#ef4444" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #ef4444; cursor: pointer; outline: none;"></button>
             <button class="theme-swatch" data-color="#ff1e77" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #ff1e77; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#8b5cf6" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #8b5cf6; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#8b4513" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #8b4513; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#b91c1c" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #b91c1c; cursor: pointer; outline: none;"></button>
+            <button class="theme-swatch" data-color="#166534" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #166534; cursor: pointer; outline: none;"></button>
             <button class="theme-swatch" data-color="#64748b" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; background: #64748b; cursor: pointer; outline: none;"></button>
           </div>
           
@@ -231,9 +235,18 @@
           <button id="btn-settings-feedback" class="btn-primary" style="padding: 10px; font-size: 13px; font-weight: 600; width: 100%; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none;">Send App Feedback</button>
         </div>
 
+        <!-- Legal section -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-bottom: 10px;">
+          <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; display: block; margin-bottom: 8px;">Legal</label>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-settings-terms" class="btn-primary" style="flex: 1; padding: 8px; font-size: 12px; font-weight: 500; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none;">Terms of Use</button>
+            <button id="btn-settings-privacy" class="btn-primary" style="flex: 1; padding: 8px; font-size: 12px; font-weight: 500; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); box-shadow: none;">Privacy Policy</button>
+          </div>
+        </div>
+
         <!-- App Version Footer -->
         <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.1.9 (Build 29)
+          iSubnet v1.1.10 (Build 30)
         </div>
       </div>
     </div>
@@ -353,7 +366,6 @@
           <li><span class="pro-check">✓</span> Unlimited Notes</li>
           <li><span class="pro-check">✓</span> Export Reports &amp; CSV</li>
           <li><span class="pro-check">✓</span> Bulk Subnet Calculator</li>
-          <li><span class="pro-check">✓</span> Light / Dark Theme</li>
         </ul>
         <div class="pro-price" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; width: 100%;">
           <button class="btn-primary pro-unlock-btn" id="btn-pro-buy-lifetime" style="width: 100%; background: linear-gradient(135deg, #F59E0B, #D97706); border: none;">Lifetime Access — €4.99</button>
@@ -361,6 +373,11 @@
             <button class="btn-primary pro-unlock-btn" id="btn-pro-buy-yearly" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 12px; font-weight: 600; padding: 10px; box-shadow: none;">€2.49 / Year</button>
             <button class="btn-primary pro-unlock-btn" id="btn-pro-buy-monthly" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 12px; font-weight: 600; padding: 10px; box-shadow: none;">€0.49 / Month</button>
           </div>
+        </div>
+        
+        <div style="font-size: 10px; color: var(--text-muted); text-align: center; margin-bottom: 15px; line-height: 1.4;">
+          <a href="#" id="link-terms" style="color: var(--text-secondary); text-decoration: underline;">Terms of Use</a> &nbsp;|&nbsp; 
+          <a href="#" id="link-privacy" style="color: var(--text-secondary); text-decoration: underline;">Privacy Policy</a>
         </div>
         <button class="btn-dismiss" id="btn-pro-dismiss" style="width: 100%;">Maybe Later</button>
       </div>

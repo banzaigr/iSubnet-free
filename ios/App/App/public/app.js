@@ -164,15 +164,50 @@ async function initRevenueCat() {
           useRevenueCat = true;
           console.log("RevenueCat initialized successfully!");
           updateRevenueCatSubscriptionState();
+          fetchAndDisplayOfferings();
         })
         .catch(err => {
           console.warn("RevenueCat configure warning (will try to operate with login sync anyway):", err);
           useRevenueCat = true; // Still allow login syncing calls to register customer accounts
           updateRevenueCatSubscriptionState();
+          fetchAndDisplayOfferings();
         });
     } catch(err) {
       console.error("RevenueCat Init Error:", err);
     }
+  }
+}
+
+async function fetchAndDisplayOfferings() {
+  if (!useRevenueCat) return;
+  try {
+    const { Purchases } = window.Capacitor.Plugins;
+    const offerings = await Purchases.getOfferings();
+    if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
+      const packages = offerings.current.availablePackages;
+      
+      const lifetimePkg = packages.find(p => p.packageType === 'LIFETIME');
+      const yearlyPkg = packages.find(p => p.packageType === 'ANNUAL' || p.packageType === 'YEARLY');
+      const monthlyPkg = packages.find(p => p.packageType === 'MONTHLY');
+      
+      const btnLifetime = document.getElementById('btn-pro-buy-lifetime');
+      const btnYearly = document.getElementById('btn-pro-buy-yearly');
+      const btnMonthly = document.getElementById('btn-pro-buy-monthly');
+      
+      if (lifetimePkg && btnLifetime) btnLifetime.textContent = `Lifetime Access — ${lifetimePkg.product.priceString}`;
+      if (yearlyPkg && btnYearly) btnYearly.textContent = `${yearlyPkg.product.priceString} / Year`;
+      if (monthlyPkg && btnMonthly) {
+        btnMonthly.textContent = `${monthlyPkg.product.priceString} / Month`;
+        
+        // Also update the small price label on the initial Pro card
+        const planPriceLabel = document.getElementById('plan-modal-price');
+        if (planPriceLabel) {
+          planPriceLabel.textContent = `${monthlyPkg.product.priceString}/mo`;
+        }
+      }
+    }
+  } catch(err) {
+    console.error("Failed to fetch offerings for UI:", err);
   }
 }
 
@@ -3093,9 +3128,32 @@ function hexToHsl(hex) {
     if (max === r)      h = ((g - b) / d + 6) % 6;
     else if (max === g) h = (b - r) / d + 2;
     else                h = (r - g) / d + 4;
-    h = Math.round(h * 60);
+    h *= 60;
   }
-  return [h, Math.round(s * 100), Math.round(l * 100)];
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+
+// Convert HSL to Hex
+function hslToHex(h, s, l) {
+  l /= 100;
+  const a = s * Math.min(l, 1 - l) / 100;
+  const f = n => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+// Automatically lighten dark theme colors in Dark Mode to preserve contrast
+function getAdjustedThemeColor(hex) {
+  if (!document.body.classList.contains('dark-mode')) return hex;
+  const [h, s, l] = hexToHsl(hex);
+  // Boost lightness for dark colors (L < 45%) to ensure visibility
+  if (l < 45) {
+    return hslToHex(h, s, Math.min(l + 25, 55));
+  }
+  return hex;
 }
 
 /**
@@ -3112,10 +3170,12 @@ function computeBitOffColor(hex) {
 }
 
 function loadThemeColor() {
-  document.documentElement.style.setProperty('--accent-primary', activeThemeColor);
-  document.documentElement.style.setProperty('--accent-primary-rgb', hexToRgb(activeThemeColor));
+  const displayColor = getAdjustedThemeColor(activeThemeColor);
+  
+  document.documentElement.style.setProperty('--accent-primary', displayColor);
+  document.documentElement.style.setProperty('--accent-primary-rgb', hexToRgb(displayColor));
   // Update the inactive-bit contrast color whenever the theme changes
-  document.documentElement.style.setProperty('--bit-off-color', computeBitOffColor(activeThemeColor));
+  document.documentElement.style.setProperty('--bit-off-color', computeBitOffColor(displayColor));
 
   // Update swatch active outline states
   const swatches = document.querySelectorAll('.theme-swatch');
@@ -3211,6 +3271,7 @@ function initSettings() {
         SafeStorage.setItem('isubnet_dark_mode', 'false');
       }
 
+      loadThemeColor(); // Re-compute and paint the theme color to adjust for contrast
       updateNativeStatusBar(isDark);
 
       // Save theme preference natively using Capacitor Preferences
@@ -3970,6 +4031,60 @@ function init() {
 
   const dismissBtn = document.getElementById('btn-pro-dismiss');
   if (dismissBtn) dismissBtn.addEventListener('click', closeProModal);
+
+  // Legal links bindings (Paywall)
+  const linkTerms = document.getElementById('link-terms');
+  if (linkTerms) {
+    linkTerms.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const url = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url: url });
+      } else {
+        window.open(url, '_blank');
+      }
+    });
+  }
+
+  const linkPrivacy = document.getElementById('link-privacy');
+  if (linkPrivacy) {
+    linkPrivacy.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const url = 'https://isubnet.net/privacy-policy/';
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url: url });
+      } else {
+        window.open(url, '_blank');
+      }
+    });
+  }
+
+  // Legal links bindings (Settings)
+  const btnSettingsTerms = document.getElementById('btn-settings-terms');
+  if (btnSettingsTerms) {
+    btnSettingsTerms.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const url = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url: url });
+      } else {
+        window.open(url, '_blank');
+      }
+    });
+  }
+
+  const btnSettingsPrivacy = document.getElementById('btn-settings-privacy');
+  if (btnSettingsPrivacy) {
+    btnSettingsPrivacy.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const url = 'https://isubnet.net/privacy-policy/';
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url: url });
+      } else {
+        window.open(url, '_blank');
+      }
+    });
+  }
 
   // --- Locked Splitter tab click ---
   const splitterBtn = document.getElementById('tab-btn-splitter');
