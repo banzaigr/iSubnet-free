@@ -253,6 +253,27 @@ async function updateRevenueCatSubscriptionState() {
     const { Purchases } = window.Capacitor.Plugins;
     const customerInfo = await Purchases.getCustomerInfo();
     const activeEntitlements = customerInfo.entitlements.active;
+    // --- DEBUG INJECTION ---
+    let debugBox = document.getElementById('rc-debug-box');
+    if (!debugBox) {
+      debugBox = document.createElement('div');
+      debugBox.id = 'rc-debug-box';
+      debugBox.style.position = 'fixed';
+      debugBox.style.bottom = '0';
+      debugBox.style.left = '0';
+      debugBox.style.width = '100%';
+      debugBox.style.maxHeight = '40vh';
+      debugBox.style.overflowY = 'scroll';
+      debugBox.style.backgroundColor = 'rgba(255,0,0,0.9)';
+      debugBox.style.color = 'white';
+      debugBox.style.zIndex = '99999';
+      debugBox.style.padding = '10px';
+      debugBox.style.fontSize = '10px';
+      debugBox.style.whiteSpace = 'pre-wrap';
+      document.body.appendChild(debugBox);
+    }
+    debugBox.textContent = JSON.stringify(activeEntitlements, null, 2);
+    // --- END DEBUG INJECTION ---
     
     if (isProEntitlementActive(activeEntitlements)) {
       PRO_UNLOCKED = true;
