@@ -174,15 +174,48 @@ async function initRevenueCat() {
         });
     } catch(err) {
       console.error("RevenueCat Init Error:", err);
+      fetchAndDisplayOfferings(); // Attempt fallback display even on total plugin error
     }
+  } else {
+    // Bare browser without Capacitor plugins
+    fetchAndDisplayOfferings();
   }
 }
 
 async function fetchAndDisplayOfferings() {
-  if (!useRevenueCat) return;
+  const isNative = window.Capacitor && window.Capacitor.getPlatform && (window.Capacitor.getPlatform() === 'ios' || window.Capacitor.getPlatform() === 'android');
+  const btnLifetime = document.getElementById('btn-pro-buy-lifetime');
+  const btnYearly = document.getElementById('btn-pro-buy-yearly');
+  const btnMonthly = document.getElementById('btn-pro-buy-monthly');
+
+  const enableButtons = (lifetimeText, yearlyText, monthlyText) => {
+    if (btnLifetime) { btnLifetime.textContent = lifetimeText; btnLifetime.disabled = false; btnLifetime.style.opacity = '1'; }
+    if (btnYearly) { btnYearly.textContent = yearlyText; btnYearly.disabled = false; btnYearly.style.opacity = '1'; }
+    if (btnMonthly) { btnMonthly.textContent = monthlyText; btnMonthly.disabled = false; btnMonthly.style.opacity = '1'; }
+  };
+
+  if (!isNative) {
+    // Enable with mock prices for Browser Demo
+    enableButtons('Lifetime Access — €4.99 (Demo)', '€2.49 / Year (Demo)', '€0.49 / Month (Demo)');
+    return;
+  }
+
+  if (!useRevenueCat) {
+    if (btnLifetime) { btnLifetime.textContent = 'Purchases Unavailable'; }
+    if (btnYearly) { btnYearly.textContent = 'Offline'; }
+    if (btnMonthly) { btnMonthly.textContent = 'Offline'; }
+    return;
+  }
+
   try {
     const { Purchases } = window.Capacitor.Plugins;
-    const offerings = await Purchases.getOfferings();
+    
+    // Add a 5-second timeout so the buttons never hang indefinitely on native
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("RevenueCat getOfferings timeout")), 5000);
+    });
+    
+    const offerings = await Promise.race([Purchases.getOfferings(), timeoutPromise]);
     if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
       const packages = offerings.current.availablePackages;
       
@@ -190,15 +223,13 @@ async function fetchAndDisplayOfferings() {
       const yearlyPkg = packages.find(p => p.packageType === 'ANNUAL' || p.packageType === 'YEARLY');
       const monthlyPkg = packages.find(p => p.packageType === 'MONTHLY');
       
-      const btnLifetime = document.getElementById('btn-pro-buy-lifetime');
-      const btnYearly = document.getElementById('btn-pro-buy-yearly');
-      const btnMonthly = document.getElementById('btn-pro-buy-monthly');
+      enableButtons(
+        lifetimePkg ? `Lifetime Access — ${lifetimePkg.product.priceString}` : 'Lifetime Access',
+        yearlyPkg ? `${yearlyPkg.product.priceString} / Year` : 'Yearly',
+        monthlyPkg ? `${monthlyPkg.product.priceString} / Month` : 'Monthly'
+      );
       
-      if (lifetimePkg && btnLifetime) btnLifetime.textContent = `Lifetime Access — ${lifetimePkg.product.priceString}`;
-      if (yearlyPkg && btnYearly) btnYearly.textContent = `${yearlyPkg.product.priceString} / Year`;
-      if (monthlyPkg && btnMonthly) {
-        btnMonthly.textContent = `${monthlyPkg.product.priceString} / Month`;
-        
+      if (monthlyPkg) {
         // Also update the small price label on the initial Pro card
         const planPriceLabel = document.getElementById('plan-modal-price');
         if (planPriceLabel) {
@@ -208,6 +239,10 @@ async function fetchAndDisplayOfferings() {
     }
   } catch(err) {
     console.error("Failed to fetch offerings for UI:", err);
+    // If fetching fails, let's keep them disabled or show an error
+    if (btnLifetime) { btnLifetime.textContent = 'Purchases Unavailable'; }
+    if (btnYearly) { btnYearly.textContent = 'Offline'; }
+    if (btnMonthly) { btnMonthly.textContent = 'Offline'; }
   }
 }
 
@@ -244,8 +279,9 @@ async function updateRevenueCatSubscriptionState() {
 }
 
 async function purchaseProductByPlan(planType) {
-  const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
-  if (!isNative || !useRevenueCat) {
+  const isNative = window.Capacitor && window.Capacitor.getPlatform && (window.Capacitor.getPlatform() === 'ios' || window.Capacitor.getPlatform() === 'android');
+  
+  if (!isNative) {
     // Browser local test fallback
     PRO_UNLOCKED = true;
     SafeStorage.setItem('isubnet_pro', 'true');
@@ -255,8 +291,17 @@ async function purchaseProductByPlan(planType) {
     return;
   }
 
+  if (!useRevenueCat) {
+    alert("In-App Purchases are currently unavailable. Please check your connection and try again.");
+    return;
+  }
+
   try {
     const { Purchases } = window.Capacitor.Plugins;
+    if (!Purchases) {
+      alert("Purchase plugin not found. Please try again later.");
+      return;
+    }
     const offerings = await Purchases.getOfferings();
     if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
       let packageToBuy = null;
