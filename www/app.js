@@ -4794,6 +4794,25 @@ function updateUpgradeUI(planTier) {
   const planManageMonthlyBtn = document.querySelector('.billing-toggle[data-cycle="monthly"]');
   const upgradeToProCard = document.getElementById('btn-plan-select-pro') ? document.getElementById('btn-plan-select-pro').parentElement : null;
   const proModalContainer = document.querySelector('.pro-price');
+  const currentPlanName = document.getElementById('current-plan-name');
+  const currentPlanDesc = document.getElementById('current-plan-desc');
+  
+  if (currentPlanName) {
+    if (planTier === 'lifetime') {
+      currentPlanName.textContent = 'Lifetime Pro';
+      if (currentPlanDesc) currentPlanDesc.textContent = 'Lifetime access to all Pro features.';
+    } else if (planTier === 'yearly') {
+      currentPlanName.textContent = 'Yearly Pro';
+      if (currentPlanDesc) currentPlanDesc.textContent = 'Annual subscription to all Pro features.';
+    } else if (planTier === 'monthly') {
+      currentPlanName.textContent = 'Monthly Pro';
+      if (currentPlanDesc) currentPlanDesc.textContent = 'Monthly subscription to all Pro features.';
+    } else {
+      currentPlanName.textContent = 'Free Plan';
+      if (currentPlanDesc) currentPlanDesc.textContent = 'Basic parameters, limited to 2 notes and 2 history items.';
+    }
+  }
+
 
   if (planTier === 'lifetime') {
     if (btnLifetime) btnLifetime.style.display = 'none';
