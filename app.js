@@ -243,6 +243,28 @@ async function fetchAndDisplayOfferings() {
     if (btnLifetime) { btnLifetime.textContent = 'Purchases Unavailable'; }
     if (btnYearly) { btnYearly.textContent = 'Offline'; }
     if (btnMonthly) { btnMonthly.textContent = 'Offline'; }
+
+    // --- TEMPORARY DEBUG OUTPUT ---
+    let debugDiv = document.getElementById('rc-debug-error');
+    if (!debugDiv) {
+      debugDiv = document.createElement('div');
+      debugDiv.id = 'rc-debug-error';
+      debugDiv.style = 'color: #ffcccc; font-size: 10px; margin-top: 10px; word-break: break-all; text-align: center; background: rgba(255,0,0,0.2); padding: 5px; border-radius: 4px; border: 1px solid red;';
+      const priceContainer = document.querySelector('.pro-price');
+      if (priceContainer) priceContainer.appendChild(debugDiv);
+    }
+    
+    // Safely extract the error message
+    let errorMsg = "Unknown Error";
+    if (err instanceof Error) {
+      errorMsg = err.message + '\n' + err.stack;
+    } else if (typeof err === 'object') {
+      try { errorMsg = JSON.stringify(err); } catch(e) { errorMsg = String(err); }
+    } else {
+      errorMsg = String(err);
+    }
+    debugDiv.textContent = 'RC DEBUG ERROR: ' + errorMsg;
+    // --- END TEMPORARY DEBUG OUTPUT ---
   }
 }
 
