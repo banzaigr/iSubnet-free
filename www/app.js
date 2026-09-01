@@ -144,8 +144,32 @@ function clearHistoryFromFirebase() {
 // --- RevenueCat SDK integration ---
 let useRevenueCat = false;
 
+// --- TEMPORARY DEBUG HELPER ---
+function showRCDebug(msg) {
+  let debugDiv = document.getElementById('rc-debug-error-main');
+  if (!debugDiv) {
+    debugDiv = document.createElement('div');
+    debugDiv.id = 'rc-debug-error-main';
+    debugDiv.style = 'color: #ffcccc; font-size: 10px; margin-top: 10px; word-break: break-all; text-align: center; background: rgba(255,0,0,0.2); padding: 5px; border-radius: 4px; border: 1px solid red;';
+    const priceContainer = document.querySelector('.pro-price');
+    if (priceContainer) priceContainer.appendChild(debugDiv);
+    // Also append to body just in case modal isn't open yet
+    const floating = document.createElement('div');
+    floating.style = 'position:fixed; top:40px; left:10px; right:10px; z-index:9999; color: #ffcccc; font-size: 10px; word-break: break-all; background: rgba(255,0,0,0.8); padding: 5px; border-radius: 4px; border: 1px solid red; pointer-events:none;';
+    floating.id = 'rc-debug-floating';
+    document.body.appendChild(floating);
+  }
+  
+  const text = 'RC DEBUG: ' + msg;
+  if (document.getElementById('rc-debug-error-main')) document.getElementById('rc-debug-error-main').textContent = text;
+  if (document.getElementById('rc-debug-floating')) document.getElementById('rc-debug-floating').textContent = text;
+}
+// ------------------------------
+
 async function initRevenueCat() {
+  showRCDebug("initRevenueCat called.");
   if (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases) {
+    showRCDebug("Plugin object found. Configuring...");
     try {
       const { Purchases } = window.Capacitor.Plugins;
       
@@ -153,31 +177,32 @@ async function initRevenueCat() {
       const apiKeyIOS = "appl_SUfiLPJdWqXeKDCpSWbiOIkTHcx";
       
       if (apiKeyAndroid === "goog_YOUR_API_KEY") {
-        console.log("RevenueCat using mock mode (Configure credentials in app.js for store release)");
+        console.log("RevenueCat using mock mode");
         return;
       }
       
       const apiKey = window.Capacitor.getPlatform() === 'ios' ? apiKeyIOS : apiKeyAndroid;
-      // Configure RevenueCat
       Purchases.configure({ apiKey })
         .then(() => {
+          showRCDebug("Configure success.");
           useRevenueCat = true;
           console.log("RevenueCat initialized successfully!");
           updateRevenueCatSubscriptionState();
           fetchAndDisplayOfferings();
         })
         .catch(err => {
-          console.warn("RevenueCat configure warning (will try to operate with login sync anyway):", err);
+          showRCDebug("Configure catch warning: " + String(err));
           useRevenueCat = true; // Still allow login syncing calls to register customer accounts
           updateRevenueCatSubscriptionState();
           fetchAndDisplayOfferings();
         });
     } catch(err) {
+      showRCDebug("Sync error in init: " + String(err));
       console.error("RevenueCat Init Error:", err);
-      fetchAndDisplayOfferings(); // Attempt fallback display even on total plugin error
+      fetchAndDisplayOfferings(); 
     }
   } else {
-    // Bare browser without Capacitor plugins
+    showRCDebug("No plugin. Cap=" + !!window.Capacitor + " Plgs=" + !!(window.Capacitor&&window.Capacitor.Plugins) + " Purch=" + !!(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Purchases));
     fetchAndDisplayOfferings();
   }
 }
