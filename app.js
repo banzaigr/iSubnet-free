@@ -4784,3 +4784,45 @@ window.adjustCidr = function(id, delta) {
   }
 };
 
+function updateUpgradeUI(planTier) {
+  const btnLifetime = document.getElementById('btn-pro-buy-lifetime');
+  const btnYearly = document.getElementById('btn-pro-buy-yearly');
+  const btnMonthly = document.getElementById('btn-pro-buy-monthly');
+  
+  const planManageLifetimeBtn = document.querySelector('.billing-toggle[data-cycle="lifetime"]');
+  const planManageAnnualBtn = document.querySelector('.billing-toggle[data-cycle="annual"]');
+  const planManageMonthlyBtn = document.querySelector('.billing-toggle[data-cycle="monthly"]');
+  const upgradeToProCard = document.getElementById('btn-plan-select-pro') ? document.getElementById('btn-plan-select-pro').parentElement : null;
+  const proModalContainer = document.querySelector('.pro-price');
+
+  if (planTier === 'lifetime') {
+    if (btnLifetime) btnLifetime.style.display = 'none';
+    if (btnYearly) btnYearly.style.display = 'none';
+    if (btnMonthly) btnMonthly.style.display = 'none';
+    if (upgradeToProCard) upgradeToProCard.style.display = 'none';
+    if (proModalContainer) proModalContainer.innerHTML = '<div style="text-align:center;color:var(--accent-primary);font-weight:bold;margin:20px 0;font-size:16px;">You have Lifetime Pro Access!</div>';
+  } else if (planTier === 'yearly') {
+    if (btnLifetime) btnLifetime.style.display = 'block';
+    if (btnYearly) btnYearly.style.display = 'none';
+    if (btnMonthly) btnMonthly.style.display = 'none';
+    if (planManageAnnualBtn) planManageAnnualBtn.style.display = 'none';
+    if (planManageMonthlyBtn) planManageMonthlyBtn.style.display = 'none';
+    if (upgradeToProCard) upgradeToProCard.style.display = 'block';
+    if (planManageLifetimeBtn) planManageLifetimeBtn.click();
+  } else if (planTier === 'monthly') {
+    if (btnLifetime) btnLifetime.style.display = 'block';
+    if (btnYearly) btnYearly.style.display = 'block';
+    if (btnMonthly) btnMonthly.style.display = 'none';
+    if (planManageMonthlyBtn) planManageMonthlyBtn.style.display = 'none';
+    if (planManageAnnualBtn) { planManageAnnualBtn.style.display = 'block'; planManageAnnualBtn.click(); }
+    if (upgradeToProCard) upgradeToProCard.style.display = 'block';
+  } else {
+    if (btnLifetime) btnLifetime.style.display = 'block';
+    if (btnYearly) btnYearly.style.display = 'block';
+    if (btnMonthly) btnMonthly.style.display = 'block';
+    if (planManageMonthlyBtn) { planManageMonthlyBtn.style.display = 'block'; planManageMonthlyBtn.click(); }
+    if (planManageAnnualBtn) planManageAnnualBtn.style.display = 'block';
+    if (planManageLifetimeBtn) planManageLifetimeBtn.style.display = 'block';
+    if (upgradeToProCard) upgradeToProCard.style.display = 'block';
+  }
+}
