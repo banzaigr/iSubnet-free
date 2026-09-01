@@ -275,6 +275,24 @@ async function updateRevenueCatSubscriptionState() {
 }
 
 async function purchaseProductByPlan(planType) {
+  // --- AUTH GATE ---
+  if (typeof useRealFirebase !== 'undefined' && useRealFirebase) {
+    const user = typeof firebase !== 'undefined' ? firebase.auth().currentUser : null;
+    if (!user) {
+      const modalAccount = document.getElementById('account-modal');
+      const accountTitle = document.getElementById('account-modal-title');
+      if (modalAccount && accountTitle) {
+        window._pendingPurchasePlan = planType;
+        // Default message depends on current mode
+        accountTitle.textContent = typeof isSignUpMode !== 'undefined' && isSignUpMode ? 'Create an account to unlock Pro' : 'Sign in to unlock Pro';
+        
+        closeProModal();
+        modalAccount.classList.remove('hidden');
+      }
+      return;
+    }
+  }
+  // --- END AUTH GATE ---
   const isNative = window.Capacitor && window.Capacitor.getPlatform && (window.Capacitor.getPlatform() === 'ios' || window.Capacitor.getPlatform() === 'android');
   
   if (!isNative) {
@@ -3343,13 +3361,13 @@ function initSettings() {
       isSignUpMode = !isSignUpMode;
       signupError.textContent = '';
       if (isSignUpMode) {
-        accountModalTitle.textContent = 'Create Account';
+        accountModalTitle.textContent = window._pendingPurchasePlan ? 'Create an account to unlock Pro' : 'Create Account';
         signupNameGroup.style.display = 'block';
         signupNameInput.setAttribute('required', 'true');
         btnAccountSubmit.textContent = 'Sign Up';
         linkToggleAuth.textContent = 'Already have an account? Sign In';
       } else {
-        accountModalTitle.textContent = 'Sign In';
+        accountModalTitle.textContent = window._pendingPurchasePlan ? 'Sign in to unlock Pro' : 'Sign In';
         signupNameGroup.style.display = 'none';
         signupNameInput.removeAttribute('required');
         btnAccountSubmit.textContent = 'Sign In';
@@ -3387,7 +3405,14 @@ function initSettings() {
     });
     btnAccountClose.addEventListener('click', () => {
       modalAccount.classList.add('hidden');
-      modalSettings.classList.remove('hidden'); // Restore settings panel
+      if (window._pendingPurchasePlan) {
+        const accountTitle = document.getElementById('account-modal-title');
+        if (accountTitle) accountTitle.textContent = isSignUpMode ? 'Create Account' : 'Sign In';
+        window._pendingPurchasePlan = null;
+        showProModal();
+      } else {
+        modalSettings.classList.remove('hidden'); // Restore settings panel
+      }
     });
   }
 
@@ -3632,7 +3657,14 @@ function initSettings() {
     });
     btnPlanClose.addEventListener('click', () => {
       modalPlan.classList.add('hidden');
-      modalSettings.classList.remove('hidden'); // Restore settings panel
+      if (window._pendingPurchasePlan) {
+        const accountTitle = document.getElementById('account-modal-title');
+        if (accountTitle) accountTitle.textContent = isSignUpMode ? 'Create Account' : 'Sign In';
+        window._pendingPurchasePlan = null;
+        showProModal();
+      } else {
+        modalSettings.classList.remove('hidden'); // Restore settings panel
+      }
     });
   }
 
