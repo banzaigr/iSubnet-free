@@ -258,7 +258,21 @@ async function updateRevenueCatSubscriptionState() {
       PRO_UNLOCKED = true;
       SafeStorage.setItem('isubnet_pro', 'true');
       applyProState();
-      document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Pro Subscriber</strong>`;
+      let activeProductId = '';
+      const ent = activeEntitlements['pro_features'] || activeEntitlements['iSubnet Pro'];
+      if (ent) {
+        activeProductId = ent.productIdentifier || '';
+      } else if (Object.keys(activeEntitlements).length > 0) {
+        activeProductId = activeEntitlements[Object.keys(activeEntitlements)[0]].productIdentifier || '';
+      }
+      
+      let planTier = 'unknown';
+      if (activeProductId.toLowerCase().includes('monthly')) planTier = 'monthly';
+      if (activeProductId.toLowerCase().includes('yearly') || activeProductId.toLowerCase().includes('annual')) planTier = 'yearly';
+      if (activeProductId.toLowerCase().includes('lifetime')) planTier = 'lifetime';
+      
+      document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>${planTier.charAt(0).toUpperCase() + planTier.slice(1)} Pro</strong>`;
+      updateUpgradeUI(planTier);
       
       const user = firebase.auth().currentUser;
       if (user && useRealFirebase) {
@@ -268,6 +282,7 @@ async function updateRevenueCatSubscriptionState() {
       PRO_UNLOCKED = false;
       SafeStorage.setItem('isubnet_pro', 'false');
       applyProState();
+      if (typeof updateUpgradeUI === 'function') updateUpgradeUI('free');
     }
   } catch(err) {
     console.error("RevenueCat Check Error:", err);
@@ -3396,6 +3411,7 @@ function initSettings() {
           SafeStorage.setItem('isubnet_pro', 'false');
           applyProState();
           document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+        if (typeof updateUpgradeUI === 'function') updateUpgradeUI('free');
         }
       } else {
         signupError.textContent = '';
@@ -3450,7 +3466,15 @@ function initSettings() {
           btnAccountSubmit.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
           btnAccountSubmit.disabled = false;
           modalAccount.classList.add('hidden');
-          modalSettings.classList.remove('hidden');
+          
+          if (window._pendingPurchasePlan) {
+            const accountTitle = document.getElementById('account-modal-title');
+            if (accountTitle) accountTitle.textContent = isSignUpMode ? 'Create Account' : 'Sign In';
+            window._pendingPurchasePlan = null;
+            showProModal();
+          } else {
+            modalSettings.classList.remove('hidden');
+          }
         }).catch((error) => {
           btnAccountSubmit.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
           btnAccountSubmit.disabled = false;
@@ -3471,6 +3495,7 @@ function initSettings() {
         SafeStorage.setItem('isubnet_pro', 'false');
         applyProState();
         document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+        if (typeof updateUpgradeUI === 'function') updateUpgradeUI('free');
 
         modalAccount.classList.add('hidden');
         modalSettings.classList.remove('hidden');
@@ -3546,6 +3571,7 @@ function initSettings() {
           SafeStorage.setItem('isubnet_pro', 'false');
           applyProState();
           document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+        if (typeof updateUpgradeUI === 'function') updateUpgradeUI('free');
         }
         
         const displayName = user.displayName || user.email.split('@')[0];
@@ -3576,6 +3602,7 @@ function initSettings() {
         SafeStorage.setItem('isubnet_pro', 'false');
         applyProState();
         document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
+        if (typeof updateUpgradeUI === 'function') updateUpgradeUI('free');
         
         // Log out of RevenueCat
         if (useRevenueCat) {
@@ -3657,14 +3684,7 @@ function initSettings() {
     });
     btnPlanClose.addEventListener('click', () => {
       modalPlan.classList.add('hidden');
-      if (window._pendingPurchasePlan) {
-        const accountTitle = document.getElementById('account-modal-title');
-        if (accountTitle) accountTitle.textContent = isSignUpMode ? 'Create Account' : 'Sign In';
-        window._pendingPurchasePlan = null;
-        showProModal();
-      } else {
-        modalSettings.classList.remove('hidden'); // Restore settings panel
-      }
+      modalSettings.classList.remove('hidden'); // Restore settings panel
     });
   }
 
