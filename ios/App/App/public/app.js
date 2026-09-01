@@ -144,32 +144,8 @@ function clearHistoryFromFirebase() {
 // --- RevenueCat SDK integration ---
 let useRevenueCat = false;
 
-// --- TEMPORARY DEBUG HELPER ---
-function showRCDebug(msg) {
-  let debugDiv = document.getElementById('rc-debug-error-main');
-  if (!debugDiv) {
-    debugDiv = document.createElement('div');
-    debugDiv.id = 'rc-debug-error-main';
-    debugDiv.style = 'color: #ffcccc; font-size: 10px; margin-top: 10px; word-break: break-all; text-align: center; background: rgba(255,0,0,0.2); padding: 5px; border-radius: 4px; border: 1px solid red;';
-    const priceContainer = document.querySelector('.pro-price');
-    if (priceContainer) priceContainer.appendChild(debugDiv);
-    // Also append to body just in case modal isn't open yet
-    const floating = document.createElement('div');
-    floating.style = 'position:fixed; top:40px; left:10px; right:10px; z-index:9999; color: #ffcccc; font-size: 10px; word-break: break-all; background: rgba(255,0,0,0.8); padding: 5px; border-radius: 4px; border: 1px solid red; pointer-events:none;';
-    floating.id = 'rc-debug-floating';
-    document.body.appendChild(floating);
-  }
-  
-  const text = 'RC DEBUG: ' + msg;
-  if (document.getElementById('rc-debug-error-main')) document.getElementById('rc-debug-error-main').textContent = text;
-  if (document.getElementById('rc-debug-floating')) document.getElementById('rc-debug-floating').textContent = text;
-}
-// ------------------------------
-
 async function initRevenueCat() {
-  showRCDebug("initRevenueCat called.");
   if (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases) {
-    showRCDebug("Plugin object found. Configuring...");
     try {
       const { Purchases } = window.Capacitor.Plugins;
       
@@ -182,27 +158,23 @@ async function initRevenueCat() {
       }
       
       const apiKey = window.Capacitor.getPlatform() === 'ios' ? apiKeyIOS : apiKeyAndroid;
-      Purchases.configure({ apiKey })
-        .then(() => {
-          showRCDebug("Configure success.");
-          useRevenueCat = true;
-          console.log("RevenueCat initialized successfully!");
-          updateRevenueCatSubscriptionState();
-          fetchAndDisplayOfferings();
-        })
-        .catch(err => {
-          showRCDebug("Configure catch warning: " + String(err));
-          useRevenueCat = true; // Still allow login syncing calls to register customer accounts
-          updateRevenueCatSubscriptionState();
-          fetchAndDisplayOfferings();
-        });
+      
+      // configure() does NOT return a Promise in the Capacitor SDK, so we execute it synchronously
+      Purchases.configure({ apiKey });
+      
+      useRevenueCat = true;
+      console.log("RevenueCat initialized successfully!");
+      updateRevenueCatSubscriptionState();
+      fetchAndDisplayOfferings();
+
     } catch(err) {
-      showRCDebug("Sync error in init: " + String(err));
       console.error("RevenueCat Init Error:", err);
+      // Even on failure, we proceed so fallback UI can render
+      useRevenueCat = true; 
+      updateRevenueCatSubscriptionState();
       fetchAndDisplayOfferings(); 
     }
   } else {
-    showRCDebug("No plugin. Cap=" + !!window.Capacitor + " Plgs=" + !!(window.Capacitor&&window.Capacitor.Plugins) + " Purch=" + !!(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Purchases));
     fetchAndDisplayOfferings();
   }
 }
@@ -268,28 +240,6 @@ async function fetchAndDisplayOfferings() {
     if (btnLifetime) { btnLifetime.textContent = 'Purchases Unavailable'; }
     if (btnYearly) { btnYearly.textContent = 'Offline'; }
     if (btnMonthly) { btnMonthly.textContent = 'Offline'; }
-
-    // --- TEMPORARY DEBUG OUTPUT ---
-    let debugDiv = document.getElementById('rc-debug-error');
-    if (!debugDiv) {
-      debugDiv = document.createElement('div');
-      debugDiv.id = 'rc-debug-error';
-      debugDiv.style = 'color: #ffcccc; font-size: 10px; margin-top: 10px; word-break: break-all; text-align: center; background: rgba(255,0,0,0.2); padding: 5px; border-radius: 4px; border: 1px solid red;';
-      const priceContainer = document.querySelector('.pro-price');
-      if (priceContainer) priceContainer.appendChild(debugDiv);
-    }
-    
-    // Safely extract the error message
-    let errorMsg = "Unknown Error";
-    if (err instanceof Error) {
-      errorMsg = err.message + '\n' + err.stack;
-    } else if (typeof err === 'object') {
-      try { errorMsg = JSON.stringify(err); } catch(e) { errorMsg = String(err); }
-    } else {
-      errorMsg = String(err);
-    }
-    debugDiv.textContent = 'RC DEBUG ERROR: ' + errorMsg;
-    // --- END TEMPORARY DEBUG OUTPUT ---
   }
 }
 
