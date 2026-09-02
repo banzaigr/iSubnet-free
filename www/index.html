@@ -211,6 +211,23 @@
               <span class="switch-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .25s; border-radius: 24px;"></span>
             </label>
           </div>
+          
+          <!-- Debug Logging Switch -->
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px;">
+            <div style="display: flex; align-items: center;">
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin: 0; margin-right: 6px;">Debug Logging</label>
+              <button id="btn-debug-info" style="background: none; border: none; cursor: pointer; color: var(--accent-primary); padding: 0; display: flex; align-items: center; outline: none;">
+                <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+              </button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button id="btn-debug-clear" style="font-size: 10px; padding: 4px 8px; border-radius: 4px; background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: pointer;">Clear Buffer</button>
+              <label class="switch-container" style="position: relative; display: inline-block; width: 46px; height: 24px; margin: 0;">
+                <input type="checkbox" id="chk-debug-log" style="opacity: 0; width: 0; height: 0; margin: 0;">
+                <span class="switch-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .25s; border-radius: 24px;"></span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- Account section -->
@@ -246,7 +263,7 @@
 
         <!-- App Version Footer -->
         <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.1.11 (Build 42)
+          iSubnet v1.1.11 (Build 48)
         </div>
       </div>
     </div>

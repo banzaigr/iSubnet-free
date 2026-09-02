@@ -1,6 +1,80 @@
 // --- Theme Mode Cache Recovery (Prevents Flash) ---
 (function() {
-  try {
+  
+// --- PERMANENT DEBUG LOGGING FEATURE ---
+window.APP_DEBUG_ENABLED = SafeStorage.getItem('isubnet_debug') === 'true';
+window.APP_DEBUG_START_TIME = parseInt(SafeStorage.getItem('isubnet_debug_start') || '0', 10);
+window.APP_DEBUG_CURRENT_NOTE_ID = SafeStorage.getItem('isubnet_debug_note_id') || null;
+window._debugSaveTimeout = null;
+window._debugReminderInterval = null;
+window._debugReminded10 = false;
+window._debugRemindedIntervals = 0;
+
+function debugLog(message) {
+  if (!window.APP_DEBUG_ENABLED) return;
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+  const entry = `[${timeStr}] ${message}\n`;
+  console.log(entry.trim());
+  
+  if (typeof notes === 'undefined') return;
+  
+  let currentNote = window.APP_DEBUG_CURRENT_NOTE_ID ? notes.find(n => n.id === window.APP_DEBUG_CURRENT_NOTE_ID) : null;
+  
+  if (!currentNote || currentNote.content.length > 25000) {
+    window.APP_DEBUG_CURRENT_NOTE_ID = String(Date.now());
+    SafeStorage.setItem('isubnet_debug_note_id', window.APP_DEBUG_CURRENT_NOTE_ID);
+    currentNote = {
+      id: window.APP_DEBUG_CURRENT_NOTE_ID,
+      date: new Date().toLocaleString(),
+      category: 'General',
+      title: 'Debug Log ' + new Date().toLocaleString() + (currentNote ? ' (continued)' : ''),
+      content: ''
+    };
+    notes.unshift(currentNote);
+  }
+  
+  currentNote.content += entry;
+  
+  if (window._debugSaveTimeout) clearTimeout(window._debugSaveTimeout);
+  window._debugSaveTimeout = setTimeout(() => {
+    if (typeof saveNotesToStorage === 'function') saveNotesToStorage();
+    if (typeof saveNoteToFirebase === 'function') saveNoteToFirebase(currentNote);
+  }, 1000);
+}
+
+function checkDebugReminder() {
+  if (!window.APP_DEBUG_ENABLED) return;
+  const now = Date.now();
+  const elapsedMinutes = (now - window.APP_DEBUG_START_TIME) / 60000;
+  
+  let shouldRemind = false;
+  if (elapsedMinutes >= 10 && !window._debugReminded10) {
+    shouldRemind = true;
+    window._debugReminded10 = true;
+  } else if (elapsedMinutes >= 25) {
+    const intervalsPassed = Math.floor((elapsedMinutes - 10) / 15);
+    if (intervalsPassed > window._debugRemindedIntervals) {
+      shouldRemind = true;
+      window._debugRemindedIntervals = intervalsPassed;
+    }
+  }
+  
+  if (shouldRemind && document.visibilityState === 'visible') {
+    const turnOff = confirm(`Debug logging has been on for ${Math.floor(elapsedMinutes)} minutes. Turn it off if you're done reproducing the issue?`);
+    if (turnOff) {
+      const chk = document.getElementById('chk-debug-log');
+      if (chk) chk.click();
+    }
+  }
+}
+
+if (window.APP_DEBUG_ENABLED) {
+  window._debugReminderInterval = setInterval(checkDebugReminder, 60000);
+  debugLog("=== APP LAUNCHED (Cold Start) ===");
+}
+// --- END DEBUG LOGGING FEATURE ---
+
     const isDark = localStorage.getItem('isubnet_dark_mode') === 'true';
     if (isDark) {
       document.body.classList.add('dark-mode');
@@ -159,6 +233,8 @@ async function initRevenueCat() {
       
       const apiKey = window.Capacitor.getPlatform() === 'ios' ? apiKeyIOS : apiKeyAndroid;
       
+      debugLog(`RevenueCat: configure() called`);
+      if(typeof debugLog==='function') debugLog(`RevenueCat: configure() called`);
       Purchases.configure({ apiKey });
       
       useRevenueCat = true;
@@ -248,28 +324,28 @@ function isProEntitlementActive(entitlements) {
 }
 
 async function updateRevenueCatSubscriptionState() {
+  if(typeof debugLog==='function') debugLog(`updateRevenueCatSubscriptionState() called`);
+  debugLog(`updateRevenueCatSubscriptionState() called`);
   if (!useRevenueCat) return;
   try {
     const { Purchases } = window.Capacitor.Plugins;
+    debugLog(`RevenueCat: getCustomerInfo() called`);
+    if(typeof debugLog==='function') debugLog(`RevenueCat: getCustomerInfo() called`);
     const customerInfo = await Purchases.getCustomerInfo();
-    const activeEntitlements = customerInfo.entitlements.active;
-    // --- DEBUG INJECTION (ALERT FALLBACK) ---
-    if (!window._hasShownRcDebug) {
-      window._hasShownRcDebug = true;
-      try {
-        alert("RC DEBUG JSON:\n" + JSON.stringify(activeEntitlements, null, 2));
-      } catch(e) {
-        alert("RC DEBUG ERROR: " + e.message);
-      }
-    }
-    // --- END DEBUG INJECTION ---
+    if(typeof debugLog==='function') debugLog(`RevenueCat: getCustomerInfo() returned active entitlements:\n` + JSON.stringify(customerInfo.entitlements ? customerInfo.entitlements.active : null, null, 2).substring(0, 3000));
+    debugLog(`RevenueCat: getCustomerInfo() returned active entitlements: ` + JSON.stringify(customerInfo.entitlements ? customerInfo.entitlements.active : null));
+    const activeEntitlements = customerInfo.entitlements ? customerInfo.entitlements.active : null;
+    
+
     
     if (isProEntitlementActive(activeEntitlements)) {
       PRO_UNLOCKED = true;
       SafeStorage.setItem('isubnet_pro', 'true');
       applyProState();
+      
       let activeProductId = '';
-      const ent = activeEntitlements['pro_features'] || activeEntitlements['iSubnet Pro'];
+      // Strict check for the exact entitlement name verified in dashboard
+      const ent = activeEntitlements['iSubnet Pro'] || activeEntitlements['pro_features'];
       if (ent) {
         activeProductId = ent.productIdentifier || '';
       } else if (Object.keys(activeEntitlements).length > 0) {
@@ -277,12 +353,20 @@ async function updateRevenueCatSubscriptionState() {
       }
       
       let planTier = 'unknown';
-      if (activeProductId.toLowerCase().includes('monthly')) planTier = 'monthly';
-      if (activeProductId.toLowerCase().includes('yearly') || activeProductId.toLowerCase().includes('annual')) planTier = 'yearly';
-      if (activeProductId.toLowerCase().includes('lifetime')) planTier = 'lifetime';
+      const pid = activeProductId.toLowerCase();
       
-      document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>${planTier.charAt(0).toUpperCase() + planTier.slice(1)} Pro</strong>`;
-      updateUpgradeUI(planTier);
+      // Explicit exact matches based on dashboard identifiers
+      if (pid.includes('monthly')) {
+        planTier = 'monthly';
+      } else if (pid.includes('yearly') || pid.includes('annual')) {
+        planTier = 'yearly';
+      } else if (pid.includes('lifetime') || pid === 'isubnet.lifetime.pro' || pid === 'isubnet_pro_lifetime') {
+        planTier = 'lifetime';
+      }
+      
+      const displayTier = planTier !== 'unknown' ? (planTier.charAt(0).toUpperCase() + planTier.slice(1)) : 'Lifetime';
+      document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>${displayTier} Pro</strong>`;
+      updateUpgradeUI(planTier !== 'unknown' ? planTier : 'lifetime');
       
       const user = firebase.auth().currentUser;
       if (user && useRealFirebase) {
@@ -296,6 +380,9 @@ async function updateRevenueCatSubscriptionState() {
     }
   } catch(err) {
     console.error("RevenueCat Check Error:", err);
+    if (typeof debugLog==="function") debugLog(`ERROR in updateRevenueCatSubscriptionState: ${err.message}\n${err.stack}`);
+    debugLog(`ERROR in updateRevenueCatSubscriptionState: ${err.message}\n${err.stack}`);
+    alert("CRASH in updateRevenueCatSubscriptionState: " + err.message + "\n" + err.stack);
   }
 }
 
@@ -358,7 +445,11 @@ async function purchaseProductByPlan(planType) {
         packageToBuy = packages[0];
       }
       
+      const purchaseResult = await debugLog(`RevenueCat: purchasePackage() called for ${packageToBuy.identifier}`);
+      const purchaseResult = await if(typeof debugLog==='function') debugLog(`RevenueCat: purchasePackage() called for ${packageToBuy.identifier}`);
       const purchaseResult = await Purchases.purchasePackage({ aPackage: packageToBuy });
+      if(typeof debugLog==='function') debugLog(`RevenueCat: purchasePackage() success for ${packageToBuy.identifier}`);
+      debugLog(`RevenueCat: purchasePackage() success for ${packageToBuy.identifier}`);
       
       if (isProEntitlementActive(purchaseResult.customerInfo.entitlements.active)) {
         PRO_UNLOCKED = true;
@@ -3403,9 +3494,12 @@ function initSettings() {
 
   if (btnAccount && modalAccount && btnAccountClose) {
     btnAccount.addEventListener('click', () => {
+      if(typeof debugLog==='function') debugLog(`Button Tap: Sign In / Sign Out main button`);
+      debugLog(`Button Tap: Sign In / Sign Out main button`);
       // Toggle sign in/out
       if (btnAccount.textContent === 'Sign Out') {
         if (useRealFirebase) {
+          if(typeof debugLog==='function') debugLog(`Firebase Auth: signOut attempt`);
           firebase.auth().signOut().catch(err => console.error("Sign out error:", err));
         } else {
           accountInfo.textContent = 'Not signed in';
@@ -3464,11 +3558,13 @@ function initSettings() {
         
         let promise;
         if (isSignUpMode) {
+          if(typeof debugLog==='function') debugLog(`Firebase Auth: signUp attempt for ${email}`);
           promise = firebase.auth().createUserWithEmailAndPassword(email, password)
             .then((userCredential) => {
               return userCredential.user.updateProfile({ displayName: name });
             });
         } else {
+          if(typeof debugLog==='function') debugLog(`Firebase Auth: signIn attempt for ${email}`);
           promise = firebase.auth().signInWithEmailAndPassword(email, password);
         }
         
@@ -3520,6 +3616,7 @@ function initSettings() {
   // Firebase Auth State Observer
   if (useRealFirebase) {
     firebase.auth().onAuthStateChanged((user) => {
+      if(typeof debugLog==='function') debugLog(`Firebase Auth: onAuthStateChanged fired. User UID: ${user ? user.uid : 'null'}`);
       if (user) {
         // Migrate local data to account
         if (currentUserId === 'local') {
@@ -3565,6 +3662,8 @@ function initSettings() {
         if (useRevenueCat) {
           try {
             const { Purchases } = window.Capacitor.Plugins;
+            debugLog(`RevenueCat: logIn() called for ${user.uid}`);
+            if(typeof debugLog==='function') debugLog(`RevenueCat: logIn() called for ${user.uid}`);
             Purchases.logIn({ appUserID: user.uid })
               .then(() => {
                 const displayName = user.displayName || user.email.split('@')[0];
@@ -3574,6 +3673,7 @@ function initSettings() {
               })
               .catch(err => {
                 console.error("RevenueCat login error:", err);
+                if (typeof debugLog==="function") debugLog(`ERROR in logIn: ${err.message}\n${err.stack}`);
                 updateRevenueCatSubscriptionState();
               });
           } catch(e) {
@@ -3632,6 +3732,8 @@ function initSettings() {
   // Handle account deletion and data erasure (GDPR compliance)
   if (btnDeleteAccount) {
     btnDeleteAccount.addEventListener('click', async () => {
+      if(typeof debugLog==='function') debugLog(`Button Tap: Delete Account`);
+      debugLog(`Button Tap: Delete Account`);
       const confirmDelete = confirm("WARNING: Are you sure you want to permanently delete your account? This will erase all your synced configurations, calculator history, and custom notes from Firebase and RevenueCat servers. This action is irreversible.");
       if (!confirmDelete) return;
 
@@ -3678,6 +3780,8 @@ function initSettings() {
         window.location.reload();
       } catch (err) {
         console.error("Account deletion failed (or threw during cleanup):", err);
+        if (typeof debugLog==="function") debugLog(`ERROR in deleteAccount: ${err.message}\n${err.stack}`);
+        debugLog(`ERROR in deleteAccount: ${err.message}\n${err.stack}`);
         // If the user object is now null, the deletion actually succeeded on the backend
         if (typeof firebase !== 'undefined' && !firebase.auth().currentUser) {
             alert("Your account and all associated data have been permanently deleted from our servers.");
@@ -4102,6 +4206,48 @@ function initQuickPaste() {
 
 // --- Run Setup on page load ---
 function init() {
+
+  const chkDebugLog = document.getElementById('chk-debug-log');
+  const btnDebugInfo = document.getElementById('btn-debug-info');
+  const btnDebugClear = document.getElementById('btn-debug-clear');
+  
+  if (chkDebugLog) {
+    chkDebugLog.checked = window.APP_DEBUG_ENABLED;
+    chkDebugLog.addEventListener('change', (e) => {
+      window.APP_DEBUG_ENABLED = e.target.checked;
+      SafeStorage.setItem('isubnet_debug', window.APP_DEBUG_ENABLED ? 'true' : 'false');
+      
+      if (window.APP_DEBUG_ENABLED) {
+        window.APP_DEBUG_START_TIME = Date.now();
+        SafeStorage.setItem('isubnet_debug_start', window.APP_DEBUG_START_TIME.toString());
+        window._debugReminderInterval = setInterval(checkDebugReminder, 60000);
+        window._debugReminded10 = false;
+        window._debugRemindedIntervals = 0;
+        debugLog("=== DEBUG LOGGING ENABLED ===");
+      } else {
+        if (window._debugReminderInterval) clearInterval(window._debugReminderInterval);
+        debugLog("=== DEBUG LOGGING DISABLED ===");
+        window.APP_DEBUG_CURRENT_NOTE_ID = null;
+        SafeStorage.removeItem('isubnet_debug_note_id');
+      }
+    });
+  }
+  
+  if (btnDebugInfo) {
+    btnDebugInfo.addEventListener('click', () => {
+      alert("Turn this on if you're experiencing a problem and want to help us fix it. While enabled, the app records technical details about what you do and any errors that occur. This is automatically saved as a note in your Notes tab, which you can copy and send to support. Turn off when you're done.");
+    });
+  }
+  
+  if (btnDebugClear) {
+    btnDebugClear.addEventListener('click', () => {
+      window.APP_DEBUG_CURRENT_NOTE_ID = null;
+      SafeStorage.removeItem('isubnet_debug_note_id');
+      if (window.APP_DEBUG_ENABLED) debugLog("=== DEBUG BUFFER CLEARED (Starting new note) ===");
+      alert("In-memory debug buffer cleared. Next log will create a new note.");
+    });
+  }
+
   initSettings();
   setTimeout(initRevenueCat, 800);
   setupTabNavigation();
@@ -4828,6 +4974,8 @@ window.adjustCidr = function(id, delta) {
 };
 
 function updateUpgradeUI(planTier) {
+  if(typeof debugLog==='function') debugLog(`updateUpgradeUI() called with planTier: ${planTier}`);
+  debugLog(`updateUpgradeUI() called with planTier: ${planTier}`);
   const btnLifetime = document.getElementById('btn-pro-buy-lifetime');
   const btnYearly = document.getElementById('btn-pro-buy-yearly');
   const btnMonthly = document.getElementById('btn-pro-buy-monthly');
