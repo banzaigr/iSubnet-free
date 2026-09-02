@@ -467,6 +467,7 @@ async function purchaseProductByPlan(planType) {
       alert("Billing Error: No packages available in current offering.");
     }
   } catch(err) {
+    if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: purchasePackage() FAILED for ${packageToBuy ? packageToBuy.identifier : 'unknown'}: ${err.message} ${err.userCancelled ? '(user cancelled)' : ''}\n${JSON.stringify(err, null, 2)}`);
     if (!err.userCancelled) {
       alert("Purchase Error: " + err.message);
     }
@@ -3687,10 +3688,10 @@ function initSettings() {
             const { Purchases } = window.Capacitor.Plugins;
             if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() called for ${user.uid}`);
             Purchases.logIn({ appUserID: user.uid })
-              .then(() => {
+              .then(async () => {
                 const displayName = user.displayName || user.email.split('@')[0];
-                Purchases.setEmail({ email: user.email }).catch(() => {});
-                Purchases.setDisplayName({ displayName: displayName }).catch(() => {});
+                try { await Purchases.setEmail({ email: user.email }); } catch(e) { if(typeof window.debugLog==='function') window.debugLog(`RevenueCat: setEmail failed (ignored) - ` + e.message); }
+                try { await Purchases.setDisplayName({ displayName: displayName }); } catch(e) { if(typeof window.debugLog==='function') window.debugLog(`RevenueCat: setDisplayName failed (ignored) - ` + e.message); }
                 updateRevenueCatSubscriptionState();
               })
               .catch(err => {
@@ -3815,7 +3816,21 @@ function initSettings() {
         btnDeleteAccount.textContent = 'Delete Account';
         
         if (err && err.code === 'auth/requires-recent-login') {
-          alert("For security reasons, you must sign out and sign in again before you can delete your account.");
+          const pwd = prompt("For security reasons, please re-enter your password to confirm account deletion:");
+          if (pwd) {
+            try {
+              const credential = firebase.auth.EmailAuthProvider.credential(user.email, pwd);
+              await user.reauthenticateWithCredential(credential);
+              await user.delete();
+              alert("Your account and all associated data have been permanently deleted from our servers.");
+              SafeStorage.removeItem('isubnet_notes');
+              SafeStorage.removeItem('isubnet_history');
+              window.location.reload();
+            } catch(reauthErr) {
+              if (typeof window.debugLog === 'function') window.debugLog(`ERROR in reauthenticate: ${reauthErr.message}`);
+              alert("Re-authentication failed: " + reauthErr.message);
+            }
+          }
         } else {
           alert("Failed to delete account. Please try again or contact support.");
         }
