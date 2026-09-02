@@ -495,7 +495,13 @@ const FREE_HISTORY_LIMIT = 2;
 let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
 
 function showProModal() {
-  document.getElementById('pro-modal').classList.remove('hidden');
+  if (typeof updateRevenueCatSubscriptionState === 'function') {
+    updateRevenueCatSubscriptionState().finally(() => {
+      document.getElementById('pro-modal').classList.remove('hidden');
+    });
+  } else {
+    document.getElementById('pro-modal').classList.remove('hidden');
+  }
 }
 
 function closeProModal() {
@@ -5077,7 +5083,18 @@ function updateUpgradeUI(planTier) {
     if (btnYearly) btnYearly.style.display = 'none';
     if (btnMonthly) btnMonthly.style.display = 'none';
     if (upgradeToProCard) upgradeToProCard.style.display = 'none';
-    if (proModalContainer) proModalContainer.innerHTML = '<div style="text-align:center;color:var(--accent-primary);font-weight:bold;margin:20px 0;font-size:16px;">You have Lifetime Pro Access!</div>';
+    
+    if (proModalContainer) {
+      let msgEl = document.getElementById('pro-access-msg');
+      if (!msgEl) {
+        msgEl = document.createElement('div');
+        msgEl.id = 'pro-access-msg';
+        msgEl.style.cssText = 'text-align:center;color:var(--accent-primary);font-weight:bold;margin:20px 0;font-size:16px;';
+        proModalContainer.appendChild(msgEl);
+      }
+      msgEl.textContent = 'You have Lifetime Pro Access!';
+      msgEl.style.display = 'block';
+    }
   } else if (planTier === 'yearly') {
     if (btnLifetime) btnLifetime.style.display = 'block';
     if (btnYearly) btnYearly.style.display = 'none';
@@ -5086,6 +5103,8 @@ function updateUpgradeUI(planTier) {
     if (planManageMonthlyBtn) planManageMonthlyBtn.style.display = 'none';
     if (upgradeToProCard) upgradeToProCard.style.display = 'block';
     if (planManageLifetimeBtn) planManageLifetimeBtn.click();
+    const msgEl = document.getElementById('pro-access-msg');
+    if (msgEl) msgEl.style.display = 'none';
   } else if (planTier === 'monthly') {
     if (btnLifetime) btnLifetime.style.display = 'block';
     if (btnYearly) btnYearly.style.display = 'block';
@@ -5093,6 +5112,8 @@ function updateUpgradeUI(planTier) {
     if (planManageMonthlyBtn) planManageMonthlyBtn.style.display = 'none';
     if (planManageAnnualBtn) { planManageAnnualBtn.style.display = 'block'; planManageAnnualBtn.click(); }
     if (upgradeToProCard) upgradeToProCard.style.display = 'block';
+    const msgEl = document.getElementById('pro-access-msg');
+    if (msgEl) msgEl.style.display = 'none';
   } else {
     if (btnLifetime) btnLifetime.style.display = 'block';
     if (btnYearly) btnYearly.style.display = 'block';
@@ -5101,5 +5122,7 @@ function updateUpgradeUI(planTier) {
     if (planManageAnnualBtn) planManageAnnualBtn.style.display = 'block';
     if (planManageLifetimeBtn) planManageLifetimeBtn.style.display = 'block';
     if (upgradeToProCard) upgradeToProCard.style.display = 'block';
+    const msgEl = document.getElementById('pro-access-msg');
+    if (msgEl) msgEl.style.display = 'none';
   }
 }
