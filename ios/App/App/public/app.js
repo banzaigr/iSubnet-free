@@ -454,7 +454,9 @@ async function purchaseProductByPlan(planType) {
       
       if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: purchasePackage() called for ${packageToBuy.identifier}`);
       const purchaseResult = await Purchases.purchasePackage({ aPackage: packageToBuy });
-      if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: purchasePackage() success for ${packageToBuy.identifier}`);
+      if (typeof window.debugLog === 'function') {
+        window.debugLog(`RevenueCat: purchasePackage() RAW RESULT for ${packageToBuy.identifier}:\n` + JSON.stringify(purchaseResult, null, 2).substring(0, 4000));
+      }
       
       if (isProEntitlementActive(purchaseResult.customerInfo.entitlements.active)) {
         PRO_UNLOCKED = true;
