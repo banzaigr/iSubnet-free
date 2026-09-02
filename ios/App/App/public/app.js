@@ -354,10 +354,6 @@ async function updateRevenueCatSubscriptionState() {
 
     
     if (isProEntitlementActive(activeEntitlements)) {
-      PRO_UNLOCKED = true;
-      SafeStorage.setItem('isubnet_pro', 'true');
-      applyProState();
-      
       let activeProductId = '';
       // Strict check for the exact entitlement name verified in dashboard
       const ent = activeEntitlements['iSubnet Pro'] || activeEntitlements['pro_features'];
@@ -388,9 +384,6 @@ async function updateRevenueCatSubscriptionState() {
         db.collection("users").doc(user.uid).set({ is_pro: true }, { merge: true });
       }
     } else {
-      PRO_UNLOCKED = false;
-      SafeStorage.setItem('isubnet_pro', 'false');
-      applyProState();
       if (typeof updateUpgradeUI === 'function') updateUpgradeUI('free');
     }
   } catch(err) {
@@ -468,9 +461,6 @@ async function purchaseProductByPlan(planType) {
       }
       
       if (isProEntitlementActive(purchaseResult.customerInfo.entitlements.active)) {
-        PRO_UNLOCKED = true;
-        SafeStorage.setItem('isubnet_pro', 'true');
-        applyProState();
         alert("Thank you for upgrading! iSubnet Pro unlocked.");
         closeProModal();
         updateRevenueCatSubscriptionState();
@@ -5041,6 +5031,18 @@ window.adjustCidr = function(id, delta) {
 
 function updateUpgradeUI(planTier) {
   if(typeof window.debugLog==='function') window.debugLog(`updateUpgradeUI() called with planTier: ${planTier}`);
+  
+  // SINGLE SOURCE OF TRUTH FOR UNLOCK STATE
+  if (planTier !== 'free' && planTier !== 'unknown') {
+    PRO_UNLOCKED = true;
+    SafeStorage.setItem('isubnet_pro', 'true');
+    if (typeof applyProState === 'function') applyProState();
+  } else {
+    PRO_UNLOCKED = false;
+    SafeStorage.setItem('isubnet_pro', 'false');
+    if (typeof applyProState === 'function') applyProState();
+  }
+
   const btnLifetime = document.getElementById('btn-pro-buy-lifetime');
   const btnYearly = document.getElementById('btn-pro-buy-yearly');
   const btnMonthly = document.getElementById('btn-pro-buy-monthly');
