@@ -3686,9 +3686,10 @@ function initSettings() {
         if (useRevenueCat) {
           try {
             const { Purchases } = window.Capacitor.Plugins;
-            if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() called for ${user.uid}`);
+            if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn({ appUserID: ${user.uid} }) called`);
             Purchases.logIn({ appUserID: user.uid })
-              .then(async () => {
+              .then(async (logInResult) => {
+                if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() resolved for UID: ${user.uid}. Created: ${logInResult && logInResult.created ? 'true' : 'false'}`);
                 const displayName = user.displayName || user.email.split('@')[0];
                 try { await Purchases.setEmail({ email: user.email }); } catch(e) { if(typeof window.debugLog==='function') window.debugLog(`RevenueCat: setEmail failed (ignored) - ` + e.message); }
                 try { await Purchases.setDisplayName({ displayName: displayName }); } catch(e) { if(typeof window.debugLog==='function') window.debugLog(`RevenueCat: setDisplayName failed (ignored) - ` + e.message); }
