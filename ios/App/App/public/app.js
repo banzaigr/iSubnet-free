@@ -253,26 +253,15 @@ async function updateRevenueCatSubscriptionState() {
     const { Purchases } = window.Capacitor.Plugins;
     const customerInfo = await Purchases.getCustomerInfo();
     const activeEntitlements = customerInfo.entitlements.active;
-    // --- DEBUG INJECTION ---
-    let debugBox = document.getElementById('rc-debug-box');
-    if (!debugBox) {
-      debugBox = document.createElement('div');
-      debugBox.id = 'rc-debug-box';
-      debugBox.style.position = 'fixed';
-      debugBox.style.bottom = '0';
-      debugBox.style.left = '0';
-      debugBox.style.width = '100%';
-      debugBox.style.maxHeight = '40vh';
-      debugBox.style.overflowY = 'scroll';
-      debugBox.style.backgroundColor = 'rgba(255,0,0,0.9)';
-      debugBox.style.color = 'white';
-      debugBox.style.zIndex = '99999';
-      debugBox.style.padding = '10px';
-      debugBox.style.fontSize = '10px';
-      debugBox.style.whiteSpace = 'pre-wrap';
-      document.body.appendChild(debugBox);
+    // --- DEBUG INJECTION (ALERT FALLBACK) ---
+    if (!window._hasShownRcDebug) {
+      window._hasShownRcDebug = true;
+      try {
+        alert("RC DEBUG JSON:\n" + JSON.stringify(activeEntitlements, null, 2));
+      } catch(e) {
+        alert("RC DEBUG ERROR: " + e.message);
+      }
     }
-    debugBox.textContent = JSON.stringify(activeEntitlements, null, 2);
     // --- END DEBUG INJECTION ---
     
     if (isProEntitlementActive(activeEntitlements)) {
@@ -3499,7 +3488,11 @@ function initSettings() {
         }).catch((error) => {
           btnAccountSubmit.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
           btnAccountSubmit.disabled = false;
-          signupError.textContent = error.message;
+          if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+            signupError.textContent = "Incorrect email or password. Please try again.";
+          } else {
+            signupError.textContent = error.message;
+          }
         });
       } else {
         signupError.textContent = '';
@@ -3639,7 +3632,7 @@ function initSettings() {
   // Handle account deletion and data erasure (GDPR compliance)
   if (btnDeleteAccount) {
     btnDeleteAccount.addEventListener('click', async () => {
-      const confirmDelete = confirm("WARNING: Are you sure you want to permanently delete your account? This will erase all your synced configurations, calculator history, and custom notes from Banzai GR servers. This action is irreversible.");
+      const confirmDelete = confirm("WARNING: Are you sure you want to permanently delete your account? This will erase all your synced configurations, calculator history, and custom notes from Firebase and RevenueCat servers. This action is irreversible.");
       if (!confirmDelete) return;
 
       const user = firebase.auth().currentUser;
@@ -3684,11 +3677,20 @@ function initSettings() {
         // Reload page to reset state
         window.location.reload();
       } catch (err) {
-        console.error("Account deletion failed:", err);
+        console.error("Account deletion failed (or threw during cleanup):", err);
+        // If the user object is now null, the deletion actually succeeded on the backend
+        if (typeof firebase !== 'undefined' && !firebase.auth().currentUser) {
+            alert("Your account and all associated data have been permanently deleted from our servers.");
+            SafeStorage.removeItem('isubnet_notes');
+            SafeStorage.removeItem('isubnet_history');
+            window.location.reload();
+            return;
+        }
+        
         btnDeleteAccount.disabled = false;
         btnDeleteAccount.textContent = 'Delete Account';
         
-        if (err.code === 'auth/requires-recent-login') {
+        if (err && err.code === 'auth/requires-recent-login') {
           alert("For security reasons, you must sign out and sign in again before you can delete your account.");
         } else {
           alert("Failed to delete account. Please try again or contact support.");
