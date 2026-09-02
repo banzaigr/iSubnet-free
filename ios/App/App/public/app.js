@@ -338,8 +338,17 @@ async function updateRevenueCatSubscriptionState() {
   try {
     const { Purchases } = window.Capacitor.Plugins;
     if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: getCustomerInfo() called`);
-    const customerInfo = await Purchases.getCustomerInfo();
-    if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: getCustomerInfo() returned active entitlements:\n` + JSON.stringify(customerInfo.entitlements ? customerInfo.entitlements.active : null, null, 2).substring(0, 3000));
+    
+    const customerInfoResult = await Purchases.getCustomerInfo();
+    
+    // LOG: Dump the ENTIRE raw getCustomerInfo() object
+    if (typeof window.debugLog === 'function') {
+       window.debugLog('RevenueCat: getCustomerInfo() RAW RESULT:\n' + JSON.stringify(customerInfoResult, null, 2).substring(0, 4000));
+    }
+    
+    // FIX: Capacitor SDK returns { customerInfo: { ... } }, so we must extract it properly
+    const customerInfo = customerInfoResult.customerInfo || customerInfoResult;
+    
     const activeEntitlements = customerInfo.entitlements ? customerInfo.entitlements.active : null;
     
 
