@@ -3444,6 +3444,25 @@ function initSettings() {
   const planPrice = document.getElementById('plan-modal-price');
   const btnPlanSelectPro = document.getElementById('btn-plan-select-pro');
 
+  // Password visibility toggle
+  const btnTogglePassword = document.getElementById('btn-toggle-password');
+  const signupPassword = document.getElementById('signup-password');
+  const iconEyeOpen = document.getElementById('icon-eye-open');
+  const iconEyeClosed = document.getElementById('icon-eye-closed');
+  if (btnTogglePassword && signupPassword && iconEyeOpen && iconEyeClosed) {
+    btnTogglePassword.addEventListener('click', () => {
+      if (signupPassword.type === 'password') {
+        signupPassword.type = 'text';
+        iconEyeOpen.style.display = 'block';
+        iconEyeClosed.style.display = 'none';
+      } else {
+        signupPassword.type = 'password';
+        iconEyeOpen.style.display = 'none';
+        iconEyeClosed.style.display = 'block';
+      }
+    });
+  }
+
   // Toggle settings panel
   if (btnSettings && modalSettings && btnSettingsClose) {
     btnSettings.addEventListener('click', () => modalSettings.classList.remove('hidden'));
