@@ -462,6 +462,7 @@ async function purchaseProductByPlan(planType) {
         applyProState();
         alert("Thank you for upgrading! iSubnet Pro unlocked.");
         closeProModal();
+        updateRevenueCatSubscriptionState();
       }
     } else {
       alert("Billing Error: No packages available in current offering.");
@@ -3592,7 +3593,25 @@ function initSettings() {
           promise = firebase.auth().signInWithEmailAndPassword(email, password);
         }
         
-        promise.then(() => {
+        promise.then(async () => {
+          if (useRevenueCat && window.Capacitor && window.Capacitor.Plugins.Purchases) {
+            btnAccountSubmit.textContent = 'Syncing account...';
+            try {
+              const user = firebase.auth().currentUser;
+              if (user) {
+                if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: Awaiting logIn({ appUserID: ${user.uid} }) in modal flow`);
+                const { Purchases } = window.Capacitor.Plugins;
+                const logInResult = await Purchases.logIn({ appUserID: user.uid });
+                if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() resolved in modal flow. Created: ${logInResult && logInResult.created ? 'true' : 'false'}`);
+                const displayName = user.displayName || user.email.split('@')[0];
+                try { await Purchases.setEmail({ email: user.email }); } catch(e) {}
+                try { await Purchases.setDisplayName({ displayName: displayName }); } catch(e) {}
+                updateRevenueCatSubscriptionState();
+              }
+            } catch (err) {
+              if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() error in modal flow: ${err.message}`);
+            }
+          }
           btnAccountSubmit.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
           btnAccountSubmit.disabled = false;
           modalAccount.classList.add('hidden');
