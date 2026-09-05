@@ -1455,6 +1455,7 @@ body.dark-mode .calc-sub-tab-btn.active {
     max-width: 720px !important;
     margin: 0 auto !important;
     width: 100% !important;
+    align-self: center !important;
     padding-bottom: 80px !important;
   }
 }
@@ -1531,6 +1532,7 @@ body.dark-mode .calc-sub-tab-btn.active {
     max-width: 720px !important;
     margin: 0 auto !important;
     width: 100% !important;
+    align-self: center !important;
   }
 
   /* Compact bottom nav */

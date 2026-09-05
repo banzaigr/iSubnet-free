@@ -306,9 +306,12 @@
     <div id="account-modal" class="pro-modal-overlay hidden">
       <div class="pro-modal" style="text-align: left; max-width: 380px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
-          <h2 id="account-modal-title" style="font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary);">Create Account</h2>
-          <button id="btn-account-close" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; outline: none;">&times;</button>
-        </div>
+            <div style="display: flex; flex-direction: column;">
+              <h2 id="account-modal-title" style="font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary);">Create Account</h2>
+              <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Sync your Pro access across devices</span>
+            </div>
+            <button id="btn-account-close" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; outline: none; align-self: flex-start;">&times;</button>
+          </div>
         <form id="form-signup" style="display: flex; flex-direction: column; gap: 14px;">
           <div class="input-group" id="signup-name-group">
             <label for="signup-name">Full Name</label>
@@ -400,6 +403,7 @@
           <a href="#" id="link-terms" style="color: var(--text-secondary); text-decoration: underline;">Terms of Use</a> &nbsp;|&nbsp; 
           <a href="#" id="link-privacy" style="color: var(--text-secondary); text-decoration: underline;">Privacy Policy</a>
         </div>
+        <button class="btn-dismiss" id="btn-pro-restore" style="width: 100%; margin-bottom: 8px; font-weight: 600;">Restore Purchases</button>
         <button class="btn-dismiss" id="btn-pro-dismiss" style="width: 100%;">Maybe Later</button>
       </div>
     </div>

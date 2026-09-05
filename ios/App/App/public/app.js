@@ -395,25 +395,7 @@ async function updateRevenueCatSubscriptionState() {
 
 async function purchaseProductByPlan(planType) {
   if (typeof window.debugLog === 'function') window.debugLog(`Button Tap: Plan selected - ${planType}`);
-  // --- AUTH GATE ---
-  if (typeof useRealFirebase !== 'undefined' && useRealFirebase) {
-    const user = typeof firebase !== 'undefined' ? firebase.auth().currentUser : null;
-    if (!user) {
-      if (typeof window.debugLog === 'function') window.debugLog(`Auth Gate check: user signed in = false, showing sign-in modal`);
-      const modalAccount = document.getElementById('account-modal');
-      const accountTitle = document.getElementById('account-modal-title');
-      if (modalAccount && accountTitle) {
-        window._pendingPurchasePlan = planType;
-        // Default message depends on current mode
-        accountTitle.textContent = typeof isSignUpMode !== 'undefined' && isSignUpMode ? 'Create an account to unlock Pro' : 'Sign in to unlock Pro';
-        
-        closeProModal();
-        modalAccount.classList.remove('hidden');
-      }
-      return;
-    }
-  }
-  // --- END AUTH GATE ---
+
   const isNative = window.Capacitor && window.Capacitor.getPlatform && (window.Capacitor.getPlatform() === 'ios' || window.Capacitor.getPlatform() === 'android');
   
   if (!isNative) {
@@ -4374,6 +4356,45 @@ function init() {
 
   const dismissBtn = document.getElementById('btn-pro-dismiss');
   if (dismissBtn) dismissBtn.addEventListener('click', closeProModal);
+
+  const restoreBtn = document.getElementById('btn-pro-restore');
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', async () => {
+      const originalText = restoreBtn.textContent;
+      restoreBtn.textContent = 'Restoring...';
+      restoreBtn.disabled = true;
+      try {
+        if (!window.Capacitor || !window.Capacitor.getPlatform || (window.Capacitor.getPlatform() !== 'ios' && window.Capacitor.getPlatform() !== 'android')) {
+          alert('Restore is only available in the native app.');
+          return;
+        }
+        const { Purchases } = window.Capacitor.Plugins;
+        if (!Purchases) {
+          alert('Purchases plugin not loaded.');
+          return;
+        }
+        
+        const result = await Purchases.restorePurchases();
+        const customerInfo = result.customerInfo || result;
+        const activeEntitlements = customerInfo?.entitlements?.active || {};
+        
+        if (Object.keys(activeEntitlements).length > 0) {
+          if (typeof window.debugLog === 'function') window.debugLog('Purchases restored successfully.');
+          await updateRevenueCatSubscriptionState();
+          alert('Your purchases have been successfully restored!');
+          closeProModal();
+        } else {
+          alert('No active purchases found to restore.');
+        }
+      } catch (err) {
+        if (typeof window.debugLog === 'function') window.debugLog(`Restore failed: ${err.message}`);
+        alert('Failed to restore purchases. Please try again.');
+      } finally {
+        restoreBtn.textContent = originalText;
+        restoreBtn.disabled = false;
+      }
+    });
+  }
 
   // Legal links bindings (Paywall)
   const linkTerms = document.getElementById('link-terms');
