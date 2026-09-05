@@ -393,6 +393,25 @@ async function updateRevenueCatSubscriptionState() {
   }
 }
 
+  async function handlePurchaseSuccess(message) {
+    await updateRevenueCatSubscriptionState();
+    closeProModal();
+    
+    let userSignedIn = false;
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      userSignedIn = !!firebase.auth().currentUser;
+    }
+    
+    if (typeof useRealFirebase !== 'undefined' && useRealFirebase && !userSignedIn) {
+      const nudgeModal = document.getElementById('sync-nudge-modal');
+      if (nudgeModal) {
+        nudgeModal.classList.remove('hidden');
+        return; // skip traditional alert
+      }
+    }
+    alert(message);
+  }
+
 async function purchaseProductByPlan(planType) {
   if (typeof window.debugLog === 'function') window.debugLog(`Button Tap: Plan selected - ${planType}`);
 
@@ -442,11 +461,9 @@ async function purchaseProductByPlan(planType) {
         window.debugLog(`RevenueCat: purchasePackage() RAW RESULT for ${packageToBuy.identifier}:\n` + JSON.stringify(purchaseResult, null, 2).substring(0, 4000));
       }
       
-      if (isProEntitlementActive(purchaseResult.customerInfo.entitlements.active)) {
-        alert("Thank you for upgrading! iSubnet Pro unlocked.");
-        closeProModal();
-        updateRevenueCatSubscriptionState();
-      }
+        if (isProEntitlementActive(purchaseResult.customerInfo.entitlements.active)) {
+          await handlePurchaseSuccess("Thank you for upgrading! iSubnet Pro unlocked.");
+        }
     } else {
       alert("Billing Error: No packages available in current offering.");
     }
@@ -3568,6 +3585,40 @@ function initSettings() {
     });
   }
 
+    const btnNudgeDismiss = document.getElementById('btn-nudge-dismiss');
+    if (btnNudgeDismiss) {
+      btnNudgeDismiss.addEventListener('click', () => {
+        const nudgeModal = document.getElementById('sync-nudge-modal');
+        if (nudgeModal) nudgeModal.classList.add('hidden');
+      });
+    }
+
+    const btnNudgeCreate = document.getElementById('btn-nudge-create');
+    if (btnNudgeCreate) {
+      btnNudgeCreate.addEventListener('click', () => {
+        const nudgeModal = document.getElementById('sync-nudge-modal');
+        if (nudgeModal) nudgeModal.classList.add('hidden');
+        
+        if (modalAccount) {
+          isSignUpMode = true; // Force sign up mode for the nudge
+          const accountModalTitle = document.getElementById('account-modal-title');
+          if (accountModalTitle) accountModalTitle.textContent = 'Create Account';
+          
+          const nameGroup = document.getElementById('signup-name-group');
+          const nameInput = document.getElementById('signup-name');
+          const submitBtn = document.getElementById('btn-account-submit');
+          const toggleAuth = document.getElementById('link-toggle-auth');
+          
+          if (nameGroup) nameGroup.style.display = 'block';
+          if (nameInput) nameInput.setAttribute('required', 'true');
+          if (submitBtn) submitBtn.textContent = 'Sign Up';
+          if (toggleAuth) toggleAuth.textContent = 'Already have an account? Sign In';
+          
+          modalAccount.classList.remove('hidden');
+        }
+      });
+    }
+
   if (formSignup) {
     formSignup.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -4380,9 +4431,7 @@ function init() {
         
         if (Object.keys(activeEntitlements).length > 0) {
           if (typeof window.debugLog === 'function') window.debugLog('Purchases restored successfully.');
-          await updateRevenueCatSubscriptionState();
-          alert('Your purchases have been successfully restored!');
-          closeProModal();
+          await handlePurchaseSuccess('Your purchases have been successfully restored!');
         } else {
           alert('No active purchases found to restore.');
         }

@@ -263,7 +263,7 @@
 
         <!-- App Version Footer -->
         <div style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.1.13 (Build 63)
+          iSubnet v1.1.13 (Build 64)
         </div>
       </div>
     </div>
@@ -299,6 +299,19 @@
           </div>
           <button type="submit" class="btn-primary" style="padding: 12px; font-size: 14px; font-weight: 600; width: 100%;">Submit Feedback</button>
         </form>
+      </div>
+    </div>
+
+    <!-- Sync Nudge Modal -->
+    <div id="sync-nudge-modal" class="pro-modal-overlay hidden" style="z-index: 10000;">
+      <div class="pro-modal" style="text-align: center; max-width: 340px; padding: 24px;">
+        <div style="font-size: 40px; margin-bottom: 12px;">🎉</div>
+        <h2 style="font-size: 20px; font-weight: 700; margin: 0 0 10px; color: var(--text-primary);">You're Pro!</h2>
+        <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 20px; line-height: 1.5;">Want to keep Pro on your other devices too?<br><br>Create a free account to sync your purchase securely across iOS and Android.</p>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button class="btn-primary" id="btn-nudge-create" style="width: 100%; padding: 12px; font-weight: 600;">Create Account</button>
+          <button class="btn-dismiss" id="btn-nudge-dismiss" style="width: 100%; font-weight: 600;">Maybe Later</button>
+        </div>
       </div>
     </div>
 
