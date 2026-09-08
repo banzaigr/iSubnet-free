@@ -4408,42 +4408,46 @@ function init() {
   const dismissBtn = document.getElementById('btn-pro-dismiss');
   if (dismissBtn) dismissBtn.addEventListener('click', closeProModal);
 
-  const restoreBtn = document.getElementById('btn-pro-restore');
-  if (restoreBtn) {
-    restoreBtn.addEventListener('click', async () => {
-      const originalText = restoreBtn.textContent;
-      restoreBtn.textContent = 'Restoring...';
-      restoreBtn.disabled = true;
-      try {
-        if (!window.Capacitor || !window.Capacitor.getPlatform || (window.Capacitor.getPlatform() !== 'ios' && window.Capacitor.getPlatform() !== 'android')) {
-          alert('Restore is only available in the native app.');
-          return;
-        }
-        const { Purchases } = window.Capacitor.Plugins;
-        if (!Purchases) {
-          alert('Purchases plugin not loaded.');
-          return;
-        }
-        
-        const result = await Purchases.restorePurchases();
-        const customerInfo = result.customerInfo || result;
-        const activeEntitlements = customerInfo?.entitlements?.active || {};
-        
-        if (Object.keys(activeEntitlements).length > 0) {
-          if (typeof window.debugLog === 'function') window.debugLog('Purchases restored successfully.');
-          await handlePurchaseSuccess('Your purchases have been successfully restored!');
-        } else {
-          alert('No active purchases found to restore.');
-        }
-      } catch (err) {
-        if (typeof window.debugLog === 'function') window.debugLog(`Restore failed: ${err.message}`);
-        alert('Failed to restore purchases. Please try again.');
-      } finally {
-        restoreBtn.textContent = originalText;
-        restoreBtn.disabled = false;
+  async function restorePurchasesFlow(btnElement) {
+    if (!btnElement) return;
+    const originalText = btnElement.textContent;
+    btnElement.textContent = 'Restoring...';
+    btnElement.disabled = true;
+    try {
+      if (!window.Capacitor || !window.Capacitor.getPlatform || (window.Capacitor.getPlatform() !== 'ios' && window.Capacitor.getPlatform() !== 'android')) {
+        alert('Restore is only available in the native app.');
+        return;
       }
-    });
+      const { Purchases } = window.Capacitor.Plugins;
+      if (!Purchases) {
+        alert('Purchases plugin not loaded.');
+        return;
+      }
+      
+      const result = await Purchases.restorePurchases();
+      const customerInfo = result.customerInfo || result;
+      const activeEntitlements = customerInfo?.entitlements?.active || {};
+      
+      if (Object.keys(activeEntitlements).length > 0) {
+        if (typeof window.debugLog === 'function') window.debugLog('Purchases restored successfully.');
+        await handlePurchaseSuccess('Your purchases have been successfully restored!');
+      } else {
+        alert('No active purchases found to restore.');
+      }
+    } catch (err) {
+      if (typeof window.debugLog === 'function') window.debugLog(`Restore failed: ${err.message}`);
+      alert('Failed to restore purchases. Please try again.');
+    } finally {
+      btnElement.textContent = originalText;
+      btnElement.disabled = false;
+    }
   }
+
+  const restoreBtn = document.getElementById('btn-pro-restore');
+  if (restoreBtn) restoreBtn.addEventListener('click', () => restorePurchasesFlow(restoreBtn));
+
+  const settingsRestoreBtn = document.getElementById('btn-settings-restore');
+  if (settingsRestoreBtn) settingsRestoreBtn.addEventListener('click', () => restorePurchasesFlow(settingsRestoreBtn));
 
   // Legal links bindings (Paywall)
   const linkTerms = document.getElementById('link-terms');
