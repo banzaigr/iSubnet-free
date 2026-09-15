@@ -1474,6 +1474,26 @@ function addNote(title, content, category = 'Manual') {
   saveNoteToFirebase(newNote);
 }
 
+let autoSaveFullSplitTimeout = null;
+function triggerFullSplitAutoSave(title, content, category) {
+  if (autoSaveFullSplitTimeout) clearTimeout(autoSaveFullSplitTimeout);
+  autoSaveFullSplitTimeout = setTimeout(() => {
+    // Upsert logic
+    const existingIndex = notes.findIndex(n => n.title === title);
+    if (existingIndex !== -1) {
+      notes[existingIndex].content = content;
+      notes[existingIndex].date = new Date().toLocaleString();
+      // Move to top
+      const updatedNote = notes.splice(existingIndex, 1)[0];
+      notes.unshift(updatedNote);
+      saveNotesToStorage();
+      saveNoteToFirebase(updatedNote);
+    } else {
+      addNote(title, content, category);
+    }
+  }, 800);
+}
+
 function deleteNote(id) {
   notes = notes.filter(n => n.id !== id);
   saveNotesToStorage();
@@ -3018,7 +3038,10 @@ function runSplitter() {
       const targetBitInBlock = targetCidr - (blockIdx * 16);
       const increment = Math.pow(2, 16 - targetBitInBlock);
       
-      for (let i = 0; i < maxRender; i++) {
+      const FULL_SPLIT_SAVE_CAP = 20000;
+      const generateLimit = subnetsCount <= FULL_SPLIT_SAVE_CAP ? subnetsCount : maxRender;
+      
+      for (let i = 0; i < generateLimit; i++) {
         const subnetNetBlocks = [];
         for (let k = 0; k < 8; k++) {
           subnetNetBlocks.push(baseNetworkBlocks[k]);
@@ -3056,8 +3079,21 @@ function runSplitter() {
       }
       
       if (subnetsCount > maxRender) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).</td></tr>`;
+        let warningMsg = `Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).`;
+        if (subnetsCount <= FULL_SPLIT_SAVE_CAP) {
+          warningMsg = `Showing first ${maxRender} of ${subnetsCount} subnets — full list saved to Notes.`;
+          const title = `Full Split: ${baseIp}/${baseCidr} → /${targetCidr}`;
+          const content = formatFullSplitResults(subnets, baseIp, baseCidr, targetCidr, true);
+          triggerFullSplitAutoSave(title, content, 'IPv6');
+        } else {
+          warningMsg += " (too many to save in full — narrow the target prefix to save the complete list)";
+        }
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">${warningMsg}</td></tr>`;
       }
+      
+      // Trim subnets for UI rendering
+      const subnetsToRender = subnets.slice(0, maxRender);
+      subnets = subnetsToRender;
     } else {
       const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
       if (hostsText === '') return;
@@ -3175,7 +3211,10 @@ function runSplitter() {
       const subnetsSize = Math.pow(2, 32 - targetCidr);
       const maxRender = Math.min(subnetsCount, 128);
       
-      for (let i = 0; i < maxRender; i++) {
+      const FULL_SPLIT_SAVE_CAP = 20000;
+      const generateLimit = subnetsCount <= FULL_SPLIT_SAVE_CAP ? subnetsCount : maxRender;
+      
+      for (let i = 0; i < generateLimit; i++) {
         const netVal = (baseNetworkVal + (i * subnetsSize)) >>> 0;
         const broadVal = (netVal + subnetsSize - 1) >>> 0;
         const rangeText = targetCidr === 32 ? uint32ToIp(netVal) : 
@@ -3195,8 +3234,21 @@ function runSplitter() {
       }
       
       if (subnetsCount > maxRender) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).</td></tr>`;
+        let warningMsg = `Warning: Only first ${maxRender} subnets rendered (out of ${subnetsCount} total).`;
+        if (subnetsCount <= FULL_SPLIT_SAVE_CAP) {
+          warningMsg = `Showing first ${maxRender} of ${subnetsCount} subnets — full list saved to Notes.`;
+          const title = `Full Split: ${baseIp}/${baseCidr} → /${targetCidr}`;
+          const content = formatFullSplitResults(subnets, baseIp, baseCidr, targetCidr, false);
+          triggerFullSplitAutoSave(title, content, 'IPv4');
+        } else {
+          warningMsg += " (too many to save in full — narrow the target prefix to save the complete list)";
+        }
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 12px 0;">${warningMsg}</td></tr>`;
       }
+      
+      // Trim subnets for UI rendering
+      const subnetsToRender = subnets.slice(0, maxRender);
+      subnets = subnetsToRender;
     } else {
       const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
       if (hostsText === '') return;
@@ -3268,6 +3320,15 @@ function runSplitter() {
 }
 
 
+
+function formatFullSplitResults(subnetsArray, baseIp, baseCidr, targetCidr, isV6) {
+  const method = 'Equal Split (FLSM)';
+  let content = `Subnet Split Results (${method}) — FULL LIST:\nBase Network: ${baseIp}/${baseCidr}\nTarget Prefix: /${targetCidr}\nTotal Subnets: ${subnetsArray.length}\n\nAllocated Subnets:\n`;
+  subnetsArray.forEach(sub => {
+    content += `• ${sub.name}: ${sub.network} /${sub.cidr} | Range: ${sub.range.replace('\n', ' ')} | Usable Hosts: ${sub.hosts}\n`;
+  });
+  return content;
+}
 
 function getFormattedSplitOutput() {
   const baseIp = document.getElementById('split-base-ip').value.trim();
@@ -4213,7 +4274,7 @@ function initQuickPaste() {
   const pasteSplit = document.getElementById('btn-paste-split');
   if (pasteSplit) {
     pasteSplit.addEventListener('click', () => {
-      pasteFromClipboard('split-base-ip', runSplitter);
+      pasteFromClipboard('split-base-ip', handleAppSplitIpChange);
     });
   }
 
