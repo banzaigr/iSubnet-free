@@ -233,6 +233,85 @@ function clearHistoryFromFirebase() {
 // --- RevenueCat SDK integration ---
 let useRevenueCat = false;
 
+let _calcV4LogTimeout = null;
+function logCalcV4Debounced() {
+  if (!window.APP_DEBUG_ENABLED) return;
+  if (_calcV4LogTimeout) clearTimeout(_calcV4LogTimeout);
+  _calcV4LogTimeout = setTimeout(() => {
+    const errorEl = document.getElementById('ipv4-error');
+    const errText = errorEl ? errorEl.textContent : '';
+    const addr = document.getElementById('ipv4-address').value;
+    const cidr = document.getElementById('ipv4-cidr').value;
+    if (errText) {
+      window.debugLog(`IPv4 Calculate: input="${addr}" ERROR: ${errText}`);
+    } else {
+      const resultsCard = document.getElementById('ipv4-results');
+      if (resultsCard && !resultsCard.classList.contains('hidden')) {
+        window.debugLog(`IPv4 Calculate: input="${addr}" cidr="${cidr}" -> success`);
+      }
+    }
+  }, 800);
+}
+
+let _calcV6LogTimeout = null;
+function logCalcV6Debounced() {
+  if (!window.APP_DEBUG_ENABLED) return;
+  if (_calcV6LogTimeout) clearTimeout(_calcV6LogTimeout);
+  _calcV6LogTimeout = setTimeout(() => {
+    const errorEl = document.getElementById('ipv6-error');
+    const errText = errorEl ? errorEl.textContent : '';
+    const addr = document.getElementById('ipv6-address').value;
+    const cidr = document.getElementById('ipv6-cidr').value;
+    if (errText) {
+      window.debugLog(`IPv6 Calculate: input="${addr}" ERROR: ${errText}`);
+    } else {
+      const resultsCard = document.getElementById('ipv6-results');
+      if (resultsCard && !resultsCard.classList.contains('hidden')) {
+        window.debugLog(`IPv6 Calculate: input="${addr}" cidr="${cidr}" -> success`);
+      }
+    }
+  }, 800);
+}
+
+let _splitterLogTimeout = null;
+function logSplitterDebounced() {
+  if (!window.APP_DEBUG_ENABLED) return;
+  if (_splitterLogTimeout) clearTimeout(_splitterLogTimeout);
+  _splitterLogTimeout = setTimeout(() => {
+    const errorEl = document.getElementById('split-error');
+    const errText = errorEl ? errorEl.textContent : '';
+    const baseIp = document.getElementById('split-base-ip').value;
+    const baseCidr = document.getElementById('split-base-cidr').value;
+    if (errText) {
+      window.debugLog(`Splitter: base="${baseIp}/${baseCidr}" ERROR: ${errText}`);
+    } else {
+      const resultsCard = document.getElementById('split-results');
+      if (resultsCard && !resultsCard.classList.contains('hidden')) {
+        window.debugLog(`Splitter: base="${baseIp}/${baseCidr}" -> success`);
+      }
+    }
+  }, 800);
+}
+
+let _converterLogTimeout = null;
+function logConverterDebounced() {
+  if (!window.APP_DEBUG_ENABLED) return;
+  if (_converterLogTimeout) clearTimeout(_converterLogTimeout);
+  _converterLogTimeout = setTimeout(() => {
+    const errorEl = document.getElementById('converter-error');
+    const errText = errorEl ? errorEl.textContent : '';
+    const input = document.getElementById('converter-input').value;
+    if (errText) {
+      window.debugLog(`Converter: input="${input}" ERROR: ${errText}`);
+    } else {
+      const resultsDiv = document.getElementById('converter-results');
+      if (resultsDiv && !resultsDiv.classList.contains('hidden')) {
+        window.debugLog(`Converter: input="${input}" -> success`);
+      }
+    }
+  }, 800);
+}
+
 let _cachedRevenueCatAppUserId = null;
 
 async function getRevenueCatAppUserId() {
@@ -831,6 +910,7 @@ function validateIPv4(ipStr) {
 
 // Perform calculations for IPv4
 function calculateIPv4() {
+  logCalcV4Debounced();
   let ipInput = document.getElementById('ipv4-address').value.trim();
   
   if (ipInput.includes('/')) {
@@ -1334,6 +1414,7 @@ function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
 }
 
 function calculateIPv6() {
+  logCalcV6Debounced();
   let ipInput = document.getElementById('ipv6-address').value.trim();
   
   if (ipInput.includes('/')) {
@@ -2572,6 +2653,7 @@ function updateConvHosts(cidr, isV6) {
 }
 
 function runConverter() {
+  logConverterDebounced();
   const inputEl = document.getElementById('converter-input');
   if (!inputEl) return;
   const input = inputEl.value.trim();
@@ -3027,6 +3109,7 @@ function blocksToIpStr(blocks) {
 }
 
 function runSplitter() {
+  logSplitterDebounced();
   const baseIpEl = document.getElementById('split-base-ip');
   const baseCidrEl = document.getElementById('split-base-cidr');
   const errorEl = document.getElementById('split-error');
