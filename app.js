@@ -3098,7 +3098,7 @@ function runSplitter() {
       const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
       if (hostsText === '') return;
       
-      const reqSizes = hostsText.split(',')
+      const reqSizes = hostsText.split(/[,\s]+/)
                                .map(s => parseInt(s.trim(), 10))
                                .filter(n => !isNaN(n) && n > 0);
       if (reqSizes.length === 0) return;
@@ -3253,7 +3253,7 @@ function runSplitter() {
       const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
       if (hostsText === '') return;
       
-      const reqSizes = hostsText.split(',')
+      const reqSizes = hostsText.split(/[,\s]+/)
                                .map(s => parseInt(s.trim(), 10))
                                .filter(n => !isNaN(n) && n > 0);
       if (reqSizes.length === 0) return;

@@ -459,7 +459,7 @@
                   </button>
                 </div>
               </div>
-              <input type="text" id="ipv4-address" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
+              <input type="text" id="ipv4-address" inputmode="decimal" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
               <span class="error-msg" id="ipv4-error"></span>
             </div>
 
@@ -642,7 +642,7 @@
 
             <div class="input-group">
               <label for="ipv6-hosts">Required Hosts (Optional)</label>
-              <input type="text" id="ipv6-hosts" placeholder="e.g. 18446744073709551616">
+              <input type="text" id="ipv6-hosts" inputmode="numeric" placeholder="e.g. 18446744073709551616">
             </div>
           </div>
 
@@ -810,8 +810,8 @@
           <!-- Panel for VLSM Method -->
           <div id="split-vlsm-panel" class="hidden" style="margin-top: 15px;">
             <div class="input-group">
-              <label for="split-vlsm-hosts">Required Host Sizes (comma-separated):</label>
-              <input type="text" id="split-vlsm-hosts" placeholder="e.g. 50, 30, 10, 2" value="50, 30, 10, 2">
+              <label for="split-vlsm-hosts">Required Host Sizes (comma or space-separated):</label>
+              <input type="text" id="split-vlsm-hosts" inputmode="numeric" placeholder="e.g. 50 30 10 2" value="50, 30, 10, 2">
               <p class="helper-text" style="margin-top: 5px;">Enter hosts needed for each subnet, separated by commas.</p>
             </div>
           </div>
@@ -982,7 +982,7 @@
                 Copy
               </button>
             </div>
-            <input type="text" id="base-bin-input" placeholder="e.g. 11001010" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <input type="text" id="base-bin-input" inputmode="numeric" placeholder="e.g. 11001010" autocomplete="off" spellcheck="false" style="font-family: monospace;">
             <span class="error-msg" id="base-bin-error"></span>
           </div>
 
@@ -998,7 +998,7 @@
                 Copy
               </button>
             </div>
-            <input type="text" id="base-oct-input" placeholder="e.g. 312" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <input type="text" id="base-oct-input" inputmode="numeric" placeholder="e.g. 312" autocomplete="off" spellcheck="false" style="font-family: monospace;">
             <span class="error-msg" id="base-oct-error"></span>
           </div>
 
@@ -1014,7 +1014,7 @@
                 Copy
               </button>
             </div>
-            <input type="text" id="base-dec-input" placeholder="e.g. 202" autocomplete="off" spellcheck="false" style="font-family: monospace;">
+            <input type="text" id="base-dec-input" inputmode="numeric" placeholder="e.g. 202" autocomplete="off" spellcheck="false" style="font-family: monospace;">
             <span class="error-msg" id="base-dec-error"></span>
           </div>
 
