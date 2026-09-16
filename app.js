@@ -4386,6 +4386,27 @@ function init() {
   const btnDebugInfo = document.getElementById('btn-debug-info');
   const btnDebugClear = document.getElementById('btn-debug-clear');
   
+  // --- Hidden Debug Logging reveal gesture ---
+  let debugRevealTapCount = 0;
+  let debugRevealTapTimer = null;
+  const versionFooter = document.getElementById('settings-version-footer');
+  const debugRow = document.getElementById('debug-logging-row');
+  if (versionFooter && debugRow) {
+    versionFooter.addEventListener('click', () => {
+      debugRevealTapCount++;
+      if (debugRevealTapTimer) clearTimeout(debugRevealTapTimer);
+      debugRevealTapTimer = setTimeout(() => { debugRevealTapCount = 0; }, 3000);
+      if (debugRevealTapCount >= 7) {
+        debugRevealTapCount = 0;
+        clearTimeout(debugRevealTapTimer);
+        debugRow.classList.toggle('hidden');
+        if (typeof window.debugLog === 'function') {
+          window.debugLog(debugRow.classList.contains('hidden') ? 'Debug Logging row hidden via gesture' : 'Debug Logging row revealed via gesture');
+        }
+      }
+    });
+  }
+
   if (chkDebugLog) {
     chkDebugLog.checked = window.APP_DEBUG_ENABLED;
     chkDebugLog.addEventListener('change', (e) => {
