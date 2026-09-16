@@ -233,6 +233,8 @@ function clearHistoryFromFirebase() {
 // --- RevenueCat SDK integration ---
 let useRevenueCat = false;
 
+let _cachedRevenueCatAppUserId = null;
+
 async function getRevenueCatAppUserId() {
   try {
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases) {
@@ -248,34 +250,35 @@ async function getRevenueCatAppUserId() {
 
 async function refreshDebugUserIdDisplay() {
   const userIdRow = document.getElementById('debug-userid-row');
-  const userIdValue = document.getElementById('debug-userid-value');
-  if (!userIdRow || !userIdValue) return;
+  const userIdStatus = document.getElementById('debug-userid-status');
+  if (!userIdRow || !userIdStatus) return;
 
   if (!window.APP_DEBUG_ENABLED) {
     userIdRow.classList.add('hidden');
+    _cachedRevenueCatAppUserId = null;
     return;
   }
   userIdRow.classList.remove('hidden');
-  userIdValue.textContent = 'Loading...';
+  userIdStatus.textContent = 'Loading...';
   const appUserId = await getRevenueCatAppUserId();
-  userIdValue.textContent = appUserId || 'Unavailable (RevenueCat not ready yet)';
+  _cachedRevenueCatAppUserId = appUserId;
+  userIdStatus.textContent = appUserId ? 'Tap to copy' : 'Unavailable';
   if (appUserId && typeof window.debugLog === 'function') {
     window.debugLog(`RevenueCat App User ID: ${appUserId}`);
   }
 }
 window.refreshDebugUserIdDisplay = refreshDebugUserIdDisplay;
 
-const userIdValueEl = document.getElementById('debug-userid-value');
-if (userIdValueEl) {
-  userIdValueEl.addEventListener('click', async () => {
-    const text = userIdValueEl.textContent;
-    if (!text || text === 'Loading...' || text.startsWith('Unavailable')) return;
+const userIdRowEl = document.getElementById('debug-userid-row');
+if (userIdRowEl) {
+  userIdRowEl.addEventListener('click', async () => {
+    if (!_cachedRevenueCatAppUserId) return;
     try {
       const { Clipboard } = window.Capacitor.Plugins;
-      await Clipboard.write({ string: text });
+      await Clipboard.write({ string: _cachedRevenueCatAppUserId });
       alert('User ID copied to clipboard.');
     } catch (e) {
-      alert('Could not copy automatically. Long-press the ID above to select and copy it manually.');
+      alert('Could not copy automatically.');
       if (typeof window.debugLog === 'function') window.debugLog(`Clipboard copy failed: ${e.message}`);
     }
   });
@@ -4454,6 +4457,9 @@ function init() {
 
   if (chkDebugLog) {
     chkDebugLog.checked = window.APP_DEBUG_ENABLED;
+    if (window.APP_DEBUG_ENABLED && debugRow) {
+      debugRow.classList.remove('hidden');
+    }
     chkDebugLog.addEventListener('change', (e) => {
       window.APP_DEBUG_ENABLED = e.target.checked;
       SafeStorage.setItem('isubnet_debug', window.APP_DEBUG_ENABLED ? 'true' : 'false');
@@ -4470,6 +4476,7 @@ function init() {
         debugLog("=== DEBUG LOGGING DISABLED ===");
         window.APP_DEBUG_CURRENT_NOTE_ID = null;
         SafeStorage.removeItem('isubnet_debug_note_id');
+        if (debugRow) debugRow.classList.add('hidden');
       }
       refreshDebugUserIdDisplay();
     });
