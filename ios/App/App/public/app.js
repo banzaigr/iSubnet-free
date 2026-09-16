@@ -151,16 +151,21 @@ function syncNotesToFirebase() {
   if (!useRealFirebase) return;
   const user = firebase.auth().currentUser;
   if (!user) return;
-  
+
   db.collection("users").doc(user.uid).collection("notes").get().then(snapshot => {
     const remoteNotes = [];
     snapshot.forEach(doc => {
       remoteNotes.push({ id: doc.id, ...doc.data() });
     });
     if (remoteNotes.length > 0) {
-      // Sort by ID descending (timestamp) to display latest first
-      remoteNotes.sort((a, b) => b.id.localeCompare(a.id));
-      notes = remoteNotes;
+      const merged = [...remoteNotes];
+      notes.forEach(localNote => {
+        if (!merged.find(n => n.id === localNote.id)) {
+          merged.push(localNote); // keep local-only notes not yet synced
+        }
+      });
+      merged.sort((a, b) => b.id.localeCompare(a.id));
+      notes = merged;
       saveNotesToStorage();
       renderNotes();
     }
@@ -227,6 +232,54 @@ function clearHistoryFromFirebase() {
 
 // --- RevenueCat SDK integration ---
 let useRevenueCat = false;
+
+async function getRevenueCatAppUserId() {
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases) {
+      const { Purchases } = window.Capacitor.Plugins;
+      const result = await Purchases.getAppUserID();
+      return result && result.appUserID ? result.appUserID : null;
+    }
+  } catch (e) {
+    if (typeof window.debugLog === 'function') window.debugLog(`ERROR in getRevenueCatAppUserId: ${e.message}`);
+  }
+  return null;
+}
+
+async function refreshDebugUserIdDisplay() {
+  const userIdRow = document.getElementById('debug-userid-row');
+  const userIdValue = document.getElementById('debug-userid-value');
+  if (!userIdRow || !userIdValue) return;
+
+  if (!window.APP_DEBUG_ENABLED) {
+    userIdRow.classList.add('hidden');
+    return;
+  }
+  userIdRow.classList.remove('hidden');
+  userIdValue.textContent = 'Loading...';
+  const appUserId = await getRevenueCatAppUserId();
+  userIdValue.textContent = appUserId || 'Unavailable (RevenueCat not ready yet)';
+  if (appUserId && typeof window.debugLog === 'function') {
+    window.debugLog(`RevenueCat App User ID: ${appUserId}`);
+  }
+}
+window.refreshDebugUserIdDisplay = refreshDebugUserIdDisplay;
+
+const userIdValueEl = document.getElementById('debug-userid-value');
+if (userIdValueEl) {
+  userIdValueEl.addEventListener('click', async () => {
+    const text = userIdValueEl.textContent;
+    if (!text || text === 'Loading...' || text.startsWith('Unavailable')) return;
+    try {
+      const { Clipboard } = window.Capacitor.Plugins;
+      await Clipboard.write({ string: text });
+      alert('User ID copied to clipboard.');
+    } catch (e) {
+      alert('Could not copy automatically. Long-press the ID above to select and copy it manually.');
+      if (typeof window.debugLog === 'function') window.debugLog(`Clipboard copy failed: ${e.message}`);
+    }
+  });
+}
 
 async function initRevenueCat() {
   if (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases) {
@@ -3465,22 +3518,14 @@ function setThemeColor(color) {
 }
 
 function updateNativeStatusBar(isDark) {
-  setTimeout(() => {
-    try {
-      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
-        const StatusBar = window.Capacitor.Plugins.StatusBar;
-        if (isDark) {
-          StatusBar.setStyle({ style: 'DARK' });
-          StatusBar.setBackgroundColor({ color: '#0f1524' });
-        } else {
-          StatusBar.setStyle({ style: 'LIGHT' });
-          StatusBar.setBackgroundColor({ color: '#f8fafc' });
-        }
-      }
-    } catch (e) {
-      console.error('Failed to update native StatusBar', e);
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SystemBars) {
+      const SystemBars = window.Capacitor.Plugins.SystemBars;
+      SystemBars.setStyle({ style: isDark ? 'DARK' : 'LIGHT' });
     }
-  }, 300);
+  } catch (e) {
+    console.error('Failed to update native SystemBars', e);
+  }
 }
 
 function initSettings() {
@@ -4412,7 +4457,7 @@ function init() {
     chkDebugLog.addEventListener('change', (e) => {
       window.APP_DEBUG_ENABLED = e.target.checked;
       SafeStorage.setItem('isubnet_debug', window.APP_DEBUG_ENABLED ? 'true' : 'false');
-      
+
       if (window.APP_DEBUG_ENABLED) {
         window.APP_DEBUG_START_TIME = Date.now();
         SafeStorage.setItem('isubnet_debug_start', window.APP_DEBUG_START_TIME.toString());
@@ -4426,6 +4471,7 @@ function init() {
         window.APP_DEBUG_CURRENT_NOTE_ID = null;
         SafeStorage.removeItem('isubnet_debug_note_id');
       }
+      refreshDebugUserIdDisplay();
     });
   }
   
@@ -4446,6 +4492,7 @@ function init() {
 
   initSettings();
   setTimeout(initRevenueCat, 800);
+  setTimeout(refreshDebugUserIdDisplay, 1200);
   setupTabNavigation();
   initQuickPaste();
   setupEventListeners();

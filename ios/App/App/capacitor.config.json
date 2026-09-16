@@ -15,11 +15,11 @@
 	},
 	"packageClassList": [
 		"CAPBrowserPlugin",
+		"ClipboardPlugin",
 		"FilesystemPlugin",
 		"PreferencesPlugin",
 		"SharePlugin",
 		"SplashScreenPlugin",
-		"StatusBarPlugin",
 		"PurchasesPlugin"
 	]
 }
