@@ -269,7 +269,7 @@
 
         <!-- App Version Footer -->
         <div id="settings-version-footer" style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.1.15 (Build 70)
+          iSubnet v1.1.15 (Build 71)
         </div>
         </div>
       </div>
@@ -463,7 +463,7 @@
                   </button>
                 </div>
               </div>
-              <input type="text" id="ipv4-address" inputmode="decimal" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
+              <input type="text" id="ipv4-address" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. 192.168.1.1" value="192.168.1.1">
               <span class="error-msg" id="ipv4-error"></span>
             </div>
 
@@ -490,7 +490,7 @@
           <div id="ipv4-bulk-panel" class="hidden">
             <div class="input-group">
               <label for="ipv4-bulk-input">IP Addresses (one per line or comma separated, e.g. 10.0.0.1/24)</label>
-              <textarea id="ipv4-bulk-input" rows="5" placeholder="192.168.1.1/24&#10;10.0.0.5/8&#10;172.16.1.10/16" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <textarea id="ipv4-bulk-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="5" placeholder="192.168.1.1/24&#10;10.0.0.5/8&#10;172.16.1.10/16" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
               <span class="error-msg" id="ipv4-bulk-error"></span>
             </div>
             <button id="btn-calc-bulk-ipv4" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
@@ -654,7 +654,7 @@
           <div id="ipv6-bulk-panel" class="hidden">
             <div class="input-group">
               <label for="ipv6-bulk-input">IPv6 Addresses (one per line or comma separated, e.g. 2001:db8::/64)</label>
-              <textarea id="ipv6-bulk-input" rows="5" placeholder="2001:db8::/64&#10;fe80::1/10&#10;2001:db8:a::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <textarea id="ipv6-bulk-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="5" placeholder="2001:db8::/64&#10;fe80::1/10&#10;2001:db8:a::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
               <span class="error-msg" id="ipv6-bulk-error"></span>
             </div>
             <button id="btn-calc-bulk-ipv6" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
@@ -815,7 +815,7 @@
           <div id="split-vlsm-panel" class="hidden" style="margin-top: 15px;">
             <div class="input-group">
               <label for="split-vlsm-hosts">Required Host Sizes (comma or space-separated):</label>
-              <input type="text" id="split-vlsm-hosts" inputmode="numeric" placeholder="e.g. 50 30 10 2" value="50, 30, 10, 2">
+              <input type="text" id="split-vlsm-hosts" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. 50 30 10 2" value="50, 30, 10, 2">
               <p class="helper-text" style="margin-top: 5px;">Enter hosts needed for each subnet, separated by commas.</p>
             </div>
           </div>
@@ -883,7 +883,7 @@
                 </button>
               </div>
             </div>
-            <input type="text" id="converter-input" placeholder="e.g. /22 or 0.0.3.255" value="/24">
+            <input type="text" id="converter-input" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. /22 or 0.0.3.255" value="/24">
             <span class="error-msg" id="converter-error"></span>
           </div>
 
