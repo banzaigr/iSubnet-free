@@ -269,7 +269,7 @@
 
         <!-- App Version Footer -->
         <div id="settings-version-footer" style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.1.16 (Build 72)
+          iSubnet v1.1.16 (Build 73)
         </div>
         </div>
       </div>
@@ -790,7 +790,7 @@
           <div class="input-group" style="margin-top: 10px;">
             <label>Split Mode</label>
             <div class="segmented-control" style="display: flex; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 3px; margin-top: 5px;">
-              <button class="method-btn active" data-method="equal" style="flex: 1; background: var(--card-bg); border: none; border-radius: 6px; padding: 6px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">Equal Split (FLSM)</button>
+              <button class="method-btn active" data-method="equal" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 6px; color: var(--accent-primary); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s ease;">Equal Split (FLSM)</button>
               <button class="method-btn" data-method="vlsm" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 6px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s ease;">Host Count (VLSM)</button>
             </div>
           </div>
@@ -814,7 +814,13 @@
           <!-- Panel for VLSM Method -->
           <div id="split-vlsm-panel" class="hidden" style="margin-top: 15px;">
             <div class="input-group">
-              <label for="split-vlsm-hosts">Required Host Sizes (comma or space-separated):</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <label for="split-vlsm-hosts" style="margin: 0;">Required Host Sizes (comma or space-separated):</label>
+                <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                  <button type="button" class="btn-adjust" style="width: 26px; height: 26px; font-size: 14px;" onclick="insertAtCursor('split-vlsm-hosts', ',')" title="Insert comma">,</button>
+                  <button type="button" class="btn-adjust" style="width: 26px; height: 26px; font-size: 11px;" onclick="insertAtCursor('split-vlsm-hosts', ' ')" title="Insert space">␣</button>
+                </div>
+              </div>
               <input type="text" id="split-vlsm-hosts" inputmode="decimal" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. 50 30 10 2" value="50, 30, 10, 2">
               <p class="helper-text" style="margin-top: 5px;">Enter hosts needed for each subnet, separated by commas.</p>
             </div>
@@ -883,7 +889,7 @@
                 </button>
               </div>
             </div>
-            <input type="text" id="converter-input" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. /22 or 0.0.3.255" value="/24">
+            <input type="text" id="converter-input" inputmode="decimal" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. /22 or 0.0.3.255" value="/24">
             <span class="error-msg" id="converter-error"></span>
           </div>
 
@@ -903,10 +909,6 @@
             <div class="conv-result-row">
               <span class="conv-result-label">Wildcard Mask</span>
               <span class="conv-result-val" id="conv-wildcard">0.0.0.255</span>
-            </div>
-            <div class="conv-result-row" id="conv-ipv6-row" style="display: none;">
-              <span class="conv-result-label">IPv6 Canonical Mask</span>
-              <span class="conv-result-val" id="conv-ipv6-mask">ffff:ffff:ffff:ffff::</span>
             </div>
             <div class="conv-result-row" id="conv-hosts-row">
               <span class="conv-result-label">Available Hosts</span>

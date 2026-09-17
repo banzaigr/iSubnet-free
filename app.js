@@ -2719,7 +2719,7 @@ function runConverter() {
         document.getElementById('conv-mask').textContent = calc.mask;
         document.getElementById('conv-wildcard').textContent = calc.wildcard;
         document.getElementById('conv-binary').innerHTML = coloredBinaryStr(calc.binary);
-        document.getElementById('conv-ipv6-row').style.display = 'none';
+
         document.getElementById('conv-binary-row').style.display = 'flex';
         updateConvHosts(cidr, false);
         resultsDiv.classList.remove('hidden');
@@ -2764,98 +2764,11 @@ function runConverter() {
         recordHistoryDebounced('Converter', { input: input }, `Calculated Subnet: ${ipPart}/${cidr}`);
         return;
       }
-    } else if (parseIPv6(ipPart) !== null) {
-      let cidr = null;
-      const prefixReg = /^\/?(\d{1,3})$/;
-      if (prefixReg.test(maskPart)) {
-        cidr = parseInt(maskPart.match(prefixReg)[1], 10);
-      }
-
-      if (cidr !== null && cidr >= 0 && cidr <= 128) {
-        // parseIPv6 returns a 128-bit BigInt (not an array of fields)
-        const ipVal = parseIPv6(ipPart);
-
-        const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
-        const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
-
-        const networkVal = ipVal & netMask;
-        const broadcastVal = ipVal | hostMask;
-
-        document.getElementById('conv-type').textContent = 'IPv6 Subnet Input';
-        document.getElementById('conv-prefix').textContent = `/${cidr}`;
-        document.getElementById('conv-mask').textContent = 'N/A (IPv6)';
-        // formatIPv6Compressed already emits leading '::' when needed — no manual prefix
-        document.getElementById('conv-wildcard').textContent = formatIPv6Compressed(hostMask);
-        document.getElementById('conv-ipv6-mask').textContent = formatIPv6Compressed(netMask);
-        document.getElementById('conv-ipv6-row').style.display = 'flex';
-        document.getElementById('conv-binary-row').style.display = 'none';
-        updateConvHosts(cidr, true);
-        resultsDiv.classList.remove('hidden');
-
-        let usableRange = '';
-        if (cidr === 128) {
-          usableRange = `${formatIPv6Compressed(networkVal)} (Single Host)`;
-        } else {
-          usableRange = `${formatIPv6Compressed(networkVal)} - ${formatIPv6Compressed(broadcastVal)}`;
-        }
-
-        let totalHosts = '';
-        if (128 - cidr >= 120) {
-          totalHosts = `2^${128 - cidr}`;
-        } else {
-          totalHosts = (BigInt(1) << BigInt(128 - cidr)).toLocaleString();
-        }
-
-        // Derive the top 16 bits from the BigInt for address-type detection
-        const firstWord = Number(ipVal >> BigInt(112)) & 0xffff;
-        let ipType = 'Global Unicast (Public)';
-        if (ipVal === BigInt(0)) {
-          ipType = 'Unspecified Address (::)';
-        } else if (ipVal === BigInt(1)) {
-          ipType = 'Loopback Address';
-        } else if ((firstWord & 0xff00) === 0xff00) {        // ff00::/8
-          ipType = 'Multicast Address';
-        } else if ((firstWord & 0xffc0) === 0xfe80) {        // fe80::/10
-          ipType = 'Link-Local Address';
-        } else if ((firstWord & 0xfe00) === 0xfc00) {        // fc00::/7
-          ipType = 'Unique Local Address (Private)';
-        } else if ((firstWord & 0xe000) === 0x2000) {        // 2000::/3
-          ipType = 'Global Unicast (Public)';
-        }
-
-        if (subnetResults && subnetCard) {
-          subnetResults.innerHTML = `
-            <div class="result-item">
-              <span class="label">CIDR Notation</span>
-              <span class="val highlight" style="color: var(--accent-primary);">${formatIPv6Compressed(ipVal)}/${cidr}</span>
-            </div>
-            <div class="result-item">
-              <span class="label">Subnet Routing Prefix</span>
-              <span class="val">${formatIPv6Compressed(netMask)}</span>
-            </div>
-            <div class="result-item">
-              <span class="label">Network Range</span>
-              <span class="val" style="font-size: 13px; font-weight: 600; color: #10B981;">${usableRange}</span>
-            </div>
-            <div class="result-item">
-              <span class="label">Total IPs</span>
-              <span class="val" style="font-weight: 700;">${totalHosts}</span>
-            </div>
-            <div class="result-item">
-              <span class="label">Address Type</span>
-              <span class="val">${ipType}</span>
-            </div>
-          `;
-          subnetCard.classList.remove('hidden');
-        }
-        recordHistoryDebounced('Converter', { input: input }, `Calculated Subnet: ${ipPart}/${cidr}`);
-        return;
-      }
     }
   }
 
   // Fallback to old behavior: Check if matches CIDR prefix pattern: e.g. "/22" or "22"
-  const cidrReg = /^\/?(\d{1,3})$/;
+  const cidrReg = /^\/?(\d{1,2})$/;
   if (cidrReg.test(input)) {
     const cidrNum = parseInt(input.match(cidrReg)[1], 10);
     
@@ -2869,7 +2782,6 @@ function runConverter() {
       document.getElementById('conv-wildcard').textContent = uint32ToIp(wildcardVal);
       document.getElementById('conv-binary').innerHTML = coloredBinaryStr(uint32ToBinaryStr(maskVal));
       
-      document.getElementById('conv-ipv6-row').style.display = 'none';
       document.getElementById('conv-binary-row').style.display = 'flex';
       updateConvHosts(cidrNum, false);
       resultsDiv.classList.remove('hidden');
@@ -2877,25 +2789,7 @@ function runConverter() {
       return;
     }
     
-    if (cidrNum > 32 && cidrNum <= 128) {
-      const hostMask = (BigInt(1) << BigInt(128 - cidrNum)) - BigInt(1);
-      const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
-      
-      document.getElementById('conv-type').textContent = 'IPv6 Prefix';
-      document.getElementById('conv-prefix').textContent = `/${cidrNum}`;
-      document.getElementById('conv-mask').textContent = 'N/A (IPv6)';
-      document.getElementById('conv-wildcard').textContent = formatIPv6Compressed(hostMask);
-      document.getElementById('conv-ipv6-mask').textContent = formatIPv6Compressed(netMask);
-      
-      document.getElementById('conv-ipv6-row').style.display = 'flex';
-      document.getElementById('conv-binary-row').style.display = 'none';
-      updateConvHosts(cidrNum, true);
-      resultsDiv.classList.remove('hidden');
-      recordHistoryDebounced('Converter', { input: input }, `Converted: ${input}`);
-      return;
-    }
-    
-    errorEl.textContent = 'Prefix length must be between 0 and 32 (IPv4) or 33 and 128 (IPv6).';
+    errorEl.textContent = 'Prefix length must be between 0 and 32.';
     resultsDiv.classList.add('hidden');
     return;
   }
@@ -2932,7 +2826,6 @@ function runConverter() {
     document.getElementById('conv-wildcard').textContent = uint32ToIp(wildcardVal);
     document.getElementById('conv-binary').innerHTML = coloredBinaryStr(uint32ToBinaryStr(maskVal));
     
-    document.getElementById('conv-ipv6-row').style.display = 'none';
     document.getElementById('conv-binary-row').style.display = 'flex';
     updateConvHosts(calculatedCidr, false);
     resultsDiv.classList.remove('hidden');
@@ -2947,6 +2840,20 @@ function runConverter() {
 // --- SUBNET SPLITTER LOGIC ---
 
 let currentSplitMethod = 'equal'; // 'equal' or 'vlsm'
+
+// Inserts `text` at the current cursor position of the given input, then
+// fires its 'input' listener so dependent calculations re-run.
+function insertAtCursor(inputId, text) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? el.value.length;
+  el.value = el.value.slice(0, start) + text + el.value.slice(end);
+  const newPos = start + text.length;
+  el.focus();
+  el.setSelectionRange(newPos, newPos);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
 function initSplitterListeners() {
   // Split Method Selection (Equal vs VLSM)
@@ -2963,9 +2870,9 @@ function initSplitterListeners() {
         b.style.fontWeight = '500';
       });
       btn.classList.add('active');
-      btn.style.background = 'var(--card-bg)';
-      btn.style.color = 'var(--text-primary)';
-      btn.style.fontWeight = '600';
+      btn.style.background = 'var(--bg-card)';
+      btn.style.color = 'var(--accent-primary)';
+      btn.style.fontWeight = '700';
       
       currentSplitMethod = btn.getAttribute('data-method');
       if (currentSplitMethod === 'equal') {
@@ -4614,7 +4521,19 @@ function init() {
     const maskVal = (~0 << (32 - randomCidr)) >>> 0;
     const wildcardVal = ~maskVal >>> 0;
     convInput.value = uint32ToIp(wildcardVal);
-    convInput.addEventListener('input', runConverter);
+    convInput.addEventListener('input', () => {
+      // Some locales' numeric keypad emits a decimal comma instead of a dot;
+      // normalize so "192,168,1,1" / "0,0,3,255" style entry still parses.
+      const start = convInput.selectionStart;
+      const end = convInput.selectionEnd;
+      if (convInput.value.indexOf(',') !== -1) {
+        convInput.value = convInput.value.replace(/,/g, '.');
+        if (start !== null && end !== null) {
+          convInput.setSelectionRange(start, end);
+        }
+      }
+      runConverter();
+    });
     runConverter(); // run initial converter on default load
   }
 
