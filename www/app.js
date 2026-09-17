@@ -2314,6 +2314,13 @@ function setupEventListeners() {
   document.getElementById('btn-calc-ipv6').addEventListener('click', calculateIPv6);
   
   // Real-time calculation triggers
+  document.getElementById('ipv4-address').addEventListener('input', (e) => {
+    if (e.target.value.includes(',')) {
+      const pos = e.target.selectionStart;
+      e.target.value = e.target.value.replace(/,/g, '.');
+      e.target.selectionStart = e.target.selectionEnd = pos;
+    }
+  });
   document.getElementById('ipv4-address').addEventListener('input', calculateIPv4);
   document.getElementById('ipv4-cidr').addEventListener('input', calculateIPv4);
   document.getElementById('ipv4-hosts').addEventListener('input', calculateIPv4);
@@ -3237,7 +3244,7 @@ function runSplitter() {
       const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
       if (hostsText === '') return;
       
-      const reqSizes = hostsText.split(/[,\s]+/)
+      const reqSizes = hostsText.split(/[,.\s]+/)
                                .map(s => parseInt(s.trim(), 10))
                                .filter(n => !isNaN(n) && n > 0);
       if (reqSizes.length === 0) return;
@@ -3392,7 +3399,7 @@ function runSplitter() {
       const hostsText = document.getElementById('split-vlsm-hosts').value.trim();
       if (hostsText === '') return;
       
-      const reqSizes = hostsText.split(/[,\s]+/)
+      const reqSizes = hostsText.split(/[,.\s]+/)
                                .map(s => parseInt(s.trim(), 10))
                                .filter(n => !isNaN(n) && n > 0);
       if (reqSizes.length === 0) return;
