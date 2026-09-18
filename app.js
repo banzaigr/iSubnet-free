@@ -986,7 +986,7 @@ function validateIPv4(ipStr) {
 // Perform calculations for IPv4
 function calculateIPv4() {
   if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
-    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateIPv4' }).catch(() => {});
+    window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', type: 'string', value: 'calculateIPv4' }).catch(() => {});
   }
   logCalcV4Debounced();
   let ipInput = document.getElementById('ipv4-address').value.trim();
@@ -1493,7 +1493,7 @@ function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
 
 function calculateIPv6() {
   if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
-    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateIPv6' }).catch(() => {});
+    window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', type: 'string', value: 'calculateIPv6' }).catch(() => {});
   }
   logCalcV6Debounced();
   let ipInput = document.getElementById('ipv6-address').value.trim();
@@ -3221,7 +3221,7 @@ function blocksToIpStr(blocks) {
 
 function runSplitter() {
   if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
-    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'runSplitter' }).catch(() => {});
+    window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', type: 'string', value: 'runSplitter' }).catch(() => {});
   }
   logSplitterDebounced();
   const baseIpEl = document.getElementById('split-base-ip');
@@ -5024,7 +5024,7 @@ function initBulkCalculator() {
 }
 function calculateBulkIPv4() {
   if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
-    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateBulkIPv4' }).catch(() => {});
+    window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', type: 'string', value: 'calculateBulkIPv4' }).catch(() => {});
   }
   const input = document.getElementById('ipv4-bulk-input').value.trim();
   const errorEl = document.getElementById('ipv4-bulk-error');
@@ -5147,7 +5147,7 @@ function calculateBulkIPv4() {
 }
 function calculateBulkIPv6() {
   if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
-    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateBulkIPv6' }).catch(() => {});
+    window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', type: 'string', value: 'calculateBulkIPv6' }).catch(() => {});
   }
   const input = document.getElementById('ipv6-bulk-input').value.trim();
   const errorEl = document.getElementById('ipv6-bulk-error');
