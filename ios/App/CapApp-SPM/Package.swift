@@ -15,7 +15,7 @@ let package = Package(
         .package(name: "CapacitorCommunityInAppReview", path: "..\..\..\node_modules\@capacitor-community\in-app-review"),
         .package(name: "CapacitorFirebaseApp", path: "..\..\..\node_modules\@capacitor-firebase\app"),
         .package(name: "CapacitorFirebaseCrashlytics", path: "..\..\..\node_modules\@capacitor-firebase\crashlytics"),
-        .package(name: "CapacitorApp", path: "..\..\..\node_modules\@capacitor\app"),
+        .package(name: "CapacitorApp", path: "symlinks\CapacitorApp"),
         .package(name: "CapacitorBrowser", path: "..\..\..\node_modules\@capacitor\browser"),
         .package(name: "CapacitorClipboard", path: "..\..\..\node_modules\@capacitor\clipboard"),
         .package(name: "CapacitorFilesystem", path: "..\..\..\node_modules\@capacitor\filesystem"),

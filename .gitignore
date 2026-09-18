@@ -1,11 +1,30 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 
-# Capacitor / Mobile build output
-android/
-ios/
+# Android native project (Capacitor) - source is tracked; only local/build state is ignored
+android/*.iml
+android/.gradle/
+android/local.properties
+android/captures/
+android/.externalNativeBuild/
+android/app/release/
+android/app/debug/
+
+# iOS native project (Capacitor) - source is tracked; only local/build/generated state is ignored
+ios/App/Pods/
+ios/App/output/
+ios/App/App/public/
+ios/DerivedData/
+**/xcuserdata/
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/App/CapApp-SPM/symlinks/
+ios/App/CapApp-SPM/.build/
+ios/App/CapApp-SPM/.swiftpm/
+ios/capacitor-cordova-ios-plugins/
+
+# Web / other build output
 dist/
 build/
 
