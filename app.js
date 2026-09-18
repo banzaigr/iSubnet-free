@@ -1,6 +1,28 @@
 // --- Theme Mode Cache Recovery (Prevents Flash) ---
 (function() {
   
+// --- CRASHLYTICS GLOBAL ERROR HANDLERS ---
+window.addEventListener('error', async (event) => {
+  if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+    try {
+      await window.Capacitor.Plugins.FirebaseCrashlytics.recordException({
+        message: event.message || 'Unknown Error',
+        stacktrace: event.error ? event.error.stack : ''
+      });
+    } catch(e) {}
+  }
+});
+window.addEventListener('unhandledrejection', async (event) => {
+  if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+    try {
+      await window.Capacitor.Plugins.FirebaseCrashlytics.recordException({
+        message: event.reason ? event.reason.toString() : 'Unhandled Rejection',
+        stacktrace: event.reason && event.reason.stack ? event.reason.stack : ''
+      });
+    } catch(e) {}
+  }
+});
+
 // --- PERMANENT DEBUG LOGGING FEATURE ---
 window.APP_DEBUG_ENABLED = false; // Initialized after SafeStorage is defined
 window.APP_DEBUG_START_TIME = 0;
@@ -54,7 +76,7 @@ function debugLog(message) {
   }, 1000);
 }
 
-function checkDebugReminder() {
+async function checkDebugReminder() {
   if (!window.APP_DEBUG_ENABLED) return;
   const now = Date.now();
   const elapsedMinutes = (now - window.APP_DEBUG_START_TIME) / 60000;
@@ -72,7 +94,7 @@ function checkDebugReminder() {
   }
   
   if (shouldRemind && document.visibilityState === 'visible') {
-    const turnOff = confirm(`Debug logging has been on for ${Math.floor(elapsedMinutes)} minutes. Turn it off if you're done reproducing the issue?`);
+    const turnOff = await showConfirmDialog(`Debug logging has been on for ${Math.floor(elapsedMinutes)} minutes. Turn it off if you're done reproducing the issue?`, { confirmText: 'Turn Off', cancelText: 'Keep On' });
     if (turnOff) {
       const chk = document.getElementById('chk-debug-log');
       if (chk) chk.click();
@@ -355,9 +377,9 @@ if (userIdRowEl) {
     try {
       const { Clipboard } = window.Capacitor.Plugins;
       await Clipboard.write({ string: _cachedRevenueCatAppUserId });
-      alert('User ID copied to clipboard.');
+      showToast('User ID copied to clipboard.');
     } catch (e) {
-      alert('Could not copy automatically.');
+      showErrorDialog('Could not copy automatically. Long-press the ID above to select and copy it manually.');
       if (typeof window.debugLog === 'function') window.debugLog(`Clipboard copy failed: ${e.message}`);
     }
   });
@@ -524,7 +546,10 @@ async function updateRevenueCatSubscriptionState() {
   } catch(err) {
     console.error("RevenueCat Check Error:", err);
     if (typeof window.debugLog === 'function') window.debugLog(`ERROR in updateRevenueCatSubscriptionState: ${err.message}\n${err.stack}`);
-    alert("CRASH in updateRevenueCatSubscriptionState: " + err.message + "\n" + err.stack);
+    if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+      window.Capacitor.Plugins.FirebaseCrashlytics.recordException({ message: err.message, stacktrace: err.stack }).catch(()=>{});
+    }
+    showErrorDialog("An error occurred while updating subscription state. Please try restarting the app.");
   }
 }
 
@@ -544,7 +569,7 @@ async function updateRevenueCatSubscriptionState() {
         return; // skip traditional alert
       }
     }
-    alert(message);
+    showErrorDialog(message);
   }
 
 async function purchaseProductByPlan(planType) {
@@ -557,20 +582,20 @@ async function purchaseProductByPlan(planType) {
     PRO_UNLOCKED = true;
     SafeStorage.setItem('isubnet_pro', 'true');
     applyProState();
-    alert(`[Browser Demo] Purchased ${planType} plan! Pro features unlocked.`);
+    showToast(`[Browser Demo] Purchased ${planType} plan! Pro features unlocked.`);
     closeProModal();
     return;
   }
 
   if (!useRevenueCat) {
-    alert("In-App Purchases are currently unavailable. Please check your connection and try again.");
+    showErrorDialog("In-App Purchases are currently unavailable. Please check your connection and try again.");
     return;
   }
 
   try {
     const { Purchases } = window.Capacitor.Plugins;
     if (!Purchases) {
-      alert("Purchase plugin not found. Please try again later.");
+      showErrorDialog("Purchase plugin not found. Please try again later.");
       return;
     }
     const offerings = await Purchases.getOfferings();
@@ -600,12 +625,12 @@ async function purchaseProductByPlan(planType) {
           await handlePurchaseSuccess("Thank you for upgrading! iSubnet Pro unlocked.");
         }
     } else {
-      alert("Billing Error: No packages available in current offering.");
+      showErrorDialog("Billing Error: No packages available in current offering.");
     }
   } catch(err) {
     if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: purchasePackage() FAILED for ${packageToBuy ? packageToBuy.identifier : 'unknown'}: ${err.message} ${err.userCancelled ? '(user cancelled)' : ''}\n${JSON.stringify(err, null, 2)}`);
     if (!err.userCancelled) {
-      alert("Purchase Error: " + err.message);
+      showErrorDialog("Purchase Error: " + err.message);
     }
   }
 }
@@ -624,8 +649,8 @@ setInterval(updateTime, 1000);
 updateTime();
 
 // --- Freemium / Pro Tier ---
-const FREE_NOTES_LIMIT = 2;
-const FREE_HISTORY_LIMIT = 2;
+const FREE_NOTES_LIMIT = 3;
+const FREE_HISTORY_LIMIT = 4;
 let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
 
 function showProModal() {
@@ -690,6 +715,7 @@ if (typeof window !== 'undefined' && (!window.Capacitor || !window.Capacitor.isN
 function applyProState() {
   const badge = document.querySelector('.free-badge') || document.querySelector('.pro-badge');
   const splitterBtn = document.getElementById('tab-btn-splitter');
+  const allProBtns = document.querySelectorAll('.pro-feature-btn');
   
   if (PRO_UNLOCKED) {
     // Swap FREE badge for PRO badge
@@ -705,6 +731,27 @@ function applyProState() {
       const lockIcon = splitterBtn.querySelector('.tab-lock-icon');
       if (lockIcon) lockIcon.remove();
     }
+    // Unlock all generalized pro feature buttons
+    allProBtns.forEach(btn => {
+      const lockBadge = btn.querySelector('.pro-badge');
+      if (lockBadge) lockBadge.remove();
+      // Specifically handle the base converter hex input visual state
+      if (btn.id === 'base-hex-input') {
+        const label = document.querySelector('label[for="base-hex-input"]');
+        if (label) {
+          const labelBadge = label.querySelector('.pro-badge');
+          if (labelBadge) labelBadge.remove();
+        }
+        btn.disabled = false;
+        if (btn.value === '🔒 Pro') {
+          btn.value = ''; // Will be recomputed instantly
+          if (typeof convertBase === 'function') {
+            const decInput = document.getElementById('base-dec-input');
+            if (decInput && decInput.value) convertBase('dec', 10);
+          }
+        }
+      }
+    });
     // Remove any limit banners
     document.querySelectorAll('.pro-limit-banner').forEach(el => el.remove());
   } else {
@@ -725,6 +772,34 @@ function applyProState() {
         splitterBtn.appendChild(lock);
       }
     }
+    
+    // Lock all generalized pro feature buttons
+    allProBtns.forEach(btn => {
+      if (btn.id !== 'tab-btn-splitter' && !btn.querySelector('.pro-badge')) {
+        // Create the pro badge
+        const badgeEl = document.createElement('span');
+        badgeEl.className = 'pro-badge';
+        badgeEl.textContent = '🔒 Pro';
+        badgeEl.style.marginLeft = '4px';
+        
+        // If it's a label with a specific layout or input, handle it
+        if (btn.id === 'base-hex-input') {
+          btn.disabled = true;
+          btn.value = '🔒 Pro';
+          
+          // Also add badge to the label for visibility
+          const label = document.querySelector('label[for="base-hex-input"]');
+          if (label && !label.querySelector('.pro-badge')) {
+            const labelBadge = document.createElement('span');
+            labelBadge.className = 'pro-badge';
+            labelBadge.textContent = '🔒 Pro';
+            label.appendChild(labelBadge);
+          }
+        } else {
+          btn.appendChild(badgeEl);
+        }
+      }
+    });
     
     // Switch to another tab if currently on Splitter
     const activeTab = document.querySelector('.tab-content.active');
@@ -910,6 +985,9 @@ function validateIPv4(ipStr) {
 
 // Perform calculations for IPv4
 function calculateIPv4() {
+  if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateIPv4' }).catch(() => {});
+  }
   logCalcV4Debounced();
   let ipInput = document.getElementById('ipv4-address').value.trim();
   
@@ -1414,6 +1492,9 @@ function coloredIPv6BitExpanded(bigIntVal, prefixLength) {
 }
 
 function calculateIPv6() {
+  if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateIPv6' }).catch(() => {});
+  }
   logCalcV6Debounced();
   let ipInput = document.getElementById('ipv6-address').value.trim();
   
@@ -1863,6 +1944,15 @@ function recordHistoryDebounced(type, data, details) {
     }
     saveHistoryToStorage();
     saveHistoryToFirebase(newItem);
+
+    let cCount = parseInt(SafeStorage.getItem('isubnet_review_calc_count') || '0', 10);
+    SafeStorage.setItem('isubnet_review_calc_count', (cCount + 1).toString());
+    
+    let reason = '';
+    if (type === 'Split' && typeof currentSplitMethod !== 'undefined' && currentSplitMethod === 'vlsm') {
+      reason = 'vlsm';
+    }
+    maybeRequestReview(reason);
   }, 1200);
 }
 
@@ -1879,8 +1969,8 @@ function deleteHistoryItem(id) {
   }
 }
 
-function clearHistory() {
-  if (confirm('Are you sure you want to clear all history?')) {
+async function clearHistory() {
+  if (await showConfirmDialog("Are you sure you want to clear all history?", { confirmText: "Clear All", cancelText: "Cancel" })) {
     historyItems = [];
     saveHistoryToStorage();
     clearHistoryFromFirebase();
@@ -2007,6 +2097,69 @@ function renderHistory() {
   }
 }
 
+// --- Native-Feeling UI Primitives ---
+let _toastTimeout = null;
+function showToast(message, options = {}) {
+  const toast = document.getElementById('global-toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  // force reflow
+  void toast.offsetWidth;
+  toast.style.opacity = '1';
+  
+  if (_toastTimeout) clearTimeout(_toastTimeout);
+  _toastTimeout = setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.classList.add('hidden'), 300); // Wait for transition
+  }, options.duration || 3000);
+}
+
+function showConfirmDialog(message, options = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('global-confirm-modal');
+    if (!modal) return resolve(window.confirm(message)); // Fallback
+    
+    document.getElementById('global-confirm-msg').textContent = message;
+    const btnCancel = document.getElementById('global-confirm-cancel');
+    const btnOk = document.getElementById('global-confirm-ok');
+    
+    btnCancel.textContent = options.cancelText || 'Cancel';
+    btnOk.textContent = options.confirmText || 'OK';
+    
+    const cleanup = () => {
+      modal.classList.add('hidden');
+      btnCancel.removeEventListener('click', onCancel);
+      btnOk.removeEventListener('click', onOk);
+    };
+    
+    const onCancel = () => { cleanup(); resolve(false); };
+    const onOk = () => { cleanup(); resolve(true); };
+    
+    btnCancel.addEventListener('click', onCancel);
+    btnOk.addEventListener('click', onOk);
+    
+    modal.classList.remove('hidden');
+  });
+}
+
+function showErrorDialog(message, options = {}) {
+  const modal = document.getElementById('global-error-modal');
+  if (!modal) return window.alert(message); // Fallback
+  
+  document.getElementById('global-error-msg').textContent = message;
+  const btnOk = document.getElementById('global-error-ok');
+  
+  const cleanup = () => {
+    modal.classList.add('hidden');
+    btnOk.removeEventListener('click', onOk);
+  };
+  const onOk = () => { cleanup(); };
+  
+  btnOk.addEventListener('click', onOk);
+  modal.classList.remove('hidden');
+}
+
 function escapeHTML(str) {
   return str.replace(/[&<>'"]/g, 
     tag => ({
@@ -2042,6 +2195,7 @@ function saveIpv4Note() {
 • Network Class & Type: ${classText}, ${typeText}`;
 
   addNote(noteTitle, noteContent, 'IPv4');
+  maybeRequestReview('save_note');
   switchToNotesTab();
 }
 
@@ -2064,6 +2218,7 @@ function saveIpv6Note() {
 • Address Type: ${typeText}`;
 
   addNote(noteTitle, noteContent, 'IPv6');
+  maybeRequestReview('save_note');
   switchToNotesTab();
 }
 
@@ -2092,6 +2247,7 @@ function saveConvNote() {
   }
   
   addNote(noteTitle, noteContent, isIpv6 ? 'IPv6' : 'IPv4');
+  maybeRequestReview('save_note');
   switchToNotesTab();
 }
 
@@ -2112,6 +2268,7 @@ function saveConvSubnetNote() {
   // Detect if IPv6 for note category sorting
   const isIpv6 = (inputVal.includes(':'));
   addNote(noteTitle, noteContent.trim(), isIpv6 ? 'IPv6' : 'IPv4');
+  maybeRequestReview('save_note');
   switchToNotesTab();
 }
 
@@ -2123,6 +2280,10 @@ function switchToNotesTab() {
 // --- SHARING UTILITIES ---
 
 async function shareText(title, text) {
+  if (!PRO_UNLOCKED) {
+    text = text + "\n\n— Calculated with iSubnet · isubnet.net";
+  }
+
   const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
   if (isNative) {
     try {
@@ -2146,7 +2307,10 @@ async function shareText(title, text) {
     });
   } else {
     navigator.clipboard.writeText(text).then(() => {
-      alert(`${title} copied to clipboard!`);
+      showToast(`${title} copied to clipboard!`);
+    }).catch(err => {
+      console.error("Clipboard write failed:", err);
+      showErrorDialog("Failed to copy to clipboard.");
     });
   }
 }
@@ -2460,7 +2624,28 @@ function convertBase(value, fromBase) {
 
 let _baseConverting = false; // guard against re-entrant updates
 
+let _baseConverterLogTimeout = null;
+function logBaseConverterDebounced(sourceId) {
+  if (!window.APP_DEBUG_ENABLED) return;
+  if (_baseConverterLogTimeout) clearTimeout(_baseConverterLogTimeout);
+  _baseConverterLogTimeout = setTimeout(() => {
+    const errorEl = document.getElementById(`base-${sourceId}-error`);
+    const errText = errorEl ? errorEl.textContent : '';
+    const sourceEl = document.getElementById(`base-${sourceId}-input`);
+    const value = sourceEl ? sourceEl.value : '';
+    if (errText) {
+      window.debugLog(`Base Converter: source=${sourceId} value="${value}" ERROR: ${errText}`);
+    } else if (value) {
+      const bin = document.getElementById('base-bin-input')?.value || '';
+      const dec = document.getElementById('base-dec-input')?.value || '';
+      const hex = document.getElementById('base-hex-input')?.value || '';
+      window.debugLog(`Base Converter: source=${sourceId} value="${value}" -> bin=${bin} dec=${dec} hex=${hex}`);
+    }
+  }, 800);
+}
+
 function runBaseConverter(sourceId, fromBase) {
+  logBaseConverterDebounced(sourceId);
   if (_baseConverting) return;
   _baseConverting = true;
 
@@ -2501,12 +2686,8 @@ function runBaseConverter(sourceId, fromBase) {
     if (errorEl) {
       const baseNames = { bin: 'binary (0–1)', oct: 'octal (0–7)', dec: 'decimal (0–9)', hex: 'hex (0–9, A–F)' };
       errorEl.textContent = `Invalid ${baseNames[sourceId]} value`;
+      sourceEl.classList.add('error');
     }
-    if (sourceEl) sourceEl.classList.add('error');
-    // Clear other fields
-    Object.entries(inputs).forEach(([key, el]) => {
-      if (el && key !== sourceId) el.value = '';
-    });
     _baseConverting = false;
     return;
   }
@@ -2515,7 +2696,13 @@ function runBaseConverter(sourceId, fromBase) {
   if (inputs.bin && sourceId !== 'bin') inputs.bin.value = result.bin;
   if (inputs.oct && sourceId !== 'oct') inputs.oct.value = result.oct;
   if (inputs.dec && sourceId !== 'dec') inputs.dec.value = result.dec;
-  if (inputs.hex && sourceId !== 'hex') inputs.hex.value = result.hex;
+  if (inputs.hex && sourceId !== 'hex') {
+    if (PRO_UNLOCKED) {
+      inputs.hex.value = result.hex;
+    } else {
+      inputs.hex.value = '🔒 Pro';
+    }
+  }
 
   _baseConverting = false;
 }
@@ -2531,6 +2718,12 @@ function setupBaseConverter() {
   fields.forEach(({ id, key, base }) => {
     const el = document.getElementById(id);
     if (!el) return;
+    
+    if (id === 'base-hex-input') {
+      el.addEventListener('click', () => { if (!PRO_UNLOCKED) showProModal(); });
+      el.addEventListener('focus', () => { if (!PRO_UNLOCKED) { el.blur(); showProModal(); } });
+    }
+    
     el.addEventListener('input', () => runBaseConverter(key, base));
     // Force uppercase display for hex
     if (key === 'hex') {
@@ -2550,8 +2743,12 @@ function setupBaseConverter() {
     const inp = document.getElementById(inputId);
     if (!btn || !inp) return;
     btn.addEventListener('click', () => {
+      if (inputId === 'base-hex-input' && !PRO_UNLOCKED) {
+        showProModal();
+        return;
+      }
       const val = inp.value.trim();
-      if (!val) return;
+      if (!val || val === '🔒 Pro') return;
       navigator.clipboard.writeText(val).then(() => {
         const orig = btn.innerHTML;
         btn.innerHTML = '<svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!';
@@ -3023,6 +3220,9 @@ function blocksToIpStr(blocks) {
 }
 
 function runSplitter() {
+  if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'runSplitter' }).catch(() => {});
+  }
   logSplitterDebounced();
   const baseIpEl = document.getElementById('split-base-ip');
   const baseCidrEl = document.getElementById('split-base-cidr');
@@ -3411,6 +3611,7 @@ function saveSplitNote() {
   const title = `Split: ${baseIp}/${baseCidr}`;
   const content = getFormattedSplitOutput();
   addNote(title, content, 'IPv4');
+  maybeRequestReview('save_note');
   switchToNotesTab();
 }
 
@@ -3941,7 +4142,7 @@ function initSettings() {
   if (btnDeleteAccount) {
     btnDeleteAccount.addEventListener('click', async () => {
       if (typeof window.debugLog === 'function') window.debugLog(`Button Tap: Delete Account`);
-      const confirmDelete = confirm("WARNING: Are you sure you want to permanently delete your account? This will erase all your synced configurations, calculator history, and custom notes from Firebase and RevenueCat servers. This action is irreversible.");
+      const confirmDelete = await showConfirmDialog("WARNING: Are you sure you want to permanently delete your account? This will erase all your synced configurations, calculator history, and custom notes from Firebase and RevenueCat servers. This action is irreversible.", { confirmText: "Delete Permanently", cancelText: "Cancel" });
       if (!confirmDelete) return;
 
       const user = firebase.auth().currentUser;
@@ -3974,7 +4175,7 @@ function initSettings() {
           console.log("Mock Mode: User data deleted from servers for ID: " + userId);
         }
 
-        alert("Your account and all associated data have been permanently deleted from our servers.");
+        showToast("Your account and all associated data have been permanently deleted from our servers.");
         
         // Hide modal and refresh
         modalSettings.classList.add('hidden');
@@ -3990,7 +4191,7 @@ function initSettings() {
         if (typeof window.debugLog === 'function') window.debugLog(`ERROR in deleteAccount: ${err.message}\n${err.stack}`);
         // If the user object is now null, the deletion actually succeeded on the backend
         if (typeof firebase !== 'undefined' && !firebase.auth().currentUser) {
-            alert("Your account and all associated data have been permanently deleted from our servers.");
+            showToast("Your account and all associated data have been permanently deleted from our servers.");
             SafeStorage.removeItem('isubnet_notes');
             SafeStorage.removeItem('isubnet_history');
             window.location.reload();
@@ -4007,17 +4208,17 @@ function initSettings() {
               const credential = firebase.auth.EmailAuthProvider.credential(user.email, pwd);
               await user.reauthenticateWithCredential(credential);
               await user.delete();
-              alert("Your account and all associated data have been permanently deleted from our servers.");
+              showToast("Your account and all associated data have been permanently deleted from our servers.");
               SafeStorage.removeItem('isubnet_notes');
               SafeStorage.removeItem('isubnet_history');
               window.location.reload();
             } catch(reauthErr) {
               if (typeof window.debugLog === 'function') window.debugLog(`ERROR in reauthenticate: ${reauthErr.message}`);
-              alert("Re-authentication failed: " + reauthErr.message);
+              showErrorDialog("Re-authentication failed: " + reauthErr.message);
             }
           }
         } else {
-          alert("Failed to delete account. Please try again or contact support.");
+          showErrorDialog("Failed to delete account. Please try again or contact support.");
         }
       }
     });
@@ -4130,7 +4331,7 @@ function initSettings() {
           submitBtn.textContent = 'Submit Feedback';
           submitBtn.disabled = false;
         }
-        alert("Thank you! Your feedback has been sent successfully.");
+        showToast("Thank you! Your feedback has been sent successfully.");
         formAppFeedback.reset();
         if (modalFeedback) {
           modalFeedback.classList.add('hidden');
@@ -4141,7 +4342,7 @@ function initSettings() {
           submitBtn.textContent = 'Submit Feedback';
           submitBtn.disabled = false;
         }
-        alert("Oops! There was an issue sending your feedback. Please check your connection and try again.");
+        showErrorDialog("Oops! There was an issue sending your feedback. Please check your connection and try again.");
       });
     });
   }
@@ -4425,7 +4626,38 @@ function initQuickPaste() {
 }
 
 // --- Run Setup on page load ---
+const REVIEW_PROMPT_CALC_THRESHOLD = 6;
+async function maybeRequestReview(triggerReason = '') {
+  try {
+    const isRequested = SafeStorage.getItem('isubnet_review_requested') === 'true';
+    if (isRequested) return;
+
+    const calcCount = parseInt(SafeStorage.getItem('isubnet_review_calc_count') || '0', 10);
+    const sessionCount = parseInt(SafeStorage.getItem('isubnet_review_session_count') || '0', 10);
+
+    const isVlsm = triggerReason === 'vlsm';
+    const isExplicitSave = triggerReason === 'save_note';
+
+    const meetsThresholds = (calcCount >= REVIEW_PROMPT_CALC_THRESHOLD && sessionCount >= 2) || (sessionCount >= 3);
+    
+    if (meetsThresholds || isVlsm || isExplicitSave) {
+      if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+        const { InAppReview } = window.Capacitor.Plugins;
+        if (InAppReview) {
+          await InAppReview.requestReview();
+        }
+      }
+      SafeStorage.setItem('isubnet_review_requested', 'true');
+      SafeStorage.setItem('isubnet_review_requested_date', new Date().toISOString());
+    }
+  } catch (e) {
+    console.error('Review request failed', e);
+  }
+}
+
 function init() {
+  const sessionCount = parseInt(SafeStorage.getItem('isubnet_review_session_count') || '0', 10);
+  SafeStorage.setItem('isubnet_review_session_count', (sessionCount + 1).toString());
 
   const chkDebugLog = document.getElementById('chk-debug-log');
   const btnDebugInfo = document.getElementById('btn-debug-info');
@@ -4481,7 +4713,7 @@ function init() {
   
   if (btnDebugInfo) {
     btnDebugInfo.addEventListener('click', () => {
-      alert("Turn this on if you're experiencing a problem and want to help us fix it. While enabled, the app records technical details about what you do and any errors that occur. This is automatically saved as a note in your Notes tab, which you can copy and send to support. Turn off when you're done.");
+      showErrorDialog("Turn this on if you're experiencing a problem and want to help us fix it. While enabled, the app records technical details about what you do and any errors that occur. This is automatically saved as a note in your Notes tab, which you can copy and send to support. Turn off when you're done.");
     });
   }
   
@@ -4490,7 +4722,7 @@ function init() {
       window.APP_DEBUG_CURRENT_NOTE_ID = null;
       SafeStorage.removeItem('isubnet_debug_note_id');
       if (window.APP_DEBUG_ENABLED) window.debugLog("=== DEBUG BUFFER CLEARED (Starting new note) ===");
-      alert("In-memory debug buffer cleared. Next log will create a new note.");
+      showToast("In-memory debug buffer cleared. Next log will create a new note.");
     });
   }
 
@@ -4560,12 +4792,12 @@ function init() {
     btnElement.disabled = true;
     try {
       if (!window.Capacitor || !window.Capacitor.getPlatform || (window.Capacitor.getPlatform() !== 'ios' && window.Capacitor.getPlatform() !== 'android')) {
-        alert('Restore is only available in the native app.');
+        showErrorDialog('Restore is only available in the native app.');
         return;
       }
       const { Purchases } = window.Capacitor.Plugins;
       if (!Purchases) {
-        alert('Purchases plugin not loaded.');
+        showErrorDialog('Purchases plugin not loaded.');
         return;
       }
       
@@ -4577,11 +4809,11 @@ function init() {
         if (typeof window.debugLog === 'function') window.debugLog('Purchases restored successfully.');
         await handlePurchaseSuccess('Your purchases have been successfully restored!');
       } else {
-        alert('No active purchases found to restore.');
+        showToast('No active purchases found to restore.');
       }
     } catch (err) {
       if (typeof window.debugLog === 'function') window.debugLog(`Restore failed: ${err.message}`);
-      alert('Failed to restore purchases. Please try again.');
+      showErrorDialog('Failed to restore purchases. Please try again.');
     } finally {
       btnElement.textContent = originalText;
       btnElement.disabled = false;
@@ -4791,6 +5023,9 @@ function initBulkCalculator() {
   document.getElementById('btn-calc-bulk-ipv6').addEventListener('click', calculateBulkIPv6);
 }
 function calculateBulkIPv4() {
+  if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateBulkIPv4' }).catch(() => {});
+  }
   const input = document.getElementById('ipv4-bulk-input').value.trim();
   const errorEl = document.getElementById('ipv4-bulk-error');
   const tbody = document.getElementById('ipv4-bulk-results-tbody');
@@ -4911,6 +5146,9 @@ function calculateBulkIPv4() {
   }
 }
 function calculateBulkIPv6() {
+  if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+    window.Capacitor.Plugins.FirebaseCrashlytics.setContext({ key: 'last_calc_action', type: 'string', value: 'calculateBulkIPv6' }).catch(() => {});
+  }
   const input = document.getElementById('ipv6-bulk-input').value.trim();
   const errorEl = document.getElementById('ipv6-bulk-error');
   const tbody = document.getElementById('ipv6-bulk-results-tbody');
@@ -5156,7 +5394,7 @@ function setupExporterListeners() {
         });
       } catch (err) {
         console.error("Capacitor Report Export failed:", err);
-        alert("Export failed: " + err.message);
+        showErrorDialog("Export failed: " + err.message);
       }
     } else {
       window.print();
@@ -5246,7 +5484,7 @@ async function downloadCSV(filename, content) {
       return;
     } catch (err) {
       console.error("Capacitor CSV Export failed:", err);
-      alert("Export failed: " + err.message);
+      showErrorDialog("Export failed: " + err.message);
       return;
     }
   }
