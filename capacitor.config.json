@@ -12,5 +12,16 @@
       "splashFullScreen": true,
       "splashImmersive": true
     }
+  },
+  "experimental": {
+    "ios": {
+      "spm": {
+        "packageOptions": {
+          "@capacitor/app": {
+            "symlink": true
+          }
+        }
+      }
+    }
   }
 }
