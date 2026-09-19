@@ -4680,6 +4680,38 @@ function collapseDuplicateDots(el) {
   }
 }
 
+function collapseDuplicateColons(el) {
+  const original = el.value;
+  let cursorPos = el.selectionStart;
+  if (cursorPos === null || cursorPos === undefined) cursorPos = original.length;
+
+  let filtered = '';
+  let removedBeforeCursor = 0;
+  let consecutiveColons = 0;
+
+  for (let i = 0; i < original.length; i++) {
+    const ch = original[i];
+    if (ch === ':') {
+      consecutiveColons++;
+      if (consecutiveColons > 2) {
+        if (i < cursorPos) removedBeforeCursor++;
+        continue;
+      }
+    } else {
+      consecutiveColons = 0;
+    }
+    filtered += ch;
+  }
+
+  if (filtered !== original) {
+    el.value = filtered;
+    const newPos = Math.max(0, cursorPos - removedBeforeCursor);
+    if (typeof el.setSelectionRange === 'function') {
+      el.setSelectionRange(newPos, newPos);
+    }
+  }
+}
+
 function setupInputSanitizers() {
   const rules = [
     { id: 'ipv4-hosts',       allowed: /[0-9]/ },
@@ -4697,6 +4729,9 @@ function setupInputSanitizers() {
       stripDisallowedChars(el, allowed);
       if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input') {
         collapseDuplicateDots(el);
+      }
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv6-bulk-input') {
+        collapseDuplicateColons(el);
       }
     });
   });
@@ -4794,17 +4829,7 @@ function setupKeyboardAvoidance() {
       dlog(`EVENT visualViewport resize -> height=${window.visualViewport.height} offsetTop=${window.visualViewport.offsetTop} (window.innerHeight=${window.innerHeight})`);
     });
   }
-  window.addEventListener('focusin', (e) => {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-      dlog(`EVENT focusin on ${e.target.tagName}#${e.target.id}`);
-      snapshot('  at focusin');
-    }
-  });
-  window.addEventListener('focusout', (e) => {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-      dlog(`EVENT focusout from ${e.target.tagName}#${e.target.id}`);
-    }
-  });
+
 }
 
 function init() {
