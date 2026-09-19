@@ -5321,6 +5321,17 @@ function setupExporterListeners() {
           csv += `"${tds[0].textContent}","${tds[1].textContent.replace('\n', ' ')}","${tds[2].textContent}"\n`;
         }
       });
+    } else if (type === 'base') {
+      const bin = document.getElementById('base-bin-input')?.value.trim() || '';
+      const oct = document.getElementById('base-oct-input')?.value.trim() || '';
+      const dec = document.getElementById('base-dec-input')?.value.trim() || '';
+      const hex = document.getElementById('base-hex-input')?.value.trim() || '';
+
+      csv = `Parameter,Value\n`;
+      csv += `Binary (Base 2),${bin}\n`;
+      csv += `Octal (Base 8),${oct}\n`;
+      csv += `Decimal (Base 10),${dec}\n`;
+      csv += `Hexadecimal (Base 16),${hex}\n`;
     }
     return csv;
   };
@@ -5331,6 +5342,11 @@ function setupExporterListeners() {
       return;
     }
     const csvContent = getCSVData(type);
+    if (!csvContent || !csvContent.trim()) {
+      console.error(`getCSVData returned empty content for type "${type}"`);
+      showErrorDialog("Export failed: no data available to export.");
+      return;
+    }
     downloadCSV(`isubnet_export_${type}.csv`, csvContent);
   };
 
