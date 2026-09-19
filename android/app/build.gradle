@@ -7,7 +7,7 @@ android {
         applicationId "com.banzaigr.isubnet"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 77
+        versionCode 78
         versionName "1.1.17"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

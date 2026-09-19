@@ -2517,7 +2517,9 @@ function setupEventListeners() {
       if (!dec && !bin) return;
       const label = dec ? `Base Converter: ${dec} (DEC)` : `Base Converter: ${bin} (BIN)`;
       const body = `BIN: ${bin}\nOCT: ${oct}\nDEC: ${dec}\nHEX: ${hex}`;
-      recordHistoryDebounced('Converter', { input: dec || bin }, label);
+      addNote(label, body, 'Converter');
+      maybeRequestReview('save_note');
+      switchToNotesTab();
       flashConfirm(btnSaveBase, btnSaveBase.innerHTML);
     });
   }
@@ -4937,6 +4939,19 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
+
+// Global outside-tap keyboard dismiss for iOS
+document.addEventListener('touchend', (e) => {
+  const active = document.activeElement;
+  if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT')) return;
+  if (e.target.closest('input, textarea, select, button, a, label')) return;
+  active.blur();
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins.Keyboard) {
+      window.Capacitor.Plugins.Keyboard.hide().catch(() => {});
+    }
+  } catch(err) {}
+}, { passive: true });
 
 // --- BULK CALCULATOR ENGINE ---
 function initBulkCalculator() {
