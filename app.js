@@ -4744,6 +4744,19 @@ function setupKeyboardAvoidance() {
     dlog(`setupKeyboardAvoidance() ABORTED - not native or Keyboard plugin missing. isNativePlatform=${!!(window.Capacitor && window.Capacitor.isNativePlatform())} hasKeyboardPlugin=${!!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard)}`);
     return;
   }
+
+  // Android uses the native "adjustResize" behavior (Keyboard resize:"native" in
+  // capacitor.config.json + windowSoftInputMode="adjustResize" in AndroidManifest.xml)
+  // and does NOT need any of this manual compensation - the OS already resizes the
+  // WebView and the existing flex/CSS layout adapts on its own. Running this manual
+  // tabBar/content repositioning on top of that double-compensates and breaks the
+  // layout (tab bar gets shoved off-screen). This whole function is iOS-only, since
+  // only iOS uses Keyboard resize:"none" (see capacitor.config.json's "ios" override).
+  if (window.Capacitor.getPlatform() !== 'ios') {
+    dlog(`setupKeyboardAvoidance() SKIPPED - platform="${window.Capacitor.getPlatform()}" uses native OS keyboard resize, no manual compensation needed`);
+    return;
+  }
+
   const { Keyboard } = window.Capacitor.Plugins;
   const content = document.querySelector('.app-content');
   const tabBar = document.querySelector('.app-tab-bar');

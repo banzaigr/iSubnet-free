@@ -13,7 +13,7 @@
       "splashImmersive": true
     },
     "Keyboard": {
-      "resize": "none"
+      "resize": "native"
     }
   },
   "experimental": {
@@ -24,6 +24,13 @@
             "symlink": true
           }
         }
+      }
+    }
+  },
+  "ios": {
+    "plugins": {
+      "Keyboard": {
+        "resize": "none"
       }
     }
   }
