@@ -1178,6 +1178,17 @@ function calculateIPv4() {
 function parseIPv6(ipStr) {
   ipStr = ipStr.trim().toLowerCase();
   
+  if (ipStr.includes('.')) {
+    const lastColon = ipStr.lastIndexOf(':');
+    if (lastColon === -1) return null;
+    const v4Tail = ipStr.slice(lastColon + 1);
+    if (!validateIPv4(v4Tail)) return null;
+    const v4Uint32 = ipToUint32(v4Tail);
+    const hexGroup1 = ((v4Uint32 >>> 16) & 0xffff).toString(16);
+    const hexGroup2 = (v4Uint32 & 0xffff).toString(16);
+    ipStr = `${ipStr.slice(0, lastColon + 1)}${hexGroup1}:${hexGroup2}`;
+  }
+
   // Basic sanity validation
   if (!/^[0-9a-f:]+$/i.test(ipStr)) return null;
   if (ipStr.includes(':::')) return null;
@@ -1943,6 +1954,7 @@ function restoreHistoryItem(id) {
 
   if (item.type === 'IPv4') {
     document.getElementById('ipv4-address').value = item.data.ip;
+    document.getElementById('ipv4-address').dispatchEvent(new Event('input', { bubbles: true }));
     document.getElementById('ipv4-cidr').value = item.data.cidr;
     document.getElementById('ipv4-hosts').value = item.data.hosts;
     calculateIPv4();
@@ -1954,6 +1966,7 @@ function restoreHistoryItem(id) {
     if (subBtn) subBtn.click();
   } else if (item.type === 'IPv6') {
     document.getElementById('ipv6-address').value = item.data.ip;
+    document.getElementById('ipv6-address').dispatchEvent(new Event('input', { bubbles: true }));
     document.getElementById('ipv6-cidr').value = item.data.cidr;
     document.getElementById('ipv6-hosts').value = item.data.hosts;
     calculateIPv6();
@@ -1964,12 +1977,14 @@ function restoreHistoryItem(id) {
     if (subBtn) subBtn.click();
   } else if (item.type === 'Converter') {
     document.getElementById('converter-input').value = item.data.input;
+    document.getElementById('converter-input').dispatchEvent(new Event('input', { bubbles: true }));
     runConverter();
     // Navigate tab
     const tabBtn = document.querySelector('.tab-btn[data-target="converter-tab"]');
     if (tabBtn) tabBtn.click();
   } else if (item.type === 'Splitter') {
     document.getElementById('split-base-ip').value = item.data.baseIp;
+    document.getElementById('split-base-ip').dispatchEvent(new Event('input', { bubbles: true }));
     document.getElementById('split-base-cidr').value = item.data.baseCidr;
     
     const methodBtns = document.querySelectorAll('.method-btn');
@@ -2444,6 +2459,7 @@ function setupEventListeners() {
       e.target.selectionStart = e.target.selectionEnd = pos;
     }
     stripDisallowedChars(e.target, /[0-9./]/);
+    collapseDuplicateDots(e.target);
   });
   document.getElementById('ipv4-address').addEventListener('input', calculateIPv4);
   document.getElementById('ipv4-cidr').addEventListener('input', calculateIPv4);
@@ -4352,6 +4368,7 @@ function initQuickPaste() {
     function doPaste(text) {
       if (text) {
         inputEl.value = text.trim();
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         if (callback) callback();
         return true;
       }
@@ -4634,6 +4651,35 @@ function stripDisallowedChars(el, allowedCharRegex) {
   }
 }
 
+function collapseDuplicateDots(el) {
+  const original = el.value;
+  let cursorPos = el.selectionStart;
+  if (cursorPos === null || cursorPos === undefined) cursorPos = original.length;
+
+  let filtered = '';
+  let removedBeforeCursor = 0;
+  let lastWasDot = false;
+
+  for (let i = 0; i < original.length; i++) {
+    const ch = original[i];
+    const isDuplicateDot = ch === '.' && lastWasDot;
+    if (isDuplicateDot) {
+      if (i < cursorPos) removedBeforeCursor++;
+    } else {
+      filtered += ch;
+    }
+    lastWasDot = (ch === '.');
+  }
+
+  if (filtered !== original) {
+    el.value = filtered;
+    const newPos = Math.max(0, cursorPos - removedBeforeCursor);
+    if (typeof el.setSelectionRange === 'function') {
+      el.setSelectionRange(newPos, newPos);
+    }
+  }
+}
+
 function setupInputSanitizers() {
   const rules = [
     { id: 'ipv4-hosts',       allowed: /[0-9]/ },
@@ -4647,7 +4693,10 @@ function setupInputSanitizers() {
   rules.forEach(({ id, allowed }) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('input', () => stripDisallowedChars(el, allowed));
+    el.addEventListener('input', () => {
+      stripDisallowedChars(el, allowed);
+      if (id === 'ipv6-address') collapseDuplicateDots(el);
+    });
   });
 }
 
@@ -4797,6 +4846,7 @@ function init() {
         }
       }
       stripDisallowedChars(convInput, /[0-9./]/);
+      collapseDuplicateDots(convInput);
       runConverter();
     });
     runConverter(); // run initial converter on default load
