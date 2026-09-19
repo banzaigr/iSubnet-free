@@ -4745,11 +4745,24 @@ function setupKeyboardAvoidance() {
 
   const scrollFocusedIntoView = () => {
     const active = document.activeElement;
-    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-      active.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      dlog(`scrollFocusedIntoView() scrolled ${active.tagName}#${active.id}`);
-    } else {
+    if (!(active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'))) {
       dlog(`scrollFocusedIntoView() no focused input/textarea (activeElement=${active ? active.tagName : 'none'})`);
+      return;
+    }
+    const tabBarTop = tabBar.getBoundingClientRect().top;
+    const margin = 12;
+    const rect = active.getBoundingClientRect();
+    dlog(`scrollFocusedIntoView() active=${active.tagName}#${active.id} rect.top=${rect.top} rect.bottom=${rect.bottom} tabBarTop=${tabBarTop} content.scrollTop(before)=${content.scrollTop}`);
+    if (rect.bottom > tabBarTop - margin) {
+      const delta = rect.bottom - (tabBarTop - margin);
+      content.scrollTop += delta;
+      dlog(`  input bottom (${rect.bottom}) was below safe boundary (${tabBarTop - margin}) -> scrolled by ${delta}px, content.scrollTop(after)=${content.scrollTop}`);
+    } else if (rect.top < content.getBoundingClientRect().top) {
+      const delta = rect.top - content.getBoundingClientRect().top - margin;
+      content.scrollTop += delta;
+      dlog(`  input top (${rect.top}) was above content top -> scrolled by ${delta}px, content.scrollTop(after)=${content.scrollTop}`);
+    } else {
+      dlog(`  input already clear of tab bar, no scroll needed`);
     }
   };
 
