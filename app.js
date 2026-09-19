@@ -4704,33 +4704,65 @@ function setupKeyboardAvoidance() {
   if (!(window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Keyboard)) return;
   const { Keyboard } = window.Capacitor.Plugins;
   const content = document.querySelector('.app-content');
-  if (!content) return;
+  const tabBar = document.querySelector('.app-tab-bar');
+  if (!content || !tabBar) return;
 
   let baseContentPaddingBottom = null;
 
-  const applyKeyboardHeight = (height) => {
-    if (height > 0) {
+  const applyKeyboardOpen = (isOpen) => {
+    if (isOpen) {
       if (baseContentPaddingBottom === null) {
         baseContentPaddingBottom = parseFloat(getComputedStyle(content).paddingBottom) || 0;
       }
-      content.style.paddingBottom = `${baseContentPaddingBottom + height}px`;
+      const clearance = tabBar.offsetHeight + 16;
+      content.style.paddingBottom = `${Math.max(baseContentPaddingBottom, clearance)}px`;
     } else {
       content.style.paddingBottom = '';
     }
   };
 
-  Keyboard.addListener('keyboardWillShow', (info) => {
-    applyKeyboardHeight((info && info.keyboardHeight) || 0);
-  });
-  Keyboard.addListener('keyboardDidShow', (info) => {
-    applyKeyboardHeight((info && info.keyboardHeight) || 0);
+  function rectToObj(r) {
+    if (!r) return null;
+    return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+  }
+
+  const logGeometry = (label) => {
+    const active = document.activeElement;
+    if (typeof window.debugLog === 'function') {
+      window.debugLog('[KeyboardDebug] ' + label + ' ' + JSON.stringify({
+        windowInnerHeight: window.innerHeight,
+        tabBarRect: rectToObj(tabBar.getBoundingClientRect()),
+        contentRect: rectToObj(content.getBoundingClientRect()),
+        contentPaddingBottom: content.style.paddingBottom,
+        activeId: active && active.id,
+        activeRect: active && active.getBoundingClientRect ? rectToObj(active.getBoundingClientRect()) : null
+      }));
+    }
+  };
+
+  const scrollFocusedIntoView = () => {
     const active = document.activeElement;
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       active.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
+  };
+
+  Keyboard.addListener('keyboardWillShow', (info) => {
+    if (typeof window.debugLog === 'function') window.debugLog('[KeyboardDebug] keyboardWillShow ' + JSON.stringify(info));
+    applyKeyboardOpen(true);
+    logGeometry('after willShow apply');
+  });
+  Keyboard.addListener('keyboardDidShow', (info) => {
+    if (typeof window.debugLog === 'function') window.debugLog('[KeyboardDebug] keyboardDidShow ' + JSON.stringify(info));
+    applyKeyboardOpen(true);
+    logGeometry('after didShow apply, before scroll');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      scrollFocusedIntoView();
+      logGeometry('after scrollIntoView');
+    }));
   });
   Keyboard.addListener('keyboardWillHide', () => {
-    applyKeyboardHeight(0);
+    applyKeyboardOpen(false);
   });
 }
 
