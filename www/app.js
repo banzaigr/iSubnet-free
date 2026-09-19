@@ -4744,19 +4744,26 @@ function setupKeyboardAvoidance() {
     dlog(`setupKeyboardAvoidance() ABORTED - not native or Keyboard plugin missing. isNativePlatform=${!!(window.Capacitor && window.Capacitor.isNativePlatform())} hasKeyboardPlugin=${!!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard)}`);
     return;
   }
-
   // Android uses the native "adjustResize" behavior (Keyboard resize:"native" in
-  // capacitor.config.json + windowSoftInputMode="adjustResize" in AndroidManifest.xml)
-  // and does NOT need any of this manual compensation - the OS already resizes the
-  // WebView and the existing flex/CSS layout adapts on its own. Running this manual
-  // tabBar/content repositioning on top of that double-compensates and breaks the
-  // layout (tab bar gets shoved off-screen). This whole function is iOS-only, since
-  // only iOS uses Keyboard resize:"none" (see capacitor.config.json's "ios" override).
-  if (window.Capacitor.getPlatform() !== 'ios') {
-    dlog(`setupKeyboardAvoidance() SKIPPED - platform="${window.Capacitor.getPlatform()}" uses native OS keyboard resize, no manual compensation needed`);
-    return;
-  }
-
+  // capacitor.config.json + windowSoftInputMode="adjustResize" in AndroidManifest.xml),
+  // so the OS already resizes the WebView and tabBar/content reposition themselves via
+  // the existing CSS (position:absolute; bottom:0 inside a shrinking 100vh wrapper) -
+  // no manual style manipulation needed there, and doing it anyway double-compensates
+  // and breaks the layout (tab bar gets shoved off-screen). iOS uses resize:"none"
+  // (see capacitor.config.json's "ios" override), so the WebView never resizes and
+  // applyKeyboardHeight() below is the only thing moving tabBar/content on iOS.
+  //
+  // BUT: on both platforms, .app-tab-bar is position:absolute and layered on top of
+  // .app-content (z-index:100) rather than pushed out of the document flow, so even
+  // when Android correctly repositions the tab bar via native resize, nothing tells
+  // the browser's own focus-scroll behavior that the tab bar band is occupied - a
+  // focused input can still end up rendered underneath it. That's what
+  // scrollFocusedIntoView() below fixes, by reading the tab bar's actual current
+  // position (however it got there) and nudging content.scrollTop so the focused
+  // field clears it. So scrollFocusedIntoView() must run on BOTH platforms; only
+  // applyKeyboardHeight()'s manual style writes are iOS-only.
+  const isIOS = window.Capacitor.getPlatform() === 'ios';
+  dlog(`setupKeyboardAvoidance() platform="${window.Capacitor.getPlatform()}" isIOS=${isIOS} - manual tabBar/content styling ${isIOS ? 'ENABLED' : 'DISABLED (native resize handles it)'}, scroll-clear-of-tabbar ENABLED either way`);
   const { Keyboard } = window.Capacitor.Plugins;
   const content = document.querySelector('.app-content');
   const tabBar = document.querySelector('.app-tab-bar');
@@ -4769,6 +4776,34 @@ function setupKeyboardAvoidance() {
 
   let baseContentPaddingBottom = null;
 
+  // Baseline "keyboard fully hidden" viewport height. In theory resize:"none" keeps
+  // window.innerHeight constant on iOS the whole time, but in practice a debug log
+  // caught a case (hopping focus between two fields with different keyboard types via
+  // the "Next" accessory button) where WKWebView briefly resized its own viewport out
+  // from under us anyway - innerHeight/visualViewport.height genuinely dropped from
+  // 874 to 566 (exactly keyboardHeight's 308px) even with resize:"none" configured.
+  // When that happens, applying the full keyboardHeight as an ADDITIONAL tabBar/content
+  // offset on top of a viewport that's already shrunk by that same amount double-
+  // compensates and shoves the tab bar way up near the top of the screen. So instead of
+  // blindly trusting info.keyboardHeight, we track the tallest innerHeight we've ever
+  // observed as the "true" full-viewport baseline, and only ever apply the REMAINING
+  // gap the OS hasn't already closed for us.
+  //
+  // Deliberately NOT "reset the baseline whenever keyboardDidHide fires": that same log
+  // showed keyboardDidHide firing mid-transition (during a field-to-field "Next" hop)
+  // while innerHeight was STILL shrunk to 566 - the keyboard hadn't actually gone away,
+  // it was about to reshow for the next field. Resetting the baseline to that stale
+  // shrunk value there would recreate the exact bug this is fixing. A max-tracking
+  // baseline can only grow, so a momentarily-shrunk reading can never corrupt it - the
+  // real full height (874) simply gets kept until an even taller reading appears.
+  let fullViewportHeight = window.innerHeight;
+  const trackFullViewportHeight = () => {
+    if (window.innerHeight > fullViewportHeight) {
+      dlog(`  fullViewportHeight updated ${fullViewportHeight} -> ${window.innerHeight}`);
+      fullViewportHeight = window.innerHeight;
+    }
+  };
+
   const snapshot = (label) => {
     const tbRect = tabBar.getBoundingClientRect();
     const cRect = content.getBoundingClientRect();
@@ -4777,13 +4812,21 @@ function setupKeyboardAvoidance() {
 
   const applyKeyboardHeight = (height) => {
     dlog(`applyKeyboardHeight(${height}) called`);
+    if (!isIOS) {
+      dlog(`  SKIPPED - non-iOS platform relies on native adjustResize, no manual tabBar/content styling`);
+      return;
+    }
+    trackFullViewportHeight();
     if (height > 0) {
       if (baseContentPaddingBottom === null) {
         baseContentPaddingBottom = parseFloat(getComputedStyle(content).paddingBottom) || 0;
         dlog(`  baseContentPaddingBottom captured = ${baseContentPaddingBottom}`);
       }
-      tabBar.style.bottom = `${height}px`;
-      content.style.paddingBottom = `${baseContentPaddingBottom + height}px`;
+      const alreadyResizedBy = Math.max(0, fullViewportHeight - window.innerHeight);
+      const neededOffset = Math.max(0, height - alreadyResizedBy);
+      dlog(`  fullViewportHeight=${fullViewportHeight} innerHeight=${window.innerHeight} alreadyResizedBy=${alreadyResizedBy} -> neededOffset=${neededOffset} (raw height=${height})`);
+      tabBar.style.bottom = `${neededOffset}px`;
+      content.style.paddingBottom = `${baseContentPaddingBottom + neededOffset}px`;
     } else {
       tabBar.style.bottom = '';
       content.style.paddingBottom = '';
@@ -4832,17 +4875,18 @@ function setupKeyboardAvoidance() {
   });
   Keyboard.addListener('keyboardDidHide', () => {
     dlog(`EVENT keyboardDidHide fired`);
+    if (isIOS) trackFullViewportHeight();
     snapshot('  after keyboardDidHide');
   });
 
-  // Diagnostic only - does not affect layout. Confirms whether the WebView
-  // is actually resizing despite resize:"none" + adjustNothing.
+  // Diagnostic only - does not affect layout. On iOS this should stay flat
+  // (resize:"none" keeps the WebView fixed); on Android it should track the
+  // keyboard opening/closing (resize:"native" + adjustResize).
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => {
       dlog(`EVENT visualViewport resize -> height=${window.visualViewport.height} offsetTop=${window.visualViewport.offsetTop} (window.innerHeight=${window.innerHeight})`);
     });
   }
-
 }
 
 function init() {
