@@ -2443,6 +2443,7 @@ function setupEventListeners() {
       e.target.value = e.target.value.replace(/,/g, '.');
       e.target.selectionStart = e.target.selectionEnd = pos;
     }
+    stripDisallowedChars(e.target, /[0-9./]/);
   });
   document.getElementById('ipv4-address').addEventListener('input', calculateIPv4);
   document.getElementById('ipv4-cidr').addEventListener('input', calculateIPv4);
@@ -4610,12 +4611,51 @@ async function maybeRequestReview(triggerReason = '') {
   }
 }
 
+function stripDisallowedChars(el, allowedCharRegex) {
+  const original = el.value;
+  let cursorPos = el.selectionStart;
+  if (cursorPos === null || cursorPos === undefined) cursorPos = original.length;
+  let filtered = '';
+  let removedBeforeCursor = 0;
+  for (let i = 0; i < original.length; i++) {
+    const ch = original[i];
+    if (allowedCharRegex.test(ch)) {
+      filtered += ch;
+    } else if (i < cursorPos) {
+      removedBeforeCursor++;
+    }
+  }
+  if (filtered !== original) {
+    el.value = filtered;
+    const newPos = Math.max(0, cursorPos - removedBeforeCursor);
+    if (typeof el.setSelectionRange === 'function') {
+      el.setSelectionRange(newPos, newPos);
+    }
+  }
+}
+
+function setupInputSanitizers() {
+  const rules = [
+    { id: 'ipv4-hosts',       allowed: /[0-9]/ },
+    { id: 'ipv6-hosts',       allowed: /[0-9]/ },
+    { id: 'ipv6-address',     allowed: /[0-9a-fA-F:./]/ },
+    { id: 'ipv4-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
+    { id: 'ipv6-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
+    { id: 'split-base-ip',    allowed: /[0-9a-fA-F.:/]/ },
+    { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ }
+  ];
+  rules.forEach(({ id, allowed }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => stripDisallowedChars(el, allowed));
+  });
+}
+
 function setupKeyboardAvoidance() {
   if (!(window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Keyboard)) return;
   const { Keyboard } = window.Capacitor.Plugins;
-  const tabBar = document.querySelector('.app-tab-bar');
   const content = document.querySelector('.app-content');
-  if (!tabBar || !content) return;
+  if (!content) return;
 
   let baseContentPaddingBottom = null;
 
@@ -4624,10 +4664,8 @@ function setupKeyboardAvoidance() {
       if (baseContentPaddingBottom === null) {
         baseContentPaddingBottom = parseFloat(getComputedStyle(content).paddingBottom) || 0;
       }
-      tabBar.style.bottom = `${height}px`;
       content.style.paddingBottom = `${baseContentPaddingBottom + height}px`;
     } else {
-      tabBar.style.bottom = '';
       content.style.paddingBottom = '';
     }
   };
@@ -4637,9 +4675,6 @@ function setupKeyboardAvoidance() {
   });
   Keyboard.addListener('keyboardDidShow', (info) => {
     applyKeyboardHeight((info && info.keyboardHeight) || 0);
-    // Re-run scroll-into-view now that the tab bar and the content's
-    // reserved bottom space have both shifted up by the keyboard height,
-    // so the focused field lands above the tab bar, not behind it.
     const active = document.activeElement;
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       active.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -4728,6 +4763,7 @@ function init() {
   initQuickPaste();
   setupEventListeners();
   setupKeyboardAvoidance();
+  setupInputSanitizers();
   calculateIPv4();
   calculateIPv6();
   loadNotes();
@@ -4760,6 +4796,7 @@ function init() {
           convInput.setSelectionRange(start, end);
         }
       }
+      stripDisallowedChars(convInput, /[0-9./]/);
       runConverter();
     });
     runConverter(); // run initial converter on default load
