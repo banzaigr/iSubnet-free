@@ -4703,18 +4703,36 @@ function setupInputSanitizers() {
 }
 
 function setupKeyboardAvoidance() {
-  if (!(window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Keyboard)) return;
+  const dlog = (msg) => { if (typeof window.debugLog === 'function') window.debugLog(`[KBD] ${msg}`); };
+
+  if (!(window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Keyboard)) {
+    dlog(`setupKeyboardAvoidance() ABORTED - not native or Keyboard plugin missing. isNativePlatform=${!!(window.Capacitor && window.Capacitor.isNativePlatform())} hasKeyboardPlugin=${!!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard)}`);
+    return;
+  }
   const { Keyboard } = window.Capacitor.Plugins;
   const content = document.querySelector('.app-content');
   const tabBar = document.querySelector('.app-tab-bar');
-  if (!content || !tabBar) return;
+  if (!content || !tabBar) {
+    dlog(`setupKeyboardAvoidance() ABORTED - missing element. content=${!!content} tabBar=${!!tabBar}`);
+    return;
+  }
+
+  dlog(`setupKeyboardAvoidance() initialized. innerHeight=${window.innerHeight} visualViewport.height=${window.visualViewport ? window.visualViewport.height : 'n/a'} tabBar.rect=${JSON.stringify(tabBar.getBoundingClientRect())} content.rect=${JSON.stringify(content.getBoundingClientRect())}`);
 
   let baseContentPaddingBottom = null;
 
+  const snapshot = (label) => {
+    const tbRect = tabBar.getBoundingClientRect();
+    const cRect = content.getBoundingClientRect();
+    dlog(`${label} :: innerHeight=${window.innerHeight} vv.height=${window.visualViewport ? window.visualViewport.height : 'n/a'} vv.offsetTop=${window.visualViewport ? window.visualViewport.offsetTop : 'n/a'} tabBar.style.bottom="${tabBar.style.bottom}" tabBar.rect.bottom=${tbRect.bottom} tabBar.rect.top=${tbRect.top} content.style.paddingBottom="${content.style.paddingBottom}" content.rect.bottom=${cRect.bottom} activeElement=${document.activeElement ? document.activeElement.tagName + '#' + document.activeElement.id : 'none'}`);
+  };
+
   const applyKeyboardHeight = (height) => {
+    dlog(`applyKeyboardHeight(${height}) called`);
     if (height > 0) {
       if (baseContentPaddingBottom === null) {
         baseContentPaddingBottom = parseFloat(getComputedStyle(content).paddingBottom) || 0;
+        dlog(`  baseContentPaddingBottom captured = ${baseContentPaddingBottom}`);
       }
       tabBar.style.bottom = `${height}px`;
       content.style.paddingBottom = `${baseContentPaddingBottom + height}px`;
@@ -4722,24 +4740,57 @@ function setupKeyboardAvoidance() {
       tabBar.style.bottom = '';
       content.style.paddingBottom = '';
     }
+    snapshot(`  after applyKeyboardHeight(${height})`);
   };
 
   const scrollFocusedIntoView = () => {
     const active = document.activeElement;
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      dlog(`scrollFocusedIntoView() scrolled ${active.tagName}#${active.id}`);
+    } else {
+      dlog(`scrollFocusedIntoView() no focused input/textarea (activeElement=${active ? active.tagName : 'none'})`);
     }
   };
 
   Keyboard.addListener('keyboardWillShow', (info) => {
+    dlog(`EVENT keyboardWillShow fired, info=${JSON.stringify(info)}`);
     applyKeyboardHeight((info && info.keyboardHeight) || 0);
   });
   Keyboard.addListener('keyboardDidShow', (info) => {
+    dlog(`EVENT keyboardDidShow fired, info=${JSON.stringify(info)}`);
     applyKeyboardHeight((info && info.keyboardHeight) || 0);
-    requestAnimationFrame(() => requestAnimationFrame(scrollFocusedIntoView));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      scrollFocusedIntoView();
+      snapshot('  after scrollFocusedIntoView rAF x2');
+    }));
   });
   Keyboard.addListener('keyboardWillHide', () => {
+    dlog(`EVENT keyboardWillHide fired`);
     applyKeyboardHeight(0);
+  });
+  Keyboard.addListener('keyboardDidHide', () => {
+    dlog(`EVENT keyboardDidHide fired`);
+    snapshot('  after keyboardDidHide');
+  });
+
+  // Diagnostic only - does not affect layout. Confirms whether the WebView
+  // is actually resizing despite resize:"none" + adjustNothing.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      dlog(`EVENT visualViewport resize -> height=${window.visualViewport.height} offsetTop=${window.visualViewport.offsetTop} (window.innerHeight=${window.innerHeight})`);
+    });
+  }
+  window.addEventListener('focusin', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+      dlog(`EVENT focusin on ${e.target.tagName}#${e.target.id}`);
+      snapshot('  at focusin');
+    }
+  });
+  window.addEventListener('focusout', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+      dlog(`EVENT focusout from ${e.target.tagName}#${e.target.id}`);
+    }
   });
 }
 
