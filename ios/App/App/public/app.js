@@ -445,7 +445,6 @@ async function fetchAndDisplayOfferings() {
     return;
   }
 
-  let packageToBuy = null;
   try {
     const { Purchases } = window.Capacitor.Plugins;
     
@@ -668,32 +667,6 @@ function closeProModal() {
   document.getElementById('pro-modal').classList.add('hidden');
 }
 
-function unlockPro() {
-  const modal = document.querySelector('#pro-modal .pro-modal');
-  if (!modal) return;
-  
-  if (!modal.dataset.originalHtml) {
-    modal.dataset.originalHtml = modal.innerHTML;
-  }
-  
-  modal.innerHTML = `
-    <div class="pro-modal-header">
-      <span class="pro-crown" style="font-size: 40px; display: block; margin-bottom: 10px;">📱</span>
-      <h2 style="color: var(--accent-primary); margin: 0 0 10px;">Mobile App Required</h2>
-      <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px;">
-        This web version is a demonstration. Security and payment processing for iSubnet Pro is handled securely via the <strong>Apple App Store</strong> and <strong>Google Play Store</strong> in the mobile app.
-      </p>
-    </div>
-    <button class="btn-primary pro-unlock-btn" id="btn-pro-ok" style="margin-bottom: 10px;">OK</button>
-  `;
-  
-  document.getElementById('btn-pro-ok').addEventListener('click', () => {
-    modal.innerHTML = modal.dataset.originalHtml;
-    document.getElementById('btn-pro-unlock').addEventListener('click', unlockPro);
-    document.getElementById('btn-pro-dismiss').addEventListener('click', closeProModal);
-    closeProModal();
-  });
-}
 
 // Global helpers for testing/debugging Pro features in the browser
 if (typeof window !== 'undefined' && (!window.Capacitor || !window.Capacitor.isNativePlatform())) {
@@ -1233,18 +1206,6 @@ function parseIPv6(ipStr) {
   return bigIntVal;
 }
 
-// Format 128-bit BigInt to fully-expanded IPv6 string
-function formatIPv6Expanded(bigIntVal) {
-  const parts = [];
-  let temp = bigIntVal;
-  for (let i = 0; i < 8; i++) {
-    const part = Number(temp & BigInt(0xffff));
-    parts.unshift(part.toString(16).padStart(4, '0'));
-    temp = temp >> BigInt(16);
-  }
-  return parts.join(':');
-}
-
 // Format 128-bit BigInt to compressed IPv6 string
 function formatIPv6Compressed(bigIntVal) {
   const parts = [];
@@ -1306,7 +1267,6 @@ function coloredIPv6Html(bigIntVal, prefixLength, format = 'expanded') {
 
   // Determine active nibble count per group.
   // prefixLength nibbles-total = Math.ceil(prefixLength / 4)
-  const activeNibbles = prefixLength; // bits in prefix
   // Each group has 16 bits = 4 nibbles
   const fullyActiveGroups = Math.floor(prefixLength / 16);   // groups entirely in prefix
   const partialGroupIdx   = fullyActiveGroups;               // group that may be split
@@ -1794,8 +1754,7 @@ function renderNotes() {
     });
 
     // Edit action
-    item.querySelector('.edit-btn').addEventListener('click', (e) => {
-      const btn = e.currentTarget;
+    item.querySelector('.edit-btn').addEventListener('click', () => {
       const contentEl = item.querySelector('.note-content');
       const actionsEl = item.querySelector('.note-actions');
       const titleEl = item.querySelector('.note-title');
@@ -2202,7 +2161,6 @@ function saveIpv4Note() {
 
 // Format IPv6 data to string
 function saveIpv6Note() {
-  const input = document.getElementById('ipv6-address').value.trim();
   const compressed = document.getElementById('res6-compressed').innerText;
   const prefix = document.getElementById('res6-prefix').textContent;
   const netPrefix = document.getElementById('res6-net-prefix').innerText;
@@ -3053,6 +3011,8 @@ function flashConfirm(btn, originalHTML) {
   }, 1500);
 }
 
+// Called from inline onclick= attributes in index.html — not referenced elsewhere in this file, which is why eslint flags it as unused.
+// eslint-disable-next-line no-unused-vars
 function insertAtCursor(inputId, text) {
   const el = document.getElementById(inputId);
   if (!el) return;
@@ -5270,10 +5230,6 @@ function calculateBulkIPv6() {
 
 // --- CSV/PDF REPORT EXPORTER ---
 function setupExporterListeners() {
-  const exportPDF = () => {
-    window.print();
-  };
-
   const getCSVData = (type) => {
     let csv = '';
     if (type === 'ipv4') {
