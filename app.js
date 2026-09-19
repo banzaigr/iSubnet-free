@@ -445,6 +445,7 @@ async function fetchAndDisplayOfferings() {
     return;
   }
 
+  let packageToBuy = null;
   try {
     const { Purchases } = window.Capacitor.Plugins;
     
@@ -592,6 +593,7 @@ async function purchaseProductByPlan(planType) {
     return;
   }
 
+  let packageToBuy = null;
   try {
     const { Purchases } = window.Capacitor.Plugins;
     if (!Purchases) {
@@ -600,7 +602,6 @@ async function purchaseProductByPlan(planType) {
     }
     const offerings = await Purchases.getOfferings();
     if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
-      let packageToBuy = null;
       const packages = offerings.current.availablePackages;
       
       if (planType === 'monthly') {
@@ -2234,7 +2235,7 @@ function saveConvNote() {
   let noteContent = '';
   
   if (isIpv6) {
-    const ipv6Mask = document.getElementById('conv-ipv6-mask').textContent;
+    const ipv6Mask = document.getElementById('conv-mask').textContent;
     noteContent = `• Prefix Length: ${prefix}
 • Host Wildcard: ${wildcard}
 • Routing Prefix Mask: ${ipv6Mask}`;
@@ -2377,7 +2378,7 @@ function shareConvResult() {
   let text = '';
   
   if (isIpv6) {
-    const ipv6Mask = document.getElementById('conv-ipv6-mask').textContent;
+    const ipv6Mask = document.getElementById('conv-mask').textContent;
     text = `Converter Results (${type}):
 • Prefix Length: ${prefix}
 • Host Wildcard: ${wildcard}
@@ -3040,6 +3041,16 @@ let currentSplitMethod = 'equal'; // 'equal' or 'vlsm'
 
 // Inserts `text` at the current cursor position of the given input, then
 // fires its 'input' listener so dependent calculations re-run.
+// Helper: briefly flash button text to confirm copy
+function flashConfirm(btn, originalHTML) {
+  btn.innerHTML = '<svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!';
+  btn.style.color = 'var(--accent-success)';
+  setTimeout(() => {
+    btn.innerHTML = originalHTML;
+    btn.style.color = '';
+  }, 1500);
+}
+
 function insertAtCursor(inputId, text) {
   const el = document.getElementById(inputId);
   if (!el) return;
@@ -4126,14 +4137,6 @@ function initSettings() {
         applyProState();
         document.getElementById('settings-plan-status').innerHTML = `Current Plan: <strong>Free Plan</strong>`;
         if (typeof updateUpgradeUI === 'function') updateUpgradeUI('free');
-        
-        // Log out of RevenueCat
-        if (useRevenueCat) {
-          try {
-            const { Purchases } = window.Capacitor.Plugins;
-            Purchases.logOut().catch(err => console.error("RevenueCat logout error:", err));
-          } catch(e) {}
-        }
       }
     });
   }
@@ -4359,16 +4362,6 @@ function initQuickPaste() {
         el.style.display = 'flex';
       }
     });
-  }
-
-  // Helper: briefly flash button text to confirm copy
-  function flashConfirm(btn, originalHTML) {
-    btn.innerHTML = '<svg style="width:11px;height:11px;" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Copied!';
-    btn.style.color = 'var(--accent-success)';
-    setTimeout(() => {
-      btn.innerHTML = originalHTML;
-      btn.style.color = '';
-    }, 1500);
   }
 
   // Keep a local storage backup of the last copied text in case system clipboard reads are blocked

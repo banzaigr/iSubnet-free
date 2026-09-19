@@ -216,7 +216,7 @@ input[type="text"], input[type="number"], select {
   border-radius: 12px;
   padding: 12px 14px;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 16px;
   outline: none;
   transition: var(--transition-smooth);
 }
@@ -657,7 +657,7 @@ textarea {
   border-radius: 12px;
   padding: 12px 14px;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 16px;
   outline: none;
   resize: vertical;
   transition: var(--transition-smooth);
@@ -1616,7 +1616,7 @@ body.dark-mode .calc-sub-tab-btn.active {
   .app-content select,
   .app-content button.btn-primary,
   .app-content textarea {
-    font-size: 12px !important;
+    font-size: 16px !important;
     padding: 6px 10px !important;
     border-radius: 6px !important;
   }

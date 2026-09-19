@@ -11,6 +11,9 @@
 			"showSpinner": false,
 			"splashFullScreen": true,
 			"splashImmersive": true
+		},
+		"Keyboard": {
+			"resize": "native"
 		}
 	},
 	"experimental": {
@@ -32,6 +35,7 @@
 		"CAPBrowserPlugin",
 		"ClipboardPlugin",
 		"FilesystemPlugin",
+		"KeyboardPlugin",
 		"PreferencesPlugin",
 		"SharePlugin",
 		"SplashScreenPlugin",
