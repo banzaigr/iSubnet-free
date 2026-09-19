@@ -4610,6 +4610,46 @@ async function maybeRequestReview(triggerReason = '') {
   }
 }
 
+function setupKeyboardAvoidance() {
+  if (!(window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Keyboard)) return;
+  const { Keyboard } = window.Capacitor.Plugins;
+  const tabBar = document.querySelector('.app-tab-bar');
+  const content = document.querySelector('.app-content');
+  if (!tabBar || !content) return;
+
+  let baseContentPaddingBottom = null;
+
+  const applyKeyboardHeight = (height) => {
+    if (height > 0) {
+      if (baseContentPaddingBottom === null) {
+        baseContentPaddingBottom = parseFloat(getComputedStyle(content).paddingBottom) || 0;
+      }
+      tabBar.style.bottom = `${height}px`;
+      content.style.paddingBottom = `${baseContentPaddingBottom + height}px`;
+    } else {
+      tabBar.style.bottom = '';
+      content.style.paddingBottom = '';
+    }
+  };
+
+  Keyboard.addListener('keyboardWillShow', (info) => {
+    applyKeyboardHeight((info && info.keyboardHeight) || 0);
+  });
+  Keyboard.addListener('keyboardDidShow', (info) => {
+    applyKeyboardHeight((info && info.keyboardHeight) || 0);
+    // Re-run scroll-into-view now that the tab bar and the content's
+    // reserved bottom space have both shifted up by the keyboard height,
+    // so the focused field lands above the tab bar, not behind it.
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  });
+  Keyboard.addListener('keyboardWillHide', () => {
+    applyKeyboardHeight(0);
+  });
+}
+
 function init() {
   const sessionCount = parseInt(SafeStorage.getItem('isubnet_review_session_count') || '0', 10);
   SafeStorage.setItem('isubnet_review_session_count', (sessionCount + 1).toString());
@@ -4687,6 +4727,7 @@ function init() {
   setupTabNavigation();
   initQuickPaste();
   setupEventListeners();
+  setupKeyboardAvoidance();
   calculateIPv4();
   calculateIPv6();
   loadNotes();
