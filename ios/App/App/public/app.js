@@ -4695,7 +4695,9 @@ function setupInputSanitizers() {
     if (!el) return;
     el.addEventListener('input', () => {
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address') collapseDuplicateDots(el);
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input') {
+        collapseDuplicateDots(el);
+      }
     });
   });
 }
@@ -4709,34 +4711,16 @@ function setupKeyboardAvoidance() {
 
   let baseContentPaddingBottom = null;
 
-  const applyKeyboardOpen = (isOpen) => {
-    if (isOpen) {
+  const applyKeyboardHeight = (height) => {
+    if (height > 0) {
       if (baseContentPaddingBottom === null) {
         baseContentPaddingBottom = parseFloat(getComputedStyle(content).paddingBottom) || 0;
       }
-      const clearance = tabBar.offsetHeight + 16;
-      content.style.paddingBottom = `${Math.max(baseContentPaddingBottom, clearance)}px`;
+      tabBar.style.bottom = `${height}px`;
+      content.style.paddingBottom = `${baseContentPaddingBottom + height}px`;
     } else {
+      tabBar.style.bottom = '';
       content.style.paddingBottom = '';
-    }
-  };
-
-  function rectToObj(r) {
-    if (!r) return null;
-    return { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
-  }
-
-  const logGeometry = (label) => {
-    const active = document.activeElement;
-    if (typeof window.debugLog === 'function') {
-      window.debugLog('[KeyboardDebug] ' + label + ' ' + JSON.stringify({
-        windowInnerHeight: window.innerHeight,
-        tabBarRect: rectToObj(tabBar.getBoundingClientRect()),
-        contentRect: rectToObj(content.getBoundingClientRect()),
-        contentPaddingBottom: content.style.paddingBottom,
-        activeId: active && active.id,
-        activeRect: active && active.getBoundingClientRect ? rectToObj(active.getBoundingClientRect()) : null
-      }));
     }
   };
 
@@ -4748,21 +4732,14 @@ function setupKeyboardAvoidance() {
   };
 
   Keyboard.addListener('keyboardWillShow', (info) => {
-    if (typeof window.debugLog === 'function') window.debugLog('[KeyboardDebug] keyboardWillShow ' + JSON.stringify(info));
-    applyKeyboardOpen(true);
-    logGeometry('after willShow apply');
+    applyKeyboardHeight((info && info.keyboardHeight) || 0);
   });
   Keyboard.addListener('keyboardDidShow', (info) => {
-    if (typeof window.debugLog === 'function') window.debugLog('[KeyboardDebug] keyboardDidShow ' + JSON.stringify(info));
-    applyKeyboardOpen(true);
-    logGeometry('after didShow apply, before scroll');
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      scrollFocusedIntoView();
-      logGeometry('after scrollIntoView');
-    }));
+    applyKeyboardHeight((info && info.keyboardHeight) || 0);
+    requestAnimationFrame(() => requestAnimationFrame(scrollFocusedIntoView));
   });
   Keyboard.addListener('keyboardWillHide', () => {
-    applyKeyboardOpen(false);
+    applyKeyboardHeight(0);
   });
 }
 

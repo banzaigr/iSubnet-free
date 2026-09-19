@@ -13,7 +13,7 @@
 			"splashImmersive": true
 		},
 		"Keyboard": {
-			"resize": "native"
+			"resize": "none"
 		}
 	},
 	"experimental": {
