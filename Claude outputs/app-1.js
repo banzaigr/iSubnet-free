@@ -4951,7 +4951,6 @@ function setupKeyboardAvoidance() {
   }
 }
 
-
 function init() {
   const sessionCount = parseInt(SafeStorage.getItem('isubnet_review_session_count') || '0', 10);
   SafeStorage.setItem('isubnet_review_session_count', (sessionCount + 1).toString());

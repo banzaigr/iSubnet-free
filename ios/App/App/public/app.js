@@ -3042,6 +3042,44 @@ function insertAtCursor(inputId, text) {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+// Splitter's runSplitter() rebuilds up to 128 <tr> rows via createElement/
+// appendChild on EVERY call - much heavier than the other calculators' fixed,
+// few-field result panels. Firing that synchronously on every keystroke (the
+// 'input' listeners below used to call runSplitter()/handleAppSplitIpChange()
+// directly) forces a full layout recompute of a large table on every
+// character typed. On iOS that collided with the keyboard-avoidance
+// transition in setupKeyboardAvoidance() (app.js) / the "padding-bottom 0.2s
+// ease" in .app-content (styles.css): that transition is what turns the
+// keyboard-open padding jump into a smooth settle on the other tabs, but a
+// big synchronous table rebuild mid-transition forces the browser to
+// recompute layout right as the transition is animating, visibly stalling/
+// interrupting it - which is why the splitter tab kept flickering noticeably
+// after the other tabs' flicker was fixed. Debouncing the actual render
+// (validation/normalization above it still runs immediately) keeps typing
+// from repeatedly fighting that transition.
+//
+// iOS-only: Android relies on native "adjustResize" (see the isIOS check in
+// setupKeyboardAvoidance()) and never runs the manual padding-bottom
+// transition this is working around, so Android's Splitter tab never had
+// this flicker and should keep updating the results table instantly on
+// every keystroke, same as before.
+function isIOSNative() {
+  return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios');
+}
+
+let _splitterRenderTimeout = null;
+function runSplitterDebounced() {
+  if (!isIOSNative()) {
+    runSplitter();
+    return;
+  }
+  if (_splitterRenderTimeout) clearTimeout(_splitterRenderTimeout);
+  _splitterRenderTimeout = setTimeout(() => {
+    _splitterRenderTimeout = null;
+    runSplitter();
+  }, 150);
+}
+
 function initSplitterListeners() {
   // Split Method Selection (Equal vs VLSM)
   const methodBtns = document.querySelectorAll('.method-btn');
@@ -3089,7 +3127,7 @@ function initSplitterListeners() {
   }
   
   const splitVlsmHosts = document.getElementById('split-vlsm-hosts');
-  if (splitVlsmHosts) splitVlsmHosts.addEventListener('input', runSplitter);
+  if (splitVlsmHosts) splitVlsmHosts.addEventListener('input', runSplitterDebounced);
 
   // Notes and Share bindings for Split results
   const btnSaveSplit = document.getElementById('btn-save-notes-split');
@@ -3145,12 +3183,12 @@ function handleAppSplitIpChange() {
     }
   }
   resetAppSplitTargetSlider();
-  runSplitter();
+  runSplitterDebounced();
 }
 
 function handleAppSplitBaseCidrChange() {
   resetAppSplitTargetSlider();
-  runSplitter();
+  runSplitterDebounced();
 }
 
 function resetAppSplitTargetSlider() {

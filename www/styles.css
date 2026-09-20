@@ -189,6 +189,18 @@ body {
   box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.3), 0 0 15px rgba(59, 130, 246, 0.05);
 }
 
+/* Splitter's result table can hold up to 128 rendered rows (runSplitter() in
+   app.js), far more DOM than the other tabs' small fixed-field result cards.
+   Without containment, every rebuild of this table forces the browser to
+   recompute layout for the whole .app-content scroll area - including while
+   its own padding-bottom is mid-transition during the iOS keyboard-avoidance
+   settle (see the "padding-bottom 0.2s ease" comment on .app-content above).
+   `contain: content` scopes this card's layout/paint to itself so rebuilding
+   it doesn't fight that transition. */
+#split-results {
+  contain: content;
+}
+
 .card-title {
   font-size: 18px;
   font-weight: 600;
