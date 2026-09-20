@@ -5004,10 +5004,17 @@ function setupKeyboardAvoidance() {
       return;
     }
     currentKeyboardHeight = (info && info.keyboardHeight) || currentKeyboardHeight;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      scrollFocusedIntoView();
-      snapshot('  after scrollFocusedIntoView rAF x2 (iOS - offset deferred, native resize pending)');
-    }));
+    // No scrollFocusedIntoView() here: tabBar/content haven't moved yet (the offset
+    // is deferred until the visualViewport resize below), so tabBar.getBoundingClientRect()
+    // would still read its full, pre-keyboard resting position. Checking against that
+    // stale geometry can't detect fields that actually need to scroll clear once the
+    // keyboard settles, and for a field positioned lower in a tab it could even trigger
+    // an incorrect premature scroll that the post-resize call then has to correct on
+    // top of - trading the padding-bottom flicker we just fixed for a scroll-position
+    // one. The visualViewport resize listener below is the only call site that runs
+    // scrollFocusedIntoView() against confirmed-correct geometry, so it's the only one
+    // that should.
+    snapshot('  after keyboardDidShow (iOS - offset deferred, native resize pending)');
   });
   Keyboard.addListener('keyboardWillHide', () => {
     dlog(`EVENT keyboardWillHide fired`);
