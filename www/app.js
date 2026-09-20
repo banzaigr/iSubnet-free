@@ -4821,7 +4821,7 @@ function setupInputSanitizers() {
       if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input') {
         collapseDuplicateDots(el);
       }
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv6-bulk-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input') {
         collapseDuplicateColons(el);
       }
     });
