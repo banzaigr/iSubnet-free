@@ -2266,10 +2266,18 @@ async function shareText(title, text) {
         title: title,
         text: text
       });
-      return;
     } catch (e) {
+      // Android's Capacitor Share plugin can reject this promise even when the
+      // OS share sheet was already shown and the user genuinely completed the
+      // share - the chooser intent doesn't always report its result back to the
+      // calling activity reliably. Falling through to the clipboard-copy
+      // fallback below (meant only for platforms with no native share at all)
+      // would overwrite the user's clipboard and show a misleading "copied to
+      // clipboard" toast right after a real share, so on native platforms we
+      // just log this and stop either way.
       console.error("Capacitor Share failed:", e);
     }
+    return;
   }
 
   if (navigator.share) {
@@ -2550,11 +2558,7 @@ function setupEventListeners() {
       const hex = document.getElementById('base-hex-input').value.trim();
       if (!dec && !bin) return;
       const text = `iSubnet – Number Base Converter\nBIN: ${bin}\nOCT: ${oct}\nDEC: ${dec}\nHEX: ${hex}`;
-      if (navigator.share) {
-        navigator.share({ title: 'iSubnet Base Conversion', text });
-      } else {
-        navigator.clipboard.writeText(text).then(() => flashConfirm(btnShareBase, btnShareBase.innerHTML));
-      }
+      shareText('iSubnet Base Conversion', text);
     });
   }
   
@@ -4974,6 +4978,28 @@ function setupKeyboardAvoidance() {
     }
   };
 
+  // Fields with different `inputmode` values (e.g. numeric vs. default/full-QWERTY)
+  // trigger different native keyboard heights, so hopping via "Next" between them
+  // can leave window.visualViewport briefly offset from the layout viewport
+  // (observed: offsetTop=27 mid-transition on a split-base-ip -> split-vlsm-hosts
+  // hop, same root cause as the base-bin/oct/dec (numeric) -> base-hex (no
+  // inputmode) hop on the Base Converter tab). Running scrollFocusedIntoView()
+  // against that transient, about-to-change geometry produces a faint visible
+  // glitch. This wrapper defers up to 5 animation frames for offsetTop to settle
+  // back to 0 before measuring, and gives up and runs anyway if it never does, so
+  // this can never hang indefinitely.
+  const scrollFocusedIntoViewWhenSettled = (retriesLeft = 5) => {
+    if (isIOS && window.visualViewport && window.visualViewport.offsetTop !== 0 && retriesLeft > 0) {
+      dlog(`scrollFocusedIntoViewWhenSettled() offsetTop=${window.visualViewport.offsetTop} not settled, retriesLeft=${retriesLeft} -> deferring one more rAF`);
+      requestAnimationFrame(() => scrollFocusedIntoViewWhenSettled(retriesLeft - 1));
+      return;
+    }
+    if (isIOS && window.visualViewport && window.visualViewport.offsetTop !== 0) {
+      dlog(`scrollFocusedIntoViewWhenSettled() gave up waiting for offsetTop to settle (still ${window.visualViewport.offsetTop}) - running scrollFocusedIntoView() anyway`);
+    }
+    scrollFocusedIntoView();
+  };
+
   Keyboard.addListener('keyboardWillShow', (info) => {
     dlog(`EVENT keyboardWillShow fired, info=${JSON.stringify(info)}`);
     const height = (info && info.keyboardHeight) || 0;
@@ -4988,8 +5014,8 @@ function setupKeyboardAvoidance() {
       dlog(`  keyboardShowFallback(${KEYBOARD_SHOW_FALLBACK_MS}ms) fired - no visualViewport resize arrived in time, applying manual offset(${currentKeyboardHeight}) as fallback`);
       applyKeyboardHeight(currentKeyboardHeight);
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        scrollFocusedIntoView();
-        snapshot('  after scrollFocusedIntoView (fallback rAF x2)');
+        scrollFocusedIntoViewWhenSettled();
+        snapshot('  after scrollFocusedIntoViewWhenSettled (fallback rAF x2)');
       }));
     }, KEYBOARD_SHOW_FALLBACK_MS);
   });
@@ -5048,8 +5074,8 @@ function setupKeyboardAvoidance() {
         dlog(`  re-applying applyKeyboardHeight(${currentKeyboardHeight}) after live resize`);
         applyKeyboardHeight(currentKeyboardHeight);
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          scrollFocusedIntoView();
-          snapshot('  after scrollFocusedIntoView (post-resize rAF x2)');
+          scrollFocusedIntoViewWhenSettled();
+          snapshot('  after scrollFocusedIntoViewWhenSettled (post-resize rAF x2)');
         }));
       }
     });
