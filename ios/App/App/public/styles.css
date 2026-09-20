@@ -520,6 +520,27 @@ th {
   color: var(--accent-primary);
 }
 
+.ref-ports-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ref-ports-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ref-ports-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.ref-ports-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 1;
+}
+
 /* Tabs Toggle Mechanics */
 .tab-content {
   display: none;

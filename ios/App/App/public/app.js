@@ -2419,6 +2419,46 @@ const refCompressionText = `IPv6 Compression Rules (RFC 5952) Reference:
   - Uncompressed: 2001:0db8:0000:0000:0001:0000:0000:0000
   - RFC 5952 Canonical: 2001:db8:0:0:1::`;
 
+const refPortsText = `Common Ports Reference:
+- 20: FTP (Data) - TCP
+- 21: FTP (Control) - TCP
+- 22: SSH - TCP
+- 23: Telnet - TCP
+- 25: SMTP - TCP
+- 43: WHOIS - TCP
+- 53: DNS - TCP/UDP
+- 67: DHCP (Server) - UDP
+- 68: DHCP (Client) - UDP
+- 69: TFTP - UDP
+- 80: HTTP - TCP
+- 110: POP3 - TCP
+- 119: NNTP - TCP
+- 123: NTP - UDP
+- 143: IMAP - TCP
+- 161: SNMP - UDP
+- 162: SNMP Trap - UDP
+- 179: BGP - TCP
+- 389: LDAP - TCP
+- 443: HTTPS - TCP
+- 445: SMB - TCP
+- 465: SMTPS - TCP
+- 514: Syslog - UDP
+- 587: SMTP (Submission) - TCP
+- 636: LDAPS - TCP
+- 993: IMAPS - TCP
+- 995: POP3S - TCP
+- 1433: Microsoft SQL Server - TCP
+- 1521: Oracle DB - TCP
+- 3306: MySQL - TCP
+- 3389: RDP - TCP
+- 5060: SIP - UDP
+- 5061: SIP (TLS) - TCP
+- 5432: PostgreSQL - TCP
+- 5900: VNC - TCP
+- 6379: Redis - TCP
+- 8080: HTTP Proxy / Alt - TCP
+- 8443: HTTPS Alt - TCP`;
+
 function shareRefCompression() {
   shareText('IPv6 Compression Rules', refCompressionText);
 }
@@ -2443,6 +2483,9 @@ function shareRefPrivate() {
 }
 function shareRefIpv6() {
   shareText('IPv6 Address Types', refIpv6Text);
+}
+function shareRefPorts() {
+  shareText('Common Ports', refPortsText);
 }
 
 // --- SETUP EVENT LISTENERS ---
@@ -2535,6 +2578,12 @@ function setupEventListeners() {
     copyTextWithToast('btn-copy-ref-compression', refCompressionText);
   });
   document.getElementById('btn-share-ref-compression').addEventListener('click', shareRefCompression);
+  const btnCopyRefPorts = document.getElementById('btn-copy-ref-ports');
+  if (btnCopyRefPorts) {
+    btnCopyRefPorts.addEventListener('click', () => copyTextWithToast('btn-copy-ref-ports', refPortsText));
+  }
+  const btnShareRefPorts = document.getElementById('btn-share-ref-ports');
+  if (btnShareRefPorts) btnShareRefPorts.addEventListener('click', shareRefPorts);
   
   document.getElementById('btn-save-note-manual').addEventListener('click', () => {
     const titleInput = document.getElementById('note-title');
@@ -4853,6 +4902,30 @@ function setupKeyboardAvoidance() {
   // already applied an offset - see that listener for why this matters.
   let currentKeyboardHeight = 0;
 
+  // Field-testing (debug logs) showed the visualViewport resize listener below
+  // fires reliably ~580-630ms after keyboardWillShow on this app's target devices,
+  // and ALWAYS fully closes the gap (alreadyResizedBy consistently equals the
+  // reported keyboardHeight, landing neededOffset at exactly 0) - meaning the
+  // WKWebView DOES resize itself here despite resize:"none", every time observed.
+  // Applying the full manual offset immediately in that case, only to correct it
+  // back down once the resize confirms it wasn't needed, produces a visible
+  // overshoot-then-correct flicker: the tab bar jumps past its final resting spot,
+  // holds for ~600ms, then jumps back. The "padding-bottom 0.2s ease" transition on
+  // .app-content only smooths the two edges of that motion - it can't remove the
+  // overshoot itself. So on iOS we now default to trusting the native resize (one
+  // clean move to the correct final position, no overshoot) and only apply the
+  // manual offset as a fallback if that resize doesn't arrive in time - preserving
+  // the original "Greek IPv6 keyboard" case (see the visualViewport listener below)
+  // this logic exists for, on devices/keyboards where the WebView never resizes.
+  const KEYBOARD_SHOW_FALLBACK_MS = 700;
+  let keyboardShowFallbackTimeout = null;
+  const clearKeyboardShowFallback = () => {
+    if (keyboardShowFallbackTimeout) {
+      clearTimeout(keyboardShowFallbackTimeout);
+      keyboardShowFallbackTimeout = null;
+    }
+  };
+
   const applyKeyboardHeight = (height) => {
     dlog(`applyKeyboardHeight(${height}) called`);
     currentKeyboardHeight = height;
@@ -4903,18 +4976,42 @@ function setupKeyboardAvoidance() {
 
   Keyboard.addListener('keyboardWillShow', (info) => {
     dlog(`EVENT keyboardWillShow fired, info=${JSON.stringify(info)}`);
-    applyKeyboardHeight((info && info.keyboardHeight) || 0);
+    const height = (info && info.keyboardHeight) || 0;
+    if (!isIOS) {
+      applyKeyboardHeight(height);
+      return;
+    }
+    currentKeyboardHeight = height;
+    clearKeyboardShowFallback();
+    keyboardShowFallbackTimeout = setTimeout(() => {
+      keyboardShowFallbackTimeout = null;
+      dlog(`  keyboardShowFallback(${KEYBOARD_SHOW_FALLBACK_MS}ms) fired - no visualViewport resize arrived in time, applying manual offset(${currentKeyboardHeight}) as fallback`);
+      applyKeyboardHeight(currentKeyboardHeight);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        scrollFocusedIntoView();
+        snapshot('  after scrollFocusedIntoView (fallback rAF x2)');
+      }));
+    }, KEYBOARD_SHOW_FALLBACK_MS);
   });
   Keyboard.addListener('keyboardDidShow', (info) => {
     dlog(`EVENT keyboardDidShow fired, info=${JSON.stringify(info)}`);
-    applyKeyboardHeight((info && info.keyboardHeight) || 0);
+    if (!isIOS) {
+      applyKeyboardHeight((info && info.keyboardHeight) || 0);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        scrollFocusedIntoView();
+        snapshot('  after scrollFocusedIntoView rAF x2');
+      }));
+      return;
+    }
+    currentKeyboardHeight = (info && info.keyboardHeight) || currentKeyboardHeight;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       scrollFocusedIntoView();
-      snapshot('  after scrollFocusedIntoView rAF x2');
+      snapshot('  after scrollFocusedIntoView rAF x2 (iOS - offset deferred, native resize pending)');
     }));
   });
   Keyboard.addListener('keyboardWillHide', () => {
     dlog(`EVENT keyboardWillHide fired`);
+    clearKeyboardShowFallback();
     applyKeyboardHeight(0);
   });
   Keyboard.addListener('keyboardDidHide', () => {
@@ -4940,6 +5037,7 @@ function setupKeyboardAvoidance() {
     window.visualViewport.addEventListener('resize', () => {
       dlog(`EVENT visualViewport resize -> height=${window.visualViewport.height} offsetTop=${window.visualViewport.offsetTop} (window.innerHeight=${window.innerHeight})`);
       if (isIOS && currentKeyboardHeight > 0) {
+        clearKeyboardShowFallback();
         dlog(`  re-applying applyKeyboardHeight(${currentKeyboardHeight}) after live resize`);
         applyKeyboardHeight(currentKeyboardHeight);
         requestAnimationFrame(() => requestAnimationFrame(() => {
