@@ -4810,8 +4810,14 @@ function setupKeyboardAvoidance() {
     dlog(`${label} :: innerHeight=${window.innerHeight} vv.height=${window.visualViewport ? window.visualViewport.height : 'n/a'} vv.offsetTop=${window.visualViewport ? window.visualViewport.offsetTop : 'n/a'} tabBar.style.bottom="${tabBar.style.bottom}" tabBar.rect.bottom=${tbRect.bottom} tabBar.rect.top=${tbRect.top} content.style.paddingBottom="${content.style.paddingBottom}" content.rect.bottom=${cRect.bottom} activeElement=${document.activeElement ? document.activeElement.tagName + '#' + document.activeElement.id : 'none'}`);
   };
 
+  // Tracks the last known keyboard height so the visualViewport resize listener
+  // (below) can re-run applyKeyboardHeight() if the WebView resizes AFTER we've
+  // already applied an offset - see that listener for why this matters.
+  let currentKeyboardHeight = 0;
+
   const applyKeyboardHeight = (height) => {
     dlog(`applyKeyboardHeight(${height}) called`);
+    currentKeyboardHeight = height;
     if (!isIOS) {
       dlog(`  SKIPPED - non-iOS platform relies on native adjustResize, no manual tabBar/content styling`);
       return;
@@ -4879,15 +4885,34 @@ function setupKeyboardAvoidance() {
     snapshot('  after keyboardDidHide');
   });
 
-  // Diagnostic only - does not affect layout. On iOS this should stay flat
-  // (resize:"none" keeps the WebView fixed); on Android it should track the
-  // keyboard opening/closing (resize:"native" + adjustResize).
+  // On iOS this used to be diagnostic-only, on the assumption resize:"none" keeps the
+  // WebView fixed and only our own applyKeyboardHeight() calls (from Keyboard events)
+  // ever need to move the tab bar. A debug log proved that assumption wrong: WKWebView
+  // can resize itself AFTER a keyboardDidShow has already fired and we've already
+  // applied a JS offset (e.g. the Greek IPv6 keyboard case - keyboardDidShow(335)
+  // applies fine at innerHeight=874, then ~180ms later the view actually shrinks to
+  // 539, but nothing re-ran applyKeyboardHeight() to account for that, so the stale
+  // "335px" offset was now being measured against the new 539-tall view instead of the
+  // original 874-tall one, landing the tab bar way up near the header). So on iOS, a
+  // live resize while the keyboard is showing now re-runs applyKeyboardHeight() with
+  // the current keyboard height (harmless no-op if nothing actually needs to change -
+  // applyKeyboardHeight()'s own alreadyResizedBy/neededOffset math handles that), and
+  // re-clears the focused input afterward in case the tab bar's position moved.
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', () => {
       dlog(`EVENT visualViewport resize -> height=${window.visualViewport.height} offsetTop=${window.visualViewport.offsetTop} (window.innerHeight=${window.innerHeight})`);
+      if (isIOS && currentKeyboardHeight > 0) {
+        dlog(`  re-applying applyKeyboardHeight(${currentKeyboardHeight}) after live resize`);
+        applyKeyboardHeight(currentKeyboardHeight);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          scrollFocusedIntoView();
+          snapshot('  after scrollFocusedIntoView (post-resize rAF x2)');
+        }));
+      }
     });
   }
 }
+
 
 function init() {
   const sessionCount = parseInt(SafeStorage.getItem('isubnet_review_session_count') || '0', 10);
