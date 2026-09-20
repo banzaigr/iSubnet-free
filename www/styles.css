@@ -141,6 +141,17 @@ body {
   padding: 10px 20px 80px;
   scrollbar-width: thin;
   scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  /* Smooths the iOS keyboard-avoidance correction in setupKeyboardAvoidance()
+     (app.js): applyKeyboardHeight() first pads out on the assumption
+     resize:"none" holds, then - if the WebView's viewport actually shrinks a
+     couple hundred ms later - snaps padding-bottom back down to match. Without
+     this transition that correction is an instant, visible jump; with it, it
+     reads as a smooth settle instead. Deliberately not applied to
+     .app-tab-bar's `bottom` - scrollFocusedIntoView() reads its live
+     getBoundingClientRect() right after each style change, and animating that
+     property would make it measure a mid-transition position instead of the
+     final one. */
+  transition: padding-bottom 0.2s ease;
 }
 
 .app-content::-webkit-scrollbar {
