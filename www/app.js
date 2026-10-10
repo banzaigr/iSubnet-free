@@ -4108,6 +4108,12 @@ function initSettings() {
     firebase.auth().onAuthStateChanged((user) => {
       if(typeof window.debugLog==='function') window.debugLog(`Firebase Auth: onAuthStateChanged fired. User UID: ${user ? user.uid : 'null'}`);
       if (user) {
+        if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+          try {
+            window.Capacitor.Plugins.FirebaseCrashlytics.setUserId({ userId: user.uid }).catch(() => {});
+            if (typeof window.debugLog === 'function') window.debugLog(`Crashlytics: setUserId(${user.uid})`);
+          } catch (e) {}
+        }
         // Migrate local data to account
         if (currentUserId === 'local') {
           const localNotesRaw = SafeStorage.getItem('isubnet_notes_local');
@@ -4190,6 +4196,12 @@ function initSettings() {
         syncNotesToFirebase();
         syncHistoryToFirebase();
       } else {
+        if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+          try {
+            window.Capacitor.Plugins.FirebaseCrashlytics.setUserId({ userId: '' }).catch(() => {});
+            if (typeof window.debugLog === 'function') window.debugLog(`Crashlytics: setUserId(cleared)`);
+          } catch (e) {}
+        }
         currentUserId = 'local';
         loadNotes();
         loadHistory();
