@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>iSubnet - Network Calculator</title>
-  <link rel="stylesheet" href="styles.css?v=1.0.7">
+  <link rel="stylesheet" href="styles.css?v=1.3.0">
   <!-- Import premium font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -269,7 +269,7 @@
 
         <!-- App Version Footer -->
         <div id="settings-version-footer" style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.2.1 (Build 102)
+          iSubnet v1.3.0 (Build 103)
         </div>
         </div>
       </div>
@@ -300,6 +300,7 @@
               <option value="other">Other Request</option>
             </select>
           </div>
+
           <div class="input-group">
             <label for="fb-app-message">Message</label>
             <textarea id="fb-app-message" rows="4" placeholder="Describe your suggestion or bug report in detail..." required style="padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-tertiary); color: var(--text-primary); resize: vertical; font-family: inherit; outline: none;"></textarea>
@@ -389,7 +390,7 @@
               <span style="font-weight: 700; font-size: 15px; color: #F59E0B;">iSubnet Pro</span>
               <span id="plan-modal-price" style="font-weight: 700; font-size: 15px; color: #F59E0B;">€0.49/mo</span>
             </div>
-            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">VLSM subnetting, bulk calculations, export functions, and unlimited usage.</p>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">VLSM subnetting, DNS Lookup, bulk calculations, export functions, and unlimited usage.</p>
             <button class="btn-primary" id="btn-plan-select-pro" style="padding: 10px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #F59E0B, #D97706); border: none; width: 100%;">Upgrade to Pro</button>
           </div>
         </div>
@@ -404,8 +405,13 @@
           <h2>Upgrade to Pro</h2>
           <p>Unlock the full iSubnet toolkit</p>
         </div>
-        <ul class="pro-features-list">
+        <div id="pro-context" class="pro-context hidden">
+  <div class="pro-context-title"></div>
+  <div class="pro-context-text"></div>
+</div>
+          <ul class="pro-features-list">
           <li><span class="pro-check">✓</span> VLSM & FLSM Subnet Designer</li>
+          <li><span class="pro-check">✓</span> DNS Lookup Tool</li>
           <li><span class="pro-check">✓</span> Bulk IPv4 & IPv6 Calculations</li>
           <li><span class="pro-check">✓</span> Export CSV & Professional Reports</li>
           <li><span class="pro-check">✓</span> Share Without the Watermark</li>
@@ -429,7 +435,18 @@
       </div>
     </div>
 
-    <!-- Main Content Area -->
+    <!-- Tools Picker Modal -->
+<div id="tools-picker-modal" class="pro-modal-overlay hidden">
+  <div class="pro-modal" style="text-align: left; max-width: 380px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+      <h2 style="font-size: 18px; font-weight: 700; margin: 0; color: var(--text-primary);">Network Tools</h2>
+      <button id="btn-tools-picker-close" aria-label="Close" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; outline: none;">&times;</button>
+    </div>
+    <div id="tools-picker-list"></div>
+  </div>
+</div>
+
+<!-- Main Content Area -->
     <main class="app-content">
       <!-- TAB 1: IPv4 CALCULATOR -->
       <section id="calculator-tab" class="tab-content active">
@@ -1206,6 +1223,98 @@
           </div>
         </div>
 
+        
+        <div class="card ref-card">
+          <h2 class="card-title">Public IP Ranges</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Type / Class</th>
+                  <th>IP Range</th>
+                  <th style="text-align: right;">Addresses</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="highlight-row">
+                  <td>Class A Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">1.0.0.0 - 9.255.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">150,994,944</td>
+                </tr>
+                <tr>
+                  <td>Class A Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">11.0.0.0 - 100.63.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">1,497,366,528</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class A Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">100.128.0.0 - 126.255.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">444,596,224</td>
+                </tr>
+                <tr>
+                  <td>Class B Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">128.0.0.0 - 169.253.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">704,512,000</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class B Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">169.255.0.0 - 172.15.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">34,668,544</td>
+                </tr>
+                <tr>
+                  <td>Class B Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">172.32.0.0 - 191.255.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">333,447,168</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class C Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">192.0.1.0 - 192.0.1.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">256</td>
+                </tr>
+                <tr>
+                  <td>Class C Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">192.0.3.0 - 192.88.98.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">5,791,744</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class C Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">192.88.100.0 - 192.167.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">5,217,280</td>
+                </tr>
+                <tr>
+                  <td>Class C Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">192.169.0.0 - 198.17.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">90,767,360</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class C Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">198.20.0.0 - 198.51.99.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">2,057,216</td>
+                </tr>
+                <tr>
+                  <td>Class C Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">198.51.101.0 - 203.0.112.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">80,546,816</td>
+                </tr>
+                <tr class="highlight-row">
+                  <td>Class C Public</td>
+                  <td class="ref-table-accent" style="font-family: monospace; font-size: 13px;">203.0.114.0 - 223.255.255.255</td>
+                  <td class="ref-table-accent" style="text-align: right; font-family: monospace; font-size: 13px;">352,292,352</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 15px; justify-content: flex-end; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;">
+            <button id="btn-copy-ref-public" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-share-ref-public" class="btn-action">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
         <div class="card ref-card">
           <h2 class="card-title">IPv6 Common Types</h2>
           <div class="list-container">
@@ -1438,6 +1547,77 @@
           </div>
         </div>
       </section>
+    
+      <section id="tools-tab" class="tab-content">
+        <div class="tools-title-row"><h2 class="tab-title">DNS Lookup</h2><button id="btn-tools-switch" class="tools-switch-chip">⇄ Tools</button></div>
+        <div class="card input-card" style="margin-bottom: 20px;">
+          <div class="input-group">
+            <label>Hostname or IP</label>
+            <input type="text" id="dns-input" placeholder="example.com or 8.8.8.8" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off">
+            <div id="dns-error-msg" style="color: var(--accent-danger); font-size: 13px; margin-top: 6px; display: none;"></div>
+          </div>
+          <div class="input-group" style="margin-top: 16px;">
+            <label>Record Type</label>
+            <select id="dns-type-select">
+              <option value="A">A</option>
+              <option value="AAAA">AAAA</option>
+              <option value="MX">MX</option>
+              <option value="NS">NS</option>
+              <option value="TXT">TXT</option>
+              <option value="CNAME">CNAME</option>
+              <option value="SOA">SOA</option>
+              <option value="PTR">PTR</option>
+              <option value="CAA">CAA</option>
+              <option value="ALL">ALL (A, AAAA, MX, NS, TXT, CNAME)</option>
+            </select>
+          </div>
+          <div class="input-group" style="margin-top: 16px;">
+            <label>DNS Server</label>
+            <select id="dns-server-select">
+              <option value="cf-1">Cloudflare (1.1.1.1)</option>
+              <option value="cf-2">Cloudflare (1.0.0.1)</option>
+              <option value="g-1">Google (8.8.8.8)</option>
+              <option value="g-2">Google (8.8.4.4)</option>
+            </select>
+          </div>
+          <div class="result-actions" style="margin-top: 20px; display: flex; gap: 10px;">
+            <button id="btn-dns-lookup" class="btn-primary" style="flex: 1;">Lookup</button>
+            <button id="btn-dns-clear" class="btn-secondary" style="width: 80px;">Clear</button>
+          </div>
+        </div>
+
+        <div id="dns-results-card" class="card result-card" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);">Results</h3>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-dns-copy" class="action-btn" title="Copy Text" style="padding: 6px; width: auto; height: auto;">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path></svg>
+              </button>
+              <button id="btn-dns-save" class="action-btn" title="Save to Notes" style="padding: 6px; width: auto; height: auto;">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"></path></svg>
+              </button>
+              <button id="btn-dns-share" class="action-btn" title="Share" style="padding: 6px; width: auto; height: auto;">
+                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"></path></svg>
+              </button>
+            </div>
+          </div>
+          <div id="dns-status-line" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 500;"></div>
+          <div class="table-container">
+            <table class="result-table" style="width: 100%;">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>TTL</th>
+                  <th>Data</th>
+                </tr>
+              </thead>
+              <tbody id="dns-results-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- Tab Bar Navigation (Simulating iOS) -->
@@ -1463,7 +1643,11 @@
       <button class="tab-btn tab-btn-locked" id="tab-btn-splitter" data-pro="true">
         <div class="tab-icon-wrap" style="position: relative;">
           <div class="tab-lock-icon">🔒</div>
-          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10z"/>
+          <path d="M13.03 2.05V13H21.95A10 10 0 0 0 13.03 2.05Z"/>
+          <path d="M13.03 15V21.95A10 10 0 0 0 21.54 15Z"/>
+        </svg>
         </div>
         <span>Splitter</span>
       </button>
@@ -1478,6 +1662,20 @@
           <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.53.85-1.07-3.63-2.16V8h-1.5z"/></svg>
         </div>
         <span>History</span>
+      </button>
+      <button class="tab-btn" id="tab-btn-tools">
+        <div class="tab-icon-wrap" style="position: relative;">
+          
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+     <rect x="9" y="2.5" width="6" height="5.5" rx="1.2"></rect>
+     <rect x="2.5" y="16" width="6" height="5.5" rx="1.2"></rect>
+     <rect x="15.5" y="16" width="6" height="5.5" rx="1.2"></rect>
+     <path d="M12 8v4.5"></path>
+     <path d="M5.5 16v-2.5a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1V16"></path>
+   </svg>
+        </div>
+        <span>Tools</span>
       </button>
       <button class="tab-btn" data-target="notes-tab">
         <div class="tab-icon-wrap">
@@ -1514,6 +1712,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-  <script src="app.js?v=1.0.6"></script>
+  <script src="app.js?v=1.3.0"></script>
 </body>
 </html>

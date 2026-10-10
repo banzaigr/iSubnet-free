@@ -1,6 +1,32 @@
+# Release Notes: iSubnet v1.3.0 (Build 103)
+
+### 🛠️ New Network Tools Tab
+
+* **DNS Lookup Tool**: Added a comprehensive DNS lookup utility supporting A, AAAA, MX, NS, TXT, CNAME, SOA, PTR, CAA, and ALL queries in parallel.
+* **Safer Account Deletion**: your password is now confirmed before anything is deleted, and the confirmation message accurately lists what is erased, including copies stored on your device.
+* **Save DNS Results to Notes**: DNS lookup results now have a Save button that stores the lookup in your Notes, like the other tools.
+* **DNS Input Filtering**: the DNS Lookup field now ignores invalid characters and duplicate dots, converts commas to dots, and ignores a trailing dot.
+* **DNS Server Choice**: pick which public DNS server DNS Lookup uses (Cloudflare 1.1.1.1 / 1.0.0.1, Google 8.8.8.8 / 8.8.4.4). Results show which server answered.
+* **Tools Menu**: tapping the Tools tab opens a menu listing the available tools. Pro tools show a lock badge, and tapping one explains what it does.
+* **Clearer Pro Upgrade Screen**: tapping a locked tool or tab now explains what it offers, and the Pro features list and plan screen include the DNS Lookup tool.
+* **Tools Icon Updated**: Polished the tab bar with a dedicated network-topology icon for the new Tools tab.
+* **Splitter Icon Updated**: The Splitter tab now uses a pie icon cut into pieces of different sizes in place of the globe.
+* **Public IP Ranges Reference**: The Reference tab now has a Public IP Ranges section below Private IP Ranges, listing the public IPv4 address ranges with Copy and Share.
+
+---
+
+# Release Notes: iSubnet v1.2.0 (Build 101)
+
+### ⚙️ Input Handling Improvements
+
+* **IPv4 Bulk Input Upgraded**: The IPv4 bulk input field now collapses runs of 3 or more colons to `::` automatically, matching IPv6 behavior and cleanly handling mixed IPv6 input pasted into the IPv4 tab.
+
+---
+
 # Release Notes: iSubnet v1.1.4 (Build 23)
 
 ### 📐 Landscape Orientation Support
+
 * **Full landscape adaptation**: The app now correctly stretches and adapts when the phone is rotated to landscape orientation without breaking any feature.
 * **Phone frame removed in landscape**: The decorative phone border, rounded corners, and shadows are hidden in landscape mode — the app fills the screen edge-to-edge for maximum usable space.
 * **Status bar hidden in landscape**: The simulated status bar is hidden in landscape to preserve vertical space.
@@ -13,6 +39,7 @@
 ---
 
 ### 🧮 Bulk IPs — Calculation Improvements
+
 * **IPv4 Bulk Tab**: Merged the Network and Range columns into a single "Network / Range" column (matching the IPv6 tab layout), showing `Network: x.x.x.x` and `Range: x.x.x.x - x.x.x.x` on separate lines.
 * **Hosts / Addresses column**: Both IPv4 and IPv6 bulk result tabs now show usable hosts (palette color) and total addresses (contrast color) on separate lines for visual clarity.
 * **IPv6 usable host fix**: Corrected the IPv6 usable host count from `total − 2` (incorrect IPv4 broadcast convention) to `total − 1` (correct: only the network/anycast address is reserved in IPv6 — there is no broadcast).
@@ -23,6 +50,7 @@
 ---
 
 ### 🔀 Splitter Tab — IPv6 Hosts
+
 * **Equal split**: IPv6 equal-split subnets now display the correct host count (`usable / total`) instead of `N/A`.
 * **VLSM split**: IPv6 VLSM subnets now show `usable / total (req. N)` with the corrected `total − 1` formula.
 
@@ -31,6 +59,7 @@
 # Release Notes: iSubnet v1.1.3 (Build 22)
 
 ### 🚀 Mobile App Updates (`iSubnet-free`)
+
 * **Dynamic Splash Screen Theme Loading**: Added integration with Capacitor Preferences. The app's startup splash screen now queries the last-used theme settings natively upon cold boot:
   * Users starting the app in Light theme will see a **white splash background**.
   * Users starting the app in Dark theme will see a **dark navy splash background**.

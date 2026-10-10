@@ -653,7 +653,24 @@ const FREE_NOTES_LIMIT = 3;
 const FREE_HISTORY_LIMIT = 4;
 let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
 
-function showProModal() {
+const PRO_FEATURE_INFO = {
+  tools: { title: '🌐 DNS Lookup', text: 'Look up A, AAAA, MX, NS, TXT, CNAME, SOA, PTR and CAA records for any domain or IP. Copy, share or save results to Notes.' },
+  splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' }
+};
+
+function showProModal(feature) {
+  const ctxEl = document.getElementById('pro-context');
+  if (ctxEl) {
+    const info = feature && PRO_FEATURE_INFO[feature];
+    if (info) {
+      ctxEl.querySelector('.pro-context-title').textContent = info.title;
+      ctxEl.querySelector('.pro-context-text').textContent = info.text;
+      ctxEl.classList.remove('hidden');
+    } else {
+      ctxEl.classList.add('hidden');
+    }
+  }
+
   if (typeof updateRevenueCatSubscriptionState === 'function') {
     updateRevenueCatSubscriptionState().finally(() => {
       document.getElementById('pro-modal').classList.remove('hidden');
@@ -686,25 +703,34 @@ if (typeof window !== 'undefined' && (!window.Capacitor || !window.Capacitor.isN
   };
 }
 
+let lastToolsLocked = null;
 function applyProState() {
   const badge = document.querySelector('.free-badge') || document.querySelector('.pro-badge');
-  const splitterBtn = document.getElementById('tab-btn-splitter');
   const allProBtns = document.querySelectorAll('.pro-feature-btn');
+  const proTabs = [
+    document.getElementById('tab-btn-splitter')
+  ];
   
   if (PRO_UNLOCKED) {
+    if (lastToolsLocked !== false) {
+      if (typeof window.debugLog === 'function') window.debugLog('Tools tab: unlocked (PRO_UNLOCKED=true)');
+      lastToolsLocked = false;
+    }
     // Swap FREE badge for PRO badge
     if (badge) {
       badge.textContent = 'PRO';
       badge.className = 'pro-badge';
     }
-    // Unlock splitter tab
-    if (splitterBtn) {
-      splitterBtn.classList.remove('tab-btn-locked');
-      splitterBtn.setAttribute('data-target', 'splitter-tab');
-      splitterBtn.removeAttribute('data-pro');
-      const lockIcon = splitterBtn.querySelector('.tab-lock-icon');
-      if (lockIcon) lockIcon.remove();
-    }
+    // Unlock pro tabs
+    proTabs.forEach(tab => {
+      if (tab) {
+        tab.classList.remove('tab-btn-locked');
+        tab.setAttribute('data-target', tab.id.replace('tab-btn-', '') + '-tab');
+        tab.removeAttribute('data-pro');
+        const lockIcon = tab.querySelector('.tab-lock-icon');
+        if (lockIcon) lockIcon.remove();
+      }
+    });
     // Unlock all generalized pro feature buttons
     allProBtns.forEach(btn => {
       const lockBadge = btn.querySelector('.pro-badge');
@@ -729,27 +755,35 @@ function applyProState() {
     // Remove any limit banners
     document.querySelectorAll('.pro-limit-banner').forEach(el => el.remove());
   } else {
+    if (lastToolsLocked !== true) {
+      if (typeof window.debugLog === 'function') window.debugLog('Tools tab: locked (PRO_UNLOCKED=false)');
+      lastToolsLocked = true;
+    }
     // Lock FREE state back
     if (badge) {
       badge.textContent = 'FREE';
       badge.className = 'free-badge';
     }
-    // Lock splitter tab
-    if (splitterBtn) {
-      splitterBtn.classList.add('tab-btn-locked');
-      splitterBtn.removeAttribute('data-target');
-      splitterBtn.setAttribute('data-pro', 'true');
-      if (!splitterBtn.querySelector('.tab-lock-icon')) {
-        const lock = document.createElement('div');
-        lock.className = 'tab-lock-icon';
-        lock.textContent = '🔒';
-        splitterBtn.appendChild(lock);
+    // Lock pro tabs
+    proTabs.forEach(tab => {
+      if (tab) {
+        tab.classList.add('tab-btn-locked');
+        tab.removeAttribute('data-target');
+        tab.setAttribute('data-pro', 'true');
+        if (!tab.querySelector('.tab-lock-icon')) {
+          const lock = document.createElement('div');
+          lock.className = 'tab-lock-icon';
+          lock.textContent = '🔒';
+          const iconWrap = tab.querySelector('.tab-icon-wrap');
+          if (iconWrap) iconWrap.appendChild(lock);
+          else tab.appendChild(lock);
+        }
       }
-    }
+    });
     
     // Lock all generalized pro feature buttons
     allProBtns.forEach(btn => {
-      if (btn.id !== 'tab-btn-splitter' && !btn.querySelector('.pro-badge')) {
+      if (btn.id !== 'tab-btn-splitter' && btn.id !== 'tab-btn-tools' && !btn.querySelector('.pro-badge')) {
         // Create the pro badge
         const badgeEl = document.createElement('span');
         badgeEl.className = 'pro-badge';
@@ -775,9 +809,13 @@ function applyProState() {
       }
     });
     
-    // Switch to another tab if currently on Splitter
+    // Switch to another tab if currently on Splitter or Tools
     const activeTab = document.querySelector('.tab-content.active');
-    if (activeTab && activeTab.id === 'splitter-tab') {
+    if (activeTab && (activeTab.id === 'splitter-tab' || activeTab.id === 'tools-tab')) {
+      if (activeTab.id === 'tools-tab' && typeof window.debugLog === 'function') {
+        window.debugLog('Tools tab: active while locked, switching to Calculator');
+      }
+
       const calcBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
       if (calcBtn) calcBtn.click();
     }
@@ -2407,6 +2445,21 @@ const refPrivateText = `Private IP Ranges Reference (RFC 1918):
 • Class C Private: 192.168.0.0 - 192.168.255.255 (/16)
 • Loopback Localhost: 127.0.0.0 - 127.255.255.255 (/8)
 • Link-Local (APIPA): 169.254.0.0 - 169.254.255.255 (/16)`;
+const refPublicText = `Public IP Ranges Reference:
+• Class A Public: 1.0.0.0 - 9.255.255.255 (150,994,944 addresses)
+• Class A Public: 11.0.0.0 - 100.63.255.255 (1,497,366,528 addresses)
+• Class A Public: 100.128.0.0 - 126.255.255.255 (444,596,224 addresses)
+• Class B Public: 128.0.0.0 - 169.253.255.255 (704,512,000 addresses)
+• Class B Public: 169.255.0.0 - 172.15.255.255 (34,668,544 addresses)
+• Class B Public: 172.32.0.0 - 191.255.255.255 (333,447,168 addresses)
+• Class C Public: 192.0.1.0 - 192.0.1.255 (256 addresses)
+• Class C Public: 192.0.3.0 - 192.88.98.255 (5,791,744 addresses)
+• Class C Public: 192.88.100.0 - 192.167.255.255 (5,217,280 addresses)
+• Class C Public: 192.169.0.0 - 198.17.255.255 (90,767,360 addresses)
+• Class C Public: 198.20.0.0 - 198.51.99.255 (2,057,216 addresses)
+• Class C Public: 198.51.101.0 - 203.0.112.255 (80,546,816 addresses)
+• Class C Public: 203.0.114.0 - 223.255.255.255 (352,292,352 addresses)`;
+
 
 const refIpv6Text = `IPv6 Common Address Types Reference:
 • Global Unicast (Public): 2000::/3
@@ -2489,6 +2542,10 @@ function shareRefClasses() {
 function shareRefPrivate() {
   shareText('Private IP Ranges', refPrivateText);
 }
+function shareRefPublic() {
+  shareText('Public IP Ranges', refPublicText);
+}
+
 function shareRefIpv6() {
   shareText('IPv6 Address Types', refIpv6Text);
 }
@@ -2572,6 +2629,11 @@ function setupEventListeners() {
     copyTextWithToast('btn-copy-ref-private', refPrivateText);
   });
   document.getElementById('btn-share-ref-private').addEventListener('click', shareRefPrivate);
+  document.getElementById('btn-copy-ref-public').addEventListener('click', () => {
+    copyTextWithToast('btn-copy-ref-public', refPublicText);
+  });
+  document.getElementById('btn-share-ref-public').addEventListener('click', shareRefPublic);
+
   
   document.getElementById('btn-copy-ref-ipv6').addEventListener('click', () => {
     copyTextWithToast('btn-copy-ref-ipv6', refIpv6Text);
@@ -4223,88 +4285,71 @@ function initSettings() {
     });
   }
 
+  function clearLocalUserData(userId) {
+    [
+      'isubnet_notes', 'isubnet_history',
+      'isubnet_notes_local', 'isubnet_history_local',
+      'isubnet_notes_' + userId, 'isubnet_history_' + userId
+    ].forEach(k => SafeStorage.removeItem(k));
+  }
+
   // Handle account deletion and data erasure (GDPR compliance)
   if (btnDeleteAccount) {
     btnDeleteAccount.addEventListener('click', async () => {
       if (typeof window.debugLog === 'function') window.debugLog(`Button Tap: Delete Account`);
-      const confirmDelete = await showConfirmDialog("WARNING: Are you sure you want to permanently delete your account? This will erase all your synced configurations, calculator history, and custom notes from Firebase and RevenueCat servers. This action is irreversible.", { confirmText: "Delete Permanently", cancelText: "Cancel" });
+      const confirmDelete = await showConfirmDialog("WARNING: Are you sure you want to permanently delete your account? This will erase your account, your synced notes and calculator history from our servers, and the copies stored on this device. Purchase records held by Apple, Google Play and RevenueCat are not erased by this. This action is irreversible.", { confirmText: "Delete Permanently", cancelText: "Cancel" });
       if (!confirmDelete) return;
 
       const user = firebase.auth().currentUser;
       if (!user) return;
-
       const userId = user.uid;
 
-      // Show loader state
+      // Verify identity BEFORE deleting anything, so cancelling or failing here loses no data.
+      if (useRealFirebase) {
+        const pwd = prompt("To confirm account deletion, please enter your password:");
+        if (!pwd) return;
+        try {
+          const credential = firebase.auth.EmailAuthProvider.credential(user.email, pwd);
+          await user.reauthenticateWithCredential(credential);
+        } catch (reauthErr) {
+          if (typeof window.debugLog === 'function') window.debugLog(`ERROR in reauthenticate: code=${reauthErr && reauthErr.code ? reauthErr.code : 'unknown'}`);
+          showErrorDialog("Could not verify your password. Your account was not deleted.");
+          return;
+        }
+      }
+
       btnDeleteAccount.disabled = true;
       btnDeleteAccount.textContent = 'Deleting Account...';
 
       try {
         if (useRealFirebase) {
-          // 1. Delete all Firestore data for this user ID in batches
           const batch = db.batch();
-          
           const notesSnapshot = await db.collection("users").doc(userId).collection("notes").get();
           notesSnapshot.forEach(doc => batch.delete(doc.ref));
-          
           const historySnapshot = await db.collection("users").doc(userId).collection("history").get();
           historySnapshot.forEach(doc => batch.delete(doc.ref));
-          
           batch.delete(db.collection("users").doc(userId));
           await batch.commit();
-
-          // 2. Delete the user authentication record in Firebase
           await user.delete();
         } else {
-          // Mock mode local logs
           console.log("Mock Mode: User data deleted from servers for ID: " + userId);
         }
-
-        showToast("Your account and all associated data have been permanently deleted from our servers.");
-        
-        // Hide modal and refresh
+        showToast("Your account and synced data have been permanently deleted.");
         modalSettings.classList.add('hidden');
-        
-        // Clear local storage notes and history so they don't linger
-        SafeStorage.removeItem('isubnet_notes');
-        SafeStorage.removeItem('isubnet_history');
-        
-        // Reload page to reset state
+        clearLocalUserData(userId);
         window.location.reload();
       } catch (err) {
-        console.error("Account deletion failed (or threw during cleanup):", err);
-        if (typeof window.debugLog === 'function') window.debugLog(`ERROR in deleteAccount: ${err.message}\n${err.stack}`);
+        if (typeof window.debugLog === 'function') window.debugLog(`ERROR in deleteAccount: code=${err && err.code ? err.code : 'unknown'}`);
         // If the user object is now null, the deletion actually succeeded on the backend
         if (typeof firebase !== 'undefined' && !firebase.auth().currentUser) {
-            showToast("Your account and all associated data have been permanently deleted from our servers.");
-            SafeStorage.removeItem('isubnet_notes');
-            SafeStorage.removeItem('isubnet_history');
-            window.location.reload();
-            return;
+          showToast("Your account and synced data have been permanently deleted.");
+          clearLocalUserData(userId);
+          window.location.reload();
+          return;
         }
-        
         btnDeleteAccount.disabled = false;
         btnDeleteAccount.textContent = 'Delete Account';
-        
-        if (err && err.code === 'auth/requires-recent-login') {
-          const pwd = prompt("For security reasons, please re-enter your password to confirm account deletion:");
-          if (pwd) {
-            try {
-              const credential = firebase.auth.EmailAuthProvider.credential(user.email, pwd);
-              await user.reauthenticateWithCredential(credential);
-              await user.delete();
-              showToast("Your account and all associated data have been permanently deleted from our servers.");
-              SafeStorage.removeItem('isubnet_notes');
-              SafeStorage.removeItem('isubnet_history');
-              window.location.reload();
-            } catch(reauthErr) {
-              if (typeof window.debugLog === 'function') window.debugLog(`ERROR in reauthenticate: ${reauthErr.message}`);
-              showErrorDialog("Re-authentication failed: " + reauthErr.message);
-            }
-          }
-        } else {
-          showErrorDialog("Failed to delete account. Please try again or contact support.");
-        }
+        showErrorDialog("Failed to delete account. Please try again or contact support.");
       }
     });
   }
@@ -4783,6 +4828,24 @@ function collapseDuplicateDots(el) {
   }
 }
 
+function normalizeDnsInput(el) {
+  const original = el.value;
+  let pos = el.selectionStart;
+  if (pos === null || pos === undefined) pos = original.length;
+  // commas become dots (same length, so the cursor stays put)
+  let v = original.replace(/,/g, '.');
+  // a DNS query only needs the host: drop ?query / #fragment, and any user@ prefix
+  let t = v.replace(/[?#][\s\S]*$/, '');
+  t = t.replace(/^((?:[a-z][a-z0-9+.\-]*:\/\/)?)[^\/]*@/i, '$1');
+  const trimmed = (t !== v);
+  v = t;
+  if (v !== original) {
+    el.value = v;
+    const newPos = trimmed ? v.length : pos;
+    if (typeof el.setSelectionRange === 'function') el.setSelectionRange(newPos, newPos);
+  }
+}
+
 function collapseDuplicateColons(el) {
   const original = el.value;
   let cursorPos = el.selectionStart;
@@ -4823,17 +4886,17 @@ function setupInputSanitizers() {
     { id: 'ipv4-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
     { id: 'ipv6-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
     { id: 'split-base-ip',    allowed: /[0-9a-fA-F.:/]/ },
-    { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ }
+    { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ },
+    { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
   ];
   rules.forEach(({ id, allowed }) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', () => {
+      if (id === 'dns-input') normalizeDnsInput(el);
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input') {
         collapseDuplicateDots(el);
-      }
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input') {
         collapseDuplicateColons(el);
       }
     });
@@ -5328,14 +5391,89 @@ function init() {
   const splitterBtn = document.getElementById('tab-btn-splitter');
   if (splitterBtn) {
     splitterBtn.addEventListener('click', () => {
-      if (splitterBtn.getAttribute('data-pro') === 'true') {
-        showProModal();
-      }
+      if (splitterBtn.getAttribute('data-pro') === 'true') showProModal('splitter');
     });
   }
+  const toolsBtn = document.getElementById('tab-btn-tools');
+  if (toolsBtn) {
+    toolsBtn.addEventListener('click', () => {
+      if (typeof window.debugLog === 'function') window.debugLog(`Tools tab tapped: opening picker (pro=${PRO_UNLOCKED})`);
+      openToolsPicker();
+    });
+  }
+  const toolsSwitchChip = document.getElementById('btn-tools-switch');
+  if (toolsSwitchChip) toolsSwitchChip.addEventListener('click', openToolsPicker);
+  const toolsPickerModal = document.getElementById('tools-picker-modal');
+  const toolsPickerClose = document.getElementById('btn-tools-picker-close');
+  if (toolsPickerClose) toolsPickerClose.addEventListener('click', closeToolsPicker);
+  if (toolsPickerModal) toolsPickerModal.addEventListener('click', (e) => { if (e.target === toolsPickerModal) closeToolsPicker(); });
 
   // Apply pro state on load (restores PRO badge + unlocked tabs if already purchased)
   applyProState();
+}
+
+// --- Tools Picker ---
+const TOOLS_LIST = [
+  { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, AAAA, MX, NS, TXT and more', screen: 'tools-tab', feature: 'tools' }
+];
+
+function openToolsPicker() {
+  const modal = document.getElementById('tools-picker-modal');
+  const list = document.getElementById('tools-picker-list');
+  if (!modal || !list) return;
+  list.textContent = '';
+  TOOLS_LIST.forEach(tool => {
+    const row = document.createElement('button');
+    row.className = 'tools-picker-row';
+    row.setAttribute('data-tool', tool.id);
+    const icon = document.createElement('div');
+    icon.className = 'tools-picker-icon';
+    icon.textContent = tool.icon;
+    const text = document.createElement('div');
+    text.className = 'tools-picker-text';
+    const title = document.createElement('div');
+    title.className = 'tools-picker-title';
+    title.textContent = tool.title;
+    const desc = document.createElement('div');
+    desc.className = 'tools-picker-desc';
+    desc.textContent = tool.desc;
+    text.appendChild(title);
+    text.appendChild(desc);
+    const right = document.createElement('span');
+    if (PRO_UNLOCKED) {
+      right.className = 'tools-picker-chevron';
+      right.textContent = '›';
+    } else {
+      right.className = 'pro-badge';
+      right.textContent = '🔒 Pro';
+    }
+    row.appendChild(icon);
+    row.appendChild(text);
+    row.appendChild(right);
+    row.addEventListener('click', () => openTool(tool));
+    list.appendChild(row);
+  });
+  modal.classList.remove('hidden');
+}
+
+function closeToolsPicker() {
+  const modal = document.getElementById('tools-picker-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function openTool(tool) {
+  closeToolsPicker();
+  if (typeof window.debugLog === 'function') window.debugLog(`Tools picker: selected ${tool.id} (locked=${!PRO_UNLOCKED})`);
+  if (!PRO_UNLOCKED) {
+    showProModal(tool.feature);
+    return;
+  }
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  const toolsBtn = document.getElementById('tab-btn-tools');
+  if (toolsBtn) toolsBtn.classList.add('active');
+  const screen = document.getElementById(tool.screen);
+  if (screen) screen.classList.add('active');
 }
 
 // --- Limit Banner Helpers ---
@@ -5497,7 +5635,7 @@ function calculateBulkIPv4() {
   }
 
   const lines = input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-  let hasValid = false;
+  
 
   lines.forEach(line => {
     let ip = line;
@@ -5527,7 +5665,7 @@ function calculateBulkIPv4() {
         tbody.appendChild(tr);
         return;
       }
-      hasValid = true;
+      
       const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
       const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
       const networkPrefixVal = ipBigInt & netMask;
@@ -5561,7 +5699,7 @@ function calculateBulkIPv4() {
         tbody.appendChild(tr);
         return;
       }
-      hasValid = true;
+      
       const ipVal = ipToUint32(ip);
       const maskVal = cidr === 0 ? 0 : (~0 << (32 - cidr)) >>> 0;
       const wildcardVal = ~maskVal >>> 0;
@@ -5620,7 +5758,7 @@ function calculateBulkIPv6() {
   }
 
   const lines = input.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-  let hasValid = false;
+  
 
   lines.forEach(line => {
     let ip = line;
@@ -5643,7 +5781,7 @@ function calculateBulkIPv6() {
         return;
       }
 
-      hasValid = true;
+      
       const hostMask = (BigInt(1) << BigInt(128 - cidr)) - BigInt(1);
       const netMask = ~hostMask & ((BigInt(1) << BigInt(128)) - BigInt(1));
       const networkPrefixVal = ipBigInt & netMask;
@@ -5676,7 +5814,7 @@ function calculateBulkIPv6() {
         return;
       }
 
-      hasValid = true;
+      
       const ipVal = ipToUint32(ip);
       const maskVal = cidr === 0 ? 0 : (~0 << (32 - cidr)) >>> 0;
       const wildcardVal = ~maskVal >>> 0;
@@ -6129,3 +6267,537 @@ function updateUpgradeUI(planTier) {
     if (msgEl) msgEl.style.display = 'none';
   }
 }
+
+
+
+// --- DNS LOOKUP TOOL ---
+(function() {
+  const input = document.getElementById('dns-input');
+  const typeSelect = document.getElementById('dns-type-select');
+  const serverSelect = document.getElementById('dns-server-select');
+  const btnLookup = document.getElementById('btn-dns-lookup');
+  const btnClear = document.getElementById('btn-dns-clear');
+  const resultsCard = document.getElementById('dns-results-card');
+  const statusLine = document.getElementById('dns-status-line');
+  const tbody = document.getElementById('dns-results-tbody');
+  const errorMsg = document.getElementById('dns-error-msg');
+  const btnCopy = document.getElementById('btn-dns-copy');
+  const btnShare = document.getElementById('btn-dns-share');
+
+  let currentDnsCount = 0;
+  let dnsLookupCount = 0;
+  let currentLookupName = '';
+  let currentReverseName = '';
+  
+  function dnsLog(msg) {
+    if (typeof window.debugLog === 'function') {
+      try {
+        const prefix = msg.startsWith('init:') || msg.startsWith('ui:') ? 'DNS ' : `DNS #${currentDnsCount}: `;
+        window.debugLog(prefix + msg);
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+
+
+  function dnsErrInfo(err) {
+    const name = (err && err.name) || 'Error';
+    const m = String((err && err.message) || err || '');
+    let kind = 'other';
+    if (name === 'AbortError') kind = 'abort';
+    else if (name === 'SyntaxError') kind = 'parse';
+    else if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) kind = 'network';
+    const frames = String((err && err.stack) || '')
+      .split('\n')
+      .filter(l => /^\s*at\s/.test(l) || l.includes('@'))
+      .slice(0, 3)
+      .map(l => l.trim())
+      .join(' <- ');
+    return { name, kind, frames };
+  }
+  function redactErr(err) {
+    if (!err) return { name: 'Unknown', msg: 'Unknown error', stack: '' };
+    const name = err.name || 'Error';
+    let msg = err.message || String(err);
+    let stack = err.stack || '';
+
+    function redactStr(str) {
+      if (!str) return '';
+      str = str.replace(/https?:\/\/[^\s"']+/g, '[URL redacted]');
+      
+      const escapeRegExp = (s) => s.split('').map(c => /[.*+?^${}()|[\]\\]/.test(c) ? '\\' + c : c).join('');
+      
+      if (currentReverseName && currentReverseName.length > 2) {
+        const safeRev = escapeRegExp(currentReverseName);
+        str = str.replace(new RegExp(safeRev + '\\.?', 'gi'), '[redacted]');
+      }
+      if (currentLookupName && currentLookupName.length > 2) {
+        const safeName = escapeRegExp(currentLookupName);
+        str = str.replace(new RegExp(safeName + '\\.?', 'gi'), '[redacted]');
+      }
+      return str;
+    }
+
+    msg = redactStr(msg);
+    stack = redactStr(stack).split('\n').slice(0, 3).join('\n');
+    return { name, msg, stack };
+  }
+
+  const btnSave = document.getElementById('btn-dns-save');
+  if (!input || !typeSelect || !btnLookup || !btnClear || !resultsCard || !statusLine || !tbody || !errorMsg || !btnCopy || !btnShare || !btnSave) {
+    const missing = [];
+    if (!input) missing.push('dns-input');
+    if (!typeSelect) missing.push('dns-type-select');
+    if (!btnLookup) missing.push('btn-dns-lookup');
+    if (!btnClear) missing.push('btn-dns-clear');
+    if (!resultsCard) missing.push('dns-results-card');
+    if (!statusLine) missing.push('dns-status-line');
+    if (!tbody) missing.push('dns-results-tbody');
+    if (!errorMsg) missing.push('dns-error-msg');
+    if (!btnCopy) missing.push('btn-dns-copy');
+    if (!btnShare) missing.push('btn-dns-share');
+    dnsLog('init: ABORTED, missing elements: ' + missing.join(', '));
+    return;
+  }
+
+  const cap = window.Capacitor;
+  const platform = cap && cap.getPlatform ? cap.getPlatform() : 'web';
+  const isNative = cap && cap.isNativePlatform ? cap.isNativePlatform() : false;
+  const hasCapHttp = !!(cap && cap.Plugins && cap.Plugins.CapacitorHttp);
+  const hasCrashlytics = !!(cap && cap.Plugins && cap.Plugins.FirebaseCrashlytics);
+  const hasClip = !!(navigator.clipboard && navigator.clipboard.writeText);
+  const typeAbort = typeof window.AbortController;
+  dnsLog(`init: ok | platform=${platform} | isNative=${isNative} | hasCapHttp=${hasCapHttp} | hasCrash=${hasCrashlytics} | hasClip=${hasClip} | typeAbort=${typeAbort}`);
+
+  let currentAbortController = null;
+  let lastLookupResultText = '';
+  let lastLookupNoteTitle = '';
+
+  const RECORD_TYPES = {
+    1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT', 28: 'AAAA', 33: 'SRV', 257: 'CAA'
+  };
+
+  const DNS_SERVERS = {
+    'cf-1': { label: 'Cloudflare 1.1.1.1', url: 'https://1.1.1.1/dns-query' },
+    'cf-2': { label: 'Cloudflare 1.0.0.1', url: 'https://1.0.0.1/dns-query' },
+    'g-1':  { label: 'Google 8.8.8.8',     url: 'https://8.8.8.8/resolve' },
+    'g-2':  { label: 'Google 8.8.4.4',     url: 'https://8.8.4.4/resolve' }
+  };
+  const DNS_SERVER_DEFAULT = 'cf-1';
+  const DNS_SERVER_KEY = 'isubnet_dns_server';
+
+  function getDnsServerId() {
+    const id = serverSelect ? serverSelect.value : DNS_SERVER_DEFAULT;
+    return DNS_SERVERS[id] ? id : DNS_SERVER_DEFAULT;
+  }
+
+  if (serverSelect) {
+    let saved = null;
+    try { saved = SafeStorage.getItem(DNS_SERVER_KEY); } catch (e) { saved = null; }
+    serverSelect.value = DNS_SERVERS[saved] ? saved : DNS_SERVER_DEFAULT;
+    serverSelect.addEventListener('change', () => {
+      const id = getDnsServerId();
+      try { SafeStorage.setItem(DNS_SERVER_KEY, id); } catch (e) { /* ignore */ }
+      dnsLog(`ui: server changed | server=${id}`);
+    });
+  }
+
+  const RCODE_NAMES = {
+    0: 'NOERROR', 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 4: 'NOTIMP', 5: 'REFUSED'
+  };
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+    resultsCard.style.display = 'none';
+  }
+
+  function hideError() {
+    errorMsg.style.display = 'none';
+  }
+
+  async function fetchDns(name, type, serverId) {
+    const isNat = window.Capacitor && window.Capacitor.isNativePlatform();
+    const hasCap = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp);
+    const server = DNS_SERVERS[serverId] || DNS_SERVERS[DNS_SERVER_DEFAULT];
+    const url = `${server.url}?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`;
+    
+    let useNative = isNat && hasCap;
+    if (isNat && !hasCap) {
+      dnsLog(`type=${type} | native but CapacitorHttp missing, falling back to fetch`);
+    }
+
+    const t0 = performance.now();
+    let rStatus = 0;
+    let rCType = '';
+    let dType = '';
+    let parsedObj = null;
+    let parseFailed = false;
+
+    try {
+      if (useNative) {
+        dnsLog(`type=${type} | path=CapacitorHttp`);
+        const options = {
+          url: url,
+          headers: { 'Accept': 'application/dns-json' },
+          connectTimeout: 8000,
+          readTimeout: 8000
+        };
+        const response = await window.Capacitor.Plugins.CapacitorHttp.get(options);
+        rStatus = response.status;
+        if (response.headers) {
+          // Headers could be varied case
+          for (const [k, v] of Object.entries(response.headers)) {
+            if (k.toLowerCase() === 'content-type') rCType = v;
+          }
+        }
+        
+        if (rStatus === 429) dnsLog(`type=${type} | HTTP 429 (rate limited)`);
+        else if (rStatus !== 200) throw new Error('HTTP ' + rStatus);
+        
+        let data = response.data;
+        dType = typeof data;
+        if (dType === 'string') {
+          try {
+            data = JSON.parse(data);
+            parsedObj = data;
+          } catch (e) {
+            parseFailed = true;
+            throw new Error('Invalid JSON response');
+          }
+        } else {
+          parsedObj = data;
+        }
+
+        if (!parsedObj || typeof parsedObj.Status !== 'number') {
+          throw new Error('Unexpected response from DNS service');
+        }
+      } else {
+        dnsLog(`type=${type} | path=fetch`);
+        const response = await fetch(url, {
+          headers: { 'Accept': 'application/dns-json' },
+          signal: currentAbortController.signal
+        });
+        rStatus = response.status;
+        rCType = response.headers.get('content-type') || '';
+        
+        if (rStatus === 429) dnsLog(`type=${type} | HTTP 429 (rate limited)`);
+        else if (!response.ok) throw new Error('HTTP ' + rStatus);
+        
+        dType = 'stream';
+        try {
+          parsedObj = await response.json();
+        } catch(e) {
+          parseFailed = true;
+          throw new Error('Invalid JSON response');
+        }
+        if (!parsedObj || typeof parsedObj.Status !== 'number') {
+          throw new Error('Unexpected response from DNS service');
+        }
+      }
+      
+      const t1 = performance.now();
+      const ansCount = parsedObj.Answer ? parsedObj.Answer.length : 0;
+      const authCount = parsedObj.Authority ? parsedObj.Authority.length : 0;
+      const tc = !!parsedObj.TC;
+      const cCount = parsedObj.Comment ? (Array.isArray(parsedObj.Comment) ? parsedObj.Comment.length : 1) : 0;
+      const elapsed = Math.round(t1 - t0);
+
+      dnsLog(`type=${type} | status=${rStatus} | cType=${rCType} | dataType=${dType} | jsonNeed=${useNative && dType==='string'} | parseFail=${parseFailed} | statusIsNum=true | RCODE=${parsedObj.Status} | Ans=${ansCount} | Auth=${authCount} | TC=${tc} | Comments=${cCount} | ms=${elapsed}`);
+      return parsedObj;
+      
+    } catch (e) {
+      const i = dnsErrInfo(e);
+      dnsLog(`type=${type} | error=${i.name} | kind=${i.kind}` + (i.name === 'AbortError' ? '' : ` | frames=${i.frames}`));
+      throw e;
+    }
+  }
+
+  async function runLookup() {
+    if (btnLookup.disabled) {
+      dnsLog('ui: ignored, lookup already running');
+      return;
+    }
+
+    dnsLookupCount++;
+    currentDnsCount = dnsLookupCount;
+    hideError();
+    
+    let rawVal = input.value;
+    let val = rawVal.trim().replace(/\.+$/, '');
+    if (!val) {
+      dnsLog('rejected: empty input');
+      showError('Please enter a hostname or IP address.');
+      return;
+    }
+
+    let wasUrl = false;
+    let hadPath = false;
+    let urlParseFailed = false;
+    
+    if (val.startsWith('http://') || val.startsWith('https://')) wasUrl = true;
+    if (val.includes('/')) hadPath = true;
+
+    try {
+      if (wasUrl) {
+        val = new URL(val).hostname;
+      } else if (hadPath) {
+        val = new URL('http://' + val).hostname;
+      } else {
+        try {
+          const urlObj = new URL('http://' + val);
+          val = urlObj.hostname;
+        } catch(e) {
+          val = val.toLowerCase();
+          urlParseFailed = true;
+        }
+      }
+    } catch (e) {
+      val = val.toLowerCase();
+      urlParseFailed = true;
+    }
+    
+    val = val.replace(/\.+$/, '');
+    const changed = (rawVal !== val);
+    input.value = val;
+    currentLookupName = val;
+    currentReverseName = '';
+    
+    let type = typeSelect.value;
+    const serverId = getDnsServerId();
+    let kind = 'hostname';
+    let reverse = false;
+    let effectiveType = type;
+    
+    if (typeof validateIPv4 === 'function' && validateIPv4(val)) {
+      kind = 'ipv4';
+      reverse = true;
+      currentReverseName = val.split('.').reverse().join('.') + '.in-addr.arpa';
+      val = currentReverseName;
+      effectiveType = 'PTR';
+    } else if (typeof parseIPv6 === 'function') {
+      const bigInt = parseIPv6(val);
+      if (bigInt !== null) {
+        kind = 'ipv6';
+        reverse = true;
+        currentReverseName = bigInt.toString(16).padStart(32, '0').split('').reverse().join('.') + '.ip6.arpa';
+        val = currentReverseName;
+        effectiveType = 'PTR';
+      }
+    }
+    
+    dnsLog(`start | selectedType=${type} | server=${serverId} | inputLength=${rawVal.length} | online=${navigator.onLine}`);
+    dnsLog(`input | wasUrl=${wasUrl} | hadPath=${hadPath} | changed=${changed} | urlParseFailed=${urlParseFailed} | kind=${kind} | effectiveType=${effectiveType} | reverse=${reverse}`);
+
+    if (navigator.onLine === false) {
+      dnsLog('rejected: offline');
+      showError('Device is offline. Please check your connection.');
+      return;
+    }
+
+    btnLookup.disabled = true;
+    btnLookup.textContent = 'Looking up...';
+    tbody.innerHTML = '';
+    
+    if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
+      window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'dnsLookup', type: 'string' }).catch(() => {});
+    }
+
+    if (currentAbortController) {
+      dnsLog('abort reason=superseded');
+      currentAbortController.abort();
+    }
+    currentAbortController = new window.AbortController();
+    const abortTimer = setTimeout(() => {
+      if (currentAbortController) {
+        dnsLog('abort reason=timeout');
+        currentAbortController.abort();
+      }
+    }, 8000);
+
+    const startTime = performance.now();
+    let outcome = 'ok';
+    
+    try {
+      let results = [];
+      let maxStatus = 0;
+      let failedQueries = 0;
+      let totalQueries = 1;
+      
+      if (effectiveType === 'ALL') {
+        const types = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME'];
+        totalQueries = types.length;
+        const promises = types.map(t => fetchDns(val, t, serverId));
+        const responses = await Promise.allSettled(promises);
+        
+        const rejected = responses.filter(r => r.status === 'rejected');
+        failedQueries = rejected.length;
+        
+        if (failedQueries === totalQueries) {
+          throw rejected[0].reason;
+        }
+        
+        if (failedQueries > 0) {
+          const failedTypes = [];
+          responses.forEach((r, i) => { if (r.status === 'rejected') failedTypes.push(types[i]); });
+          dnsLog(`ALL: ${failedQueries} of ${totalQueries} failed (failed types: ${failedTypes.join(',')})`);
+        }
+        
+        for (const res of responses) {
+          if (res.status === 'fulfilled' && res.value) {
+            const data = res.value;
+            if (data.Status > maxStatus) maxStatus = data.Status;
+            if (data.Answer) results.push(...data.Answer);
+            else if (data.Authority && results.length === 0) results.push(...data.Authority);
+          }
+        }
+      } else {
+        const data = await fetchDns(val, effectiveType, serverId);
+        maxStatus = data.Status;
+        if (data.Answer) results = data.Answer;
+        else if (data.Authority) results = data.Authority;
+      }
+
+      // Deduplicate
+      let dupesRemoved = 0;
+      const seen = new Set();
+      results = results.filter(r => {
+        const key = r.name + '|' + r.type + '|' + r.data;
+        if (seen.has(key)) {
+          dupesRemoved++;
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+
+      const elapsed = Math.round(performance.now() - startTime);
+      const rcodeName = RCODE_NAMES[maxStatus] || ('RCODE' + maxStatus);
+      
+      let statusText = `${rcodeName} - ${elapsed}ms via ${DNS_SERVERS[serverId].label} (DNS over HTTPS)`;
+      if (failedQueries > 0) statusText += ` (${failedQueries} of ${totalQueries} queries failed)`;
+      statusLine.textContent = statusText;
+      
+      const activeName = (currentLookupName || currentReverseName || 'Unknown');
+      const activeType = (effectiveType === 'ALL' ? 'A, AAAA, MX, NS, TXT, CNAME' : effectiveType);
+      lastLookupNoteTitle = `DNS Lookup: ${activeName} (${activeType})`;
+      lastLookupResultText = `DNS Lookup for ${activeName} (${activeType})\nStatus: ${rcodeName} (${elapsed}ms)\nServer: ${DNS_SERVERS[serverId].label}\n\n`;
+
+      let maxDataLen = 0;
+
+      if (results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:16px;">No records found</td></tr>';
+        lastLookupResultText += "No records found.\n";
+      } else {
+        let i = 0;
+        for (const rec of results) {
+          try {
+            const rawName = String(rec.name || '').replace(/(.)\.$/, '$1');
+            const recTypeNum = rec.type;
+            const rawType = RECORD_TYPES[recTypeNum] || ('TYPE' + recTypeNum);
+            const rawTtl = String(rec.TTL || '');
+            const rawData = rec.data || '';
+            
+            if (rawData.length > maxDataLen) maxDataLen = rawData.length;
+
+            lastLookupResultText += `${rawName}\t${rawType}\t${rawTtl}\t${rawData}\n`;
+            
+            const safeName = typeof escapeHTML === 'function' ? escapeHTML(String(rawName)) : String(rawName);
+            const safeType = typeof escapeHTML === 'function' ? escapeHTML(String(rawType)) : String(rawType);
+            const safeTtl = typeof escapeHTML === 'function' ? escapeHTML(String(rawTtl)) : String(rawTtl);
+            const safeData = typeof escapeHTML === 'function' ? escapeHTML(String(rawData)) : String(rawData);
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td style="word-break: break-all;">${safeName}</td>
+              <td>${safeType}</td>
+              <td>${safeTtl}</td>
+              <td style="word-break: break-word; max-width: 250px;">${safeData}</td>
+            `;
+            tbody.appendChild(tr);
+          } catch (renderErr) {
+            const info = dnsErrInfo(renderErr);
+            dnsLog(`render FAILED at row ${i} | error=${info.name} | kind=${info.kind} | frames=${info.frames}`);
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:16px; color:var(--accent-danger);">An error occurred displaying the results.</td></tr>';
+            lastLookupResultText = '';
+            lastLookupNoteTitle = '';
+            outcome = 'error';
+            break;
+          }
+          i++;
+        }
+      }
+      
+      resultsCard.style.display = 'block';
+      dnsLog(`result | elapsed=${elapsed} | RCODE=${rcodeName} | results=${results.length} | dupesRemoved=${dupesRemoved} | maxDataLen=${maxDataLen}`);
+
+    } catch (err) {
+      const red = redactErr(err);
+      if (err.name === 'AbortError') {
+        outcome = 'timeout';
+        showError('Request timed out (8 seconds).');
+        dnsLog(`abort reason=timeout`);
+      } else {
+        outcome = 'error';
+        showError('Failed to lookup DNS: ' + red.msg);
+      }
+    } finally {
+      clearTimeout(abortTimer);
+      btnLookup.disabled = false;
+      btnLookup.textContent = 'Lookup';
+      currentAbortController = null;
+      currentLookupName = '';
+      currentReverseName = '';
+      dnsLog(`finished | outcome=${outcome} | totalMs=${Math.round(performance.now() - startTime)}`);
+    }
+  }
+
+  btnLookup.addEventListener('click', runLookup);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runLookup();
+  });
+  
+  btnClear.addEventListener('click', () => {
+    dnsLog('ui: cleared');
+    input.value = '';
+    hideError();
+    resultsCard.style.display = 'none';
+    lastLookupResultText = '';
+  });
+
+  btnCopy.addEventListener('click', () => {
+    const hasText = !!lastLookupResultText;
+    dnsLog(`ui: copy tap | hasText=${hasText} | len=${lastLookupResultText.length} | hasClip=${hasClip}`);
+    if (hasText && hasClip) {
+      navigator.clipboard.writeText(lastLookupResultText)
+        .then(() => {
+          dnsLog('ui: copy success');
+          if (typeof showToast === 'function') showToast('DNS results copied!');
+        })
+        .catch(err => {
+          const info = dnsErrInfo(err);
+          dnsLog(`ui: copy FAILED | error=${info.name} | kind=${info.kind}`);
+          if (typeof showToast === 'function') showToast('Copy failed');
+        });
+    }
+  });
+
+  btnShare.addEventListener('click', () => {
+    const hasText = !!lastLookupResultText;
+    dnsLog(`ui: share tap | hasText=${hasText} | len=${lastLookupResultText.length}`);
+    if (hasText && typeof shareText === 'function') {
+      shareText('DNS Lookup Results', lastLookupResultText);
+    }
+  });
+
+  btnSave.addEventListener('click', () => {
+    const hasText = !!lastLookupResultText;
+    dnsLog(`ui: save tap | hasText=${hasText} | len=${lastLookupResultText ? lastLookupResultText.length : 0}`);
+    if (!hasText || typeof addNote !== 'function') return;
+    addNote(lastLookupNoteTitle || 'DNS Lookup', lastLookupResultText, 'DNS');
+    if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+    if (typeof switchToNotesTab === 'function') switchToNotesTab();
+  });
+
+})();

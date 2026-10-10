@@ -75,3 +75,18 @@ get_error.py
 server_test.py
 test_app.py
 user-data-dir/
+ 
+# Local scratch
+Claude outputs/
+graphify-out/
+build68_implementation_prompt.md
+patch_bulk_cards.js
+patch_bulk_visibility.js
+patch_five_edits.js
+patch_share_fixes.js
+patch_splitter.js
+apply_ports.js
+fix_keyboard_overshoot.js
+scratch_keyboard_function.js
+live_website_source.html
+live_script_decoded.js

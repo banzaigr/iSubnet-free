@@ -37,8 +37,8 @@ No installation required. The app runs entirely in the browser.
 3. That's it — no build step, no server, no dependencies
 
 ```bash
-git clone https://github.com/risch72004/subnet-calculator.git
-cd subnet-calculator
+git clone https://github.com/banzaigr/iSubnet-free.git
+cd iSubnet-free
 open index.html   # macOS
 # or double-click index.html on Windows
 ```
@@ -57,7 +57,7 @@ open index.html   # macOS
 ## 📁 Project Structure
 
 ```
-subnet-calculator/
+iSubnet-free/
 ├── index.html       # App structure and tab layout
 ├── styles.css       # Full design system and dark mode styles
 ├── app.js           # Calculation engines, tab logic, storage
@@ -79,7 +79,7 @@ subnet-calculator/
 
 ## 📄 License
 
-Copyright © 2026 risch72004. All rights reserved.  
+Copyright © 2026 banzai.gr. All rights reserved.  
 See [LICENSE](LICENSE) for details.
 
 ---
