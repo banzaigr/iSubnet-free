@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>iSubnet - Network Calculator</title>
-  <link rel="stylesheet" href="styles.css?v=1.3.0">
+  <link rel="stylesheet" href="styles.css?v=1.4.0">
   <!-- Import premium font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -269,7 +269,7 @@
 
         <!-- App Version Footer -->
         <div id="settings-version-footer" style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.3.0 (Build 103)
+          iSubnet v1.4.0
         </div>
         </div>
       </div>
@@ -1628,12 +1628,12 @@
         <div class="card input-card" style="margin-bottom: 20px;">
           <div class="input-group">
             <label>Hostname or IP</label>
-            <input type="text" id="ping-input" placeholder="example.com or 8.8.8.8" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off">
+            <input type="text" id="ping-input" data-kbd-keep-visible="btn-ping-run" placeholder="example.com or 8.8.8.8" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off">
             <div id="ping-error-msg" style="color: var(--accent-danger); font-size: 13px; margin-top: 6px; display: none;"></div>
           </div>
           <div id="ping-options-row" class="ping-options-row">
             <label for="ping-count-input" class="ping-options-label">Probes <span id="ping-pro-badge" class="pro-badge" style="display: none;">🔒 Pro</span></label>
-            <input type="text" id="ping-count-input" class="ping-count-input" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="4" autocomplete="off">
+            <input type="text" id="ping-count-input" data-kbd-keep-visible="btn-ping-run" class="ping-count-input" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="4" autocomplete="off">
             <button type="button" id="btn-ping-continuous" class="ping-continuous-btn" aria-pressed="false">-t</button>
           </div>
           <div id="ping-platform-note" class="helper-text" style="display: none; margin-top: 12px; font-size: 13px; color: var(--text-secondary);">
@@ -1774,6 +1774,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-  <script src="app.js?v=1.3.0"></script>
+  <script src="app.js?v=1.4.0"></script>
 </body>
 </html>

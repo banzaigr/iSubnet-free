@@ -1,5 +1,7 @@
 package com.banzaigr.isubnet;
 
+import android.content.Context;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -10,6 +12,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -29,6 +32,37 @@ public class PingPlugin extends Plugin {
     private boolean isRunning = false;
     private volatile boolean isCancelled = false;
     private Process currentProcess = null;
+
+    private static WeakReference<PingPlugin> instanceRef = null;
+
+    @Override
+    public void load() {
+        instanceRef = new WeakReference<>(this);
+    }
+
+    static boolean cancelFromService() {
+        PingPlugin p = instanceRef != null ? instanceRef.get() : null;
+        return p != null && p.cancelRunning();
+    }
+
+    static boolean isRunningNow() {
+        PingPlugin p = instanceRef != null ? instanceRef.get() : null;
+        if (p == null) return false;
+        synchronized (p.lock) {
+            return p.isRunning;
+        }
+    }
+
+    private boolean cancelRunning() {
+        synchronized (lock) {
+            if (!isRunning) return false;
+            isCancelled = true;
+            if (currentProcess != null) {
+                currentProcess.destroy();
+            }
+            return true;
+        }
+    }
 
     @PluginMethod
     public void ping(PluginCall call) {
@@ -60,6 +94,7 @@ public class PingPlugin extends Plugin {
         final int targetCount = count;
         final int targetTimeoutMs = timeoutMs;
         final boolean targetContinuous = continuous;
+        final Context appContext = getContext().getApplicationContext();
 
         synchronized (lock) {
             if (isRunning) {
@@ -70,6 +105,7 @@ public class PingPlugin extends Plugin {
             isCancelled = false;
         }
 
+        PingForegroundService.startForPing(appContext);
         executor.execute(() -> {
             boolean rejected = false;
             int sent = 0;
@@ -285,6 +321,8 @@ public class PingPlugin extends Plugin {
 
                     call.resolve(ret);
                 }
+
+                PingForegroundService.endForPing(appContext);
             }
         });
     }
@@ -300,19 +338,6 @@ public class PingPlugin extends Plugin {
             }
         }
         call.resolve();
-    }
-
-    @Override
-    protected void handleOnStop() {
-        super.handleOnStop();
-        synchronized (lock) {
-            if (isRunning) {
-                isCancelled = true;
-                if (currentProcess != null) {
-                    currentProcess.destroy();
-                }
-            }
-        }
     }
 
     @Override

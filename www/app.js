@@ -5043,8 +5043,19 @@ function setupKeyboardAvoidance() {
     const margin = 12;
     const rect = active.getBoundingClientRect();
     dlog(`scrollFocusedIntoView() active=${active.tagName}#${active.id} rect.top=${rect.top} rect.bottom=${rect.bottom} tabBarTop=${tabBarTop} content.scrollTop(before)=${content.scrollTop}`);
-    if (rect.bottom > tabBarTop - margin) {
-      const delta = rect.bottom - (tabBarTop - margin);
+    // Optional: a field can name a button that should also stay above the tab bar
+    // (data-kbd-keep-visible="<button id>"), e.g. the Ping button under the Ping fields.
+    const keepId = active.getAttribute('data-kbd-keep-visible');
+    const keepEl = keepId ? document.getElementById(keepId) : null;
+    const bottomEdge = keepEl ? Math.max(rect.bottom, keepEl.getBoundingClientRect().bottom) : rect.bottom;
+    if (bottomEdge > tabBarTop - margin) {
+      let delta = bottomEdge - (tabBarTop - margin);
+      if (keepEl) {
+        // Never scroll the focused field itself off the top of the content area.
+        const fieldMin = Math.max(0, rect.bottom - (tabBarTop - margin));
+        const fieldMax = Math.max(fieldMin, rect.top - content.getBoundingClientRect().top - margin);
+        delta = Math.max(fieldMin, Math.min(delta, fieldMax));
+      }
       content.scrollTop += delta;
       dlog(`  input bottom (${rect.bottom}) was below safe boundary (${tabBarTop - margin}) -> scrolled by ${delta}px, content.scrollTop(after)=${content.scrollTop}`);
     } else if (rect.top < content.getBoundingClientRect().top) {
@@ -5174,6 +5185,21 @@ function init() {
   let debugRevealTapTimer = null;
   const versionFooter = document.getElementById('settings-version-footer');
   const debugRow = document.getElementById('debug-logging-row');
+
+  // Show the real app version/build (iOS: marketing version + build number; Android: versionName + versionCode).
+  if (versionFooter) {
+    try {
+      const capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+      if (capApp && typeof capApp.getInfo === 'function') {
+        capApp.getInfo().then((info) => {
+          if (info && info.version) {
+            versionFooter.textContent = `iSubnet v${info.version}` + (info.build ? ` (Build ${info.build})` : '');
+          }
+        }).catch(() => {});
+      }
+    } catch (e) { /* keep the default text */ }
+  }
+
   if (versionFooter && debugRow) {
     versionFooter.addEventListener('click', () => {
       debugRevealTapCount++;
@@ -7111,6 +7137,15 @@ function updateUpgradeUI(planTier) {
       window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'pingRun', type: 'string' }).catch(() => {});
     }
 
+    // Close the keyboard when a run starts (the number pad has no Return/Done key).
+    try {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl === input || activeEl === countInput)) activeEl.blur();
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard && typeof window.Capacitor.Plugins.Keyboard.hide === 'function') {
+        Promise.resolve(window.Capacitor.Plugins.Keyboard.hide()).catch(() => {});
+      }
+    } catch (e) { /* ignore */ }
+
     isRunning = true;
     updatePingControls();
     btnRun.textContent = 'Stop';
@@ -7292,8 +7327,12 @@ function updateUpgradeUI(planTier) {
     });
   }
 
+  // On iOS the app is suspended in the background, so a running ping is stopped there.
+  // On Android a foreground service keeps it running (see PingForegroundService.java).
+  const stopOnBackground = !!(window.Capacitor && typeof window.Capacitor.getPlatform === 'function' && window.Capacitor.getPlatform() === 'ios');
+
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && isRunning && P && typeof P.stop === 'function') {
+    if (stopOnBackground && document.visibilityState === 'hidden' && isRunning && P && typeof P.stop === 'function') {
       pingLog('stop: app hidden');
       try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
     }
@@ -7303,7 +7342,7 @@ function updateUpgradeUI(planTier) {
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App && typeof window.Capacitor.Plugins.App.addListener === 'function') {
       window.Capacitor.Plugins.App.addListener('appStateChange', (state) => {
         try {
-          if (state && state.isActive === false && isRunning && P && typeof P.stop === 'function') {
+          if (stopOnBackground && state && state.isActive === false && isRunning && P && typeof P.stop === 'function') {
             pingLog('stop: app hidden');
             try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
           }
