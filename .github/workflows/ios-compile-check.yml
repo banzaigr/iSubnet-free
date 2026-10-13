@@ -18,6 +18,11 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Packet logic self-test (compiles and runs on macOS)
+        run: |
+          swiftc -o "$RUNNER_TEMP/pingselftest" ios/App/CapApp-SPM/Sources/CapApp-SPM/PingPacket.swift ios/PingSelfTest/main.swift
+          "$RUNNER_TEMP/pingselftest"
+
       - run: node --version
 
       - run: xcodebuild -version

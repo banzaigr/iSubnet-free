@@ -7145,3 +7145,79 @@ function updateUpgradeUI(planTier) {
     });
   }
 })();
+
+// --- ANDROID BACK BUTTON ---
+(function initAndroidBackButton() {
+  if (typeof window === 'undefined' || !window.Capacitor) return;
+  if (typeof window.Capacitor.getPlatform !== 'function' || window.Capacitor.getPlatform() !== 'android') return;
+  const App = window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if (!App || typeof App.addListener !== 'function') return;
+
+  try {
+    App.addListener('backButton', function handleBackButton() {
+      try {
+        // 1. Popups in priority / z-index order
+        const popups = [
+          { id: 'global-error-modal', btnId: 'global-error-ok' },
+          { id: 'global-confirm-modal', btnId: 'global-confirm-cancel' },
+          { id: 'sync-nudge-modal', btnId: 'btn-nudge-dismiss' },
+          { id: 'tools-picker-modal', btnId: 'btn-tools-picker-close', fn: typeof closeToolsPicker === 'function' ? closeToolsPicker : null },
+          { id: 'pro-modal', btnId: 'btn-pro-dismiss', fn: typeof closeProModal === 'function' ? closeProModal : null },
+          { id: 'account-modal', btnId: 'btn-account-close' },
+          { id: 'plan-modal', btnId: 'btn-plan-close' },
+          { id: 'feedback-modal', btnId: 'btn-feedback-close' },
+          { id: 'settings-modal', btnId: 'btn-settings-close' }
+        ];
+
+        for (const popup of popups) {
+          const el = document.getElementById(popup.id);
+          if (el && !el.classList.contains('hidden')) {
+            if (typeof debugLog === 'function') {
+              debugLog('[Back] close popup ' + popup.id);
+            }
+            const btn = popup.btnId ? document.getElementById(popup.btnId) : null;
+            if (btn) {
+              btn.click();
+            } else if (typeof popup.fn === 'function') {
+              popup.fn();
+            }
+            return;
+          }
+        }
+
+        // 2. Tab check: return to calculator tab if not on it
+        const activeTab = document.querySelector('.tab-content.active');
+        if (activeTab && activeTab.id !== 'calculator-tab') {
+          if (typeof debugLog === 'function') {
+            debugLog('[Back] to calculator tab');
+          }
+          const calcBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
+          if (calcBtn) calcBtn.click();
+          return;
+        }
+
+        // 3. Exit app
+        if (typeof debugLog === 'function') {
+          debugLog('[Back] exit');
+        }
+        try {
+          if (typeof App.exitApp === 'function') {
+            App.exitApp();
+          } else if (typeof App.minimizeApp === 'function') {
+            App.minimizeApp();
+          }
+        } catch (e1) {
+          try {
+            if (typeof App.minimizeApp === 'function') {
+              App.minimizeApp();
+            }
+          } catch (e2) {}
+        }
+      } catch (err) {
+        // Never let an exception escape
+      }
+    });
+  } catch (err) {
+    // Never let an exception escape
+  }
+})();
