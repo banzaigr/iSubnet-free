@@ -256,6 +256,9 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus {
   background: var(--bg-card);
 }
 
+select:disabled { opacity: 0.5; cursor: not-allowed; }
+#btn-ping-run:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .error-msg {
   color: var(--accent-danger);
   font-size: 11px;

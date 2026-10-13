@@ -1555,6 +1555,7 @@
             <label>Hostname or IP</label>
             <input type="text" id="dns-input" placeholder="example.com or 8.8.8.8" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off">
             <div id="dns-error-msg" style="color: var(--accent-danger); font-size: 13px; margin-top: 6px; display: none;"></div>
+            <p id="dns-type-hint" class="helper-text" style="margin-top: 6px; font-size: 12px;" aria-live="polite"></p>
           </div>
           <div class="input-group" style="margin-top: 16px;">
             <label>Record Type</label>
@@ -1586,20 +1587,9 @@
           </div>
         </div>
 
-        <div id="dns-results-card" class="card result-card" style="display: none;">
+                <div id="dns-results-card" class="card result-card" style="display: none;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);">Results</h3>
-            <div style="display: flex; gap: 8px;">
-              <button id="btn-dns-copy" class="action-btn" title="Copy Text" style="padding: 6px; width: auto; height: auto;">
-                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path></svg>
-              </button>
-              <button id="btn-dns-save" class="action-btn" title="Save to Notes" style="padding: 6px; width: auto; height: auto;">
-                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"></path></svg>
-              </button>
-              <button id="btn-dns-share" class="action-btn" title="Share" style="padding: 6px; width: auto; height: auto;">
-                <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"></path></svg>
-              </button>
-            </div>
           </div>
           <div id="dns-status-line" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 500;"></div>
           <div class="table-container">
@@ -1615,6 +1605,73 @@
               <tbody id="dns-results-tbody">
               </tbody>
             </table>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-dns-copy" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-dns-save" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-dns-share" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="ping-tab" class="tab-content">
+        <div class="tools-title-row"><h2 class="tab-title">Ping</h2><button id="btn-ping-switch" class="tools-switch-chip">⇄ Tools</button></div>
+        <div class="card input-card" style="margin-bottom: 20px;">
+          <div class="input-group">
+            <label>Hostname or IP</label>
+            <input type="text" id="ping-input" placeholder="example.com or 8.8.8.8" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off">
+            <div id="ping-error-msg" style="color: var(--accent-danger); font-size: 13px; margin-top: 6px; display: none;"></div>
+          </div>
+          <div id="ping-platform-note" class="helper-text" style="display: none; margin-top: 12px; font-size: 13px; color: var(--text-secondary);">
+            Ping is available in the iOS and Android apps.
+          </div>
+          <div class="result-actions" style="margin-top: 20px; display: flex; gap: 10px;">
+            <button id="btn-ping-run" class="btn-primary" style="flex: 1;">Ping</button>
+            <button id="btn-ping-clear" class="btn-secondary" style="width: 80px;">Clear</button>
+          </div>
+        </div>
+
+                <div id="ping-results-card" class="card result-card" style="display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 15px; color: var(--text-primary);">Results</h3>
+          </div>
+          <div id="ping-status-line" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; font-weight: 500;"></div>
+          <div class="table-container">
+            <table id="ping-results-table" class="result-table" style="width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 40px;">#</th>
+                  <th>Reply</th>
+                  <th style="width: 80px;">Time</th>
+                  <th style="width: 60px;">TTL</th>
+                </tr>
+              </thead>
+              <tbody id="ping-results-tbody">
+              </tbody>
+            </table>
+          </div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-ping-copy" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-ping-save" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-ping-share" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
           </div>
         </div>
       </section>

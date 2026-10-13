@@ -654,7 +654,7 @@ const FREE_HISTORY_LIMIT = 4;
 let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
 
 const PRO_FEATURE_INFO = {
-  tools: { title: '🌐 DNS Lookup', text: 'Look up A, AAAA, MX, NS, TXT, CNAME, SOA, PTR and CAA records for any domain or IP. Copy, share or save results to Notes.' },
+  tools: { title: '🌐 DNS Lookup', text: 'Look up A, AAAA, MX, NS, TXT, CNAME, SOA and CAA records for any domain, or enter an IP address to find its hostname with a reverse DNS (PTR) lookup. Copy, share or save results to Notes.' },
   splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' }
 };
 
@@ -4887,15 +4887,16 @@ function setupInputSanitizers() {
     { id: 'ipv6-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
     { id: 'split-base-ip',    allowed: /[0-9a-fA-F.:/]/ },
     { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ },
-    { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
+    { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
+    { id: 'ping-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
   ];
   rules.forEach(({ id, allowed }) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', () => {
-      if (id === 'dns-input') normalizeDnsInput(el);
+      if (id === 'dns-input' || id === 'ping-input') normalizeDnsInput(el);
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input' || id === 'ping-input') {
         collapseDuplicateDots(el);
         collapseDuplicateColons(el);
       }
@@ -5403,6 +5404,8 @@ function init() {
   }
   const toolsSwitchChip = document.getElementById('btn-tools-switch');
   if (toolsSwitchChip) toolsSwitchChip.addEventListener('click', openToolsPicker);
+  const pingSwitchChip = document.getElementById('btn-ping-switch');
+  if (pingSwitchChip) pingSwitchChip.addEventListener('click', openToolsPicker);
   const toolsPickerModal = document.getElementById('tools-picker-modal');
   const toolsPickerClose = document.getElementById('btn-tools-picker-close');
   if (toolsPickerClose) toolsPickerClose.addEventListener('click', closeToolsPicker);
@@ -5414,7 +5417,8 @@ function init() {
 
 // --- Tools Picker ---
 const TOOLS_LIST = [
-  { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, AAAA, MX, NS, TXT and more', screen: 'tools-tab', feature: 'tools' }
+  { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, MX, NS, TXT, reverse DNS and more', screen: 'tools-tab', feature: 'tools', pro: true },
+  { id: 'ping', icon: '📶', title: 'Ping', desc: 'Test reachability and round-trip time', screen: 'ping-tab', pro: false }
 ];
 
 function openToolsPicker() {
@@ -5440,12 +5444,13 @@ function openToolsPicker() {
     text.appendChild(title);
     text.appendChild(desc);
     const right = document.createElement('span');
-    if (PRO_UNLOCKED) {
-      right.className = 'tools-picker-chevron';
-      right.textContent = '›';
-    } else {
+    const isLocked = tool.pro && !PRO_UNLOCKED;
+    if (isLocked) {
       right.className = 'pro-badge';
       right.textContent = '🔒 Pro';
+    } else {
+      right.className = 'tools-picker-chevron';
+      right.textContent = '›';
     }
     row.appendChild(icon);
     row.appendChild(text);
@@ -5463,9 +5468,10 @@ function closeToolsPicker() {
 
 function openTool(tool) {
   closeToolsPicker();
-  if (typeof window.debugLog === 'function') window.debugLog(`Tools picker: selected ${tool.id} (locked=${!PRO_UNLOCKED})`);
-  if (!PRO_UNLOCKED) {
-    showProModal(tool.feature);
+  const isLocked = tool.pro && !PRO_UNLOCKED;
+  if (typeof window.debugLog === 'function') window.debugLog(`Tools picker: selected ${tool.id} (locked=${isLocked})`);
+  if (isLocked) {
+    showProModal(tool.feature || 'tools');
     return;
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -6283,6 +6289,7 @@ function updateUpgradeUI(planTier) {
   const errorMsg = document.getElementById('dns-error-msg');
   const btnCopy = document.getElementById('btn-dns-copy');
   const btnShare = document.getElementById('btn-dns-share');
+  const typeHint = document.getElementById('dns-type-hint');
 
   let currentDnsCount = 0;
   let dnsLookupCount = 0;
@@ -6373,6 +6380,66 @@ function updateUpgradeUI(planTier) {
   let currentAbortController = null;
   let lastLookupResultText = '';
   let lastLookupNoteTitle = '';
+
+  const DNS_TYPE_HINTS = {
+    A: 'Enter a hostname (example.com). Shows the IPv4 addresses it points to.',
+    AAAA: 'Enter a hostname (example.com). Shows the IPv6 addresses it points to. No result means no IPv6 address is published.',
+    MX: 'Enter a domain (example.com). Shows the mail servers that receive its email. The lowest priority number is tried first.',
+    NS: 'Enter a domain (example.com). Shows the name servers responsible for it. Subdomains usually have none of their own.',
+    TXT: 'Enter a domain (example.com). Shows text records such as SPF and site verification. For DMARC enter _dmarc.example.com.',
+    CNAME: 'Enter a subdomain (www.example.com). Shows the name it is an alias of. A main domain normally has no CNAME.',
+    SOA: 'Enter a domain (example.com). Shows the zone\'s primary name server, admin contact and refresh timers.',
+    PTR: 'Enter an IP address (8.8.8.8). Shows the hostname its owner registered for it, often a server name and not a website. Many addresses have none.',
+    CAA: 'Enter a domain (example.com). Shows which certificate authorities may issue certificates for it. None listed means no restriction at this name.',
+    ALL: 'Enter a domain (example.com). Runs A, AAAA, MX, NS, TXT and CNAME together. Types with no records are left out.',
+    IP: 'IP address detected: reverse DNS (PTR) lookup. Shows the hostname its owner registered for it, often a server name and not a website. The record type above is ignored.'
+  };
+
+  function updateDnsHint() {
+    if (!typeHint) return;
+    let val = (input.value || '').trim().replace(/\.+$/, '');
+
+    // Detect IP using the same normalization as runLookup
+    // (strip protocol/path if typed, then test IPv4 and IPv6). Never throws.
+    let isIp = false;
+    try {
+      if (val) {
+        let host = val;
+        const wasUrl = host.startsWith('http://') || host.startsWith('https://');
+        const hadPath = host.includes('/');
+        try {
+          if (wasUrl) {
+            host = new URL(host).hostname;
+          } else if (hadPath) {
+            host = new URL('http://' + host).hostname;
+          } else {
+            try {
+              host = new URL('http://' + host).hostname;
+            } catch (e) {
+              host = host.toLowerCase();
+            }
+          }
+        } catch (e) {
+          host = host.toLowerCase();
+        }
+        host = host.replace(/\.+$/, '');
+        if (validateIPv4(host) || parseIPv6(host) !== null) {
+          isIp = true;
+        }
+      }
+    } catch (e) {
+      isIp = false;
+    }
+
+    if (typeSelect) {
+      typeSelect.disabled = isIp;
+    }
+
+    const selectedType = typeSelect.value;
+    const text = isIp ? DNS_TYPE_HINTS.IP : (DNS_TYPE_HINTS[selectedType] || '');
+    typeHint.textContent = text;
+    typeHint.style.color = isIp ? 'var(--accent-primary)' : '';
+  }
 
   const RECORD_TYPES = {
     1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT', 28: 'AAAA', 33: 'SRV', 257: 'CAA'
@@ -6561,6 +6628,7 @@ function updateUpgradeUI(planTier) {
     val = val.replace(/\.+$/, '');
     const changed = (rawVal !== val);
     input.value = val;
+    updateDnsHint();
     currentLookupName = val;
     currentReverseName = '';
     
@@ -6599,6 +6667,7 @@ function updateUpgradeUI(planTier) {
     btnLookup.disabled = true;
     btnLookup.textContent = 'Looking up...';
     tbody.innerHTML = '';
+    statusLine.style.color = 'var(--text-secondary)';
     
     if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
       window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'dnsLookup', type: 'string' }).catch(() => {});
@@ -6649,14 +6718,12 @@ function updateUpgradeUI(planTier) {
             const data = res.value;
             if (data.Status > maxStatus) maxStatus = data.Status;
             if (data.Answer) results.push(...data.Answer);
-            else if (data.Authority && results.length === 0) results.push(...data.Authority);
           }
         }
       } else {
         const data = await fetchDns(val, effectiveType, serverId);
         maxStatus = data.Status;
         if (data.Answer) results = data.Answer;
-        else if (data.Authority) results = data.Authority;
       }
 
       // Deduplicate
@@ -6678,6 +6745,7 @@ function updateUpgradeUI(planTier) {
       let statusText = `${rcodeName} - ${elapsed}ms via ${DNS_SERVERS[serverId].label} (DNS over HTTPS)`;
       if (failedQueries > 0) statusText += ` (${failedQueries} of ${totalQueries} queries failed)`;
       statusLine.textContent = statusText;
+      statusLine.style.color = (maxStatus === 0) ? 'var(--accent-success)' : 'var(--accent-danger)';
       
       const activeName = (currentLookupName || currentReverseName || 'Unknown');
       const activeType = (effectiveType === 'ALL' ? 'A, AAAA, MX, NS, TXT, CNAME' : effectiveType);
@@ -6712,8 +6780,8 @@ function updateUpgradeUI(planTier) {
             tr.innerHTML = `
               <td style="word-break: break-all;">${safeName}</td>
               <td>${safeType}</td>
-              <td>${safeTtl}</td>
-              <td style="word-break: break-word; max-width: 250px;">${safeData}</td>
+              <td style="color: var(--text-muted);">${safeTtl}</td>
+              <td style="word-break: break-word; max-width: 250px; color: var(--accent-primary); font-weight: 500;">${safeData}</td>
             `;
             tbody.appendChild(tr);
           } catch (renderErr) {
@@ -6757,10 +6825,13 @@ function updateUpgradeUI(planTier) {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') runLookup();
   });
+  input.addEventListener('input', updateDnsHint);
+  typeSelect.addEventListener('change', updateDnsHint);
   
   btnClear.addEventListener('click', () => {
     dnsLog('ui: cleared');
     input.value = '';
+    updateDnsHint();
     hideError();
     resultsCard.style.display = 'none';
     lastLookupResultText = '';
@@ -6800,4 +6871,277 @@ function updateUpgradeUI(planTier) {
     if (typeof switchToNotesTab === 'function') switchToNotesTab();
   });
 
+  updateDnsHint();
+})();
+
+
+// --- PING TOOL ---
+(function initPingTool() {
+  const input = document.getElementById('ping-input');
+  const btnRun = document.getElementById('btn-ping-run');
+  const btnClear = document.getElementById('btn-ping-clear');
+  const resultsCard = document.getElementById('ping-results-card');
+  const statusLine = document.getElementById('ping-status-line');
+  const tbody = document.getElementById('ping-results-tbody');
+  const errorMsg = document.getElementById('ping-error-msg');
+  const platformNote = document.getElementById('ping-platform-note');
+  const btnCopy = document.getElementById('btn-ping-copy');
+  const btnSave = document.getElementById('btn-ping-save');
+  const btnShare = document.getElementById('btn-ping-share');
+
+  if (!input || !btnRun || !btnClear || !resultsCard || !statusLine || !tbody || !errorMsg) {
+    return;
+  }
+
+  function pingLog(msg) {
+    if (typeof window.debugLog === 'function') window.debugLog(`[Ping] ${msg}`);
+  }
+
+  const cap = window.Capacitor;
+  const platform = cap && cap.getPlatform ? cap.getPlatform() : 'web';
+  const isNative = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+
+  let lookupPath = 'none';
+  let P = null;
+  if (cap && cap.Plugins && cap.Plugins.Ping) {
+    P = cap.Plugins.Ping;
+    lookupPath = 'Plugins.Ping';
+  } else if (cap && typeof cap.registerPlugin === 'function') {
+    try {
+      P = cap.registerPlugin('Ping');
+      if (P) lookupPath = 'registerPlugin';
+    } catch (e) {
+      lookupPath = 'registerPlugin_failed';
+    }
+  }
+
+  pingLog(`init: platform=${platform} | isNative=${isNative} | pluginFound=${!!P} | path=${lookupPath}`);
+
+  if (!isNative) {
+    btnRun.disabled = true;
+    if (platformNote) platformNote.style.display = 'block';
+  }
+
+  let isRunning = false;
+  let probeListener = null;
+  let lastPingResultText = '';
+  let lastPingNoteTitle = '';
+  let rowsData = [];
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+    resultsCard.style.display = 'none';
+  }
+
+  function hideError() {
+    errorMsg.style.display = 'none';
+  }
+
+  async function runPing() {
+    if (isRunning) {
+      pingLog('ui: stop tap');
+      if (P && typeof P.stop === 'function') {
+        try { await P.stop(); } catch (e) { /* ignore */ }
+      }
+      return;
+    }
+
+    hideError();
+
+    let rawVal = input.value;
+    let val = rawVal.trim().replace(/\.+$/, '');
+    if (!val) {
+      showError('Please enter a hostname or IP address.');
+      return;
+    }
+    if (val.startsWith('-') || /\s/.test(val)) {
+      showError('Invalid hostname or IP address.');
+      return;
+    }
+
+    let wasUrl = false;
+    let hadPath = false;
+    if (val.startsWith('http://') || val.startsWith('https://')) wasUrl = true;
+    if (val.includes('/')) hadPath = true;
+
+    try {
+      if (wasUrl) {
+        val = new URL(val).hostname;
+      } else if (hadPath) {
+        val = new URL('http://' + val).hostname;
+      } else {
+        try {
+          const urlObj = new URL('http://' + val);
+          val = urlObj.hostname;
+        } catch (e) {
+          val = val.toLowerCase();
+        }
+      }
+    } catch (e) {
+      val = val.toLowerCase();
+    }
+
+    val = val.replace(/^\[|\]$/g, '');
+    if (!val || val.startsWith('-') || /\s/.test(val)) {
+      showError('Invalid hostname or IP address.');
+      return;
+    }
+
+    if (!P) {
+      if (cap && cap.Plugins && cap.Plugins.Ping) {
+        P = cap.Plugins.Ping;
+        lookupPath = 'Plugins.Ping';
+      } else if (cap && typeof cap.registerPlugin === 'function') {
+        try {
+          P = cap.registerPlugin('Ping');
+          if (P) lookupPath = 'registerPlugin';
+        } catch (e) {
+          lookupPath = 'registerPlugin_failed';
+        }
+      }
+    }
+
+    if (!P) {
+      showError("Ping isn't available on this device yet.");
+      return;
+    }
+
+    pingLog(`ui: start | online=${navigator.onLine} | inputLength=${rawVal.length}`);
+
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseCrashlytics) {
+      window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'pingRun', type: 'string' }).catch(() => {});
+    }
+
+    isRunning = true;
+    btnRun.textContent = 'Stop';
+    tbody.innerHTML = '';
+    rowsData = [];
+    resultsCard.style.display = 'block';
+    statusLine.textContent = 'Pinging...';
+    let outcome = 'ok';
+
+    try {
+      if (typeof P.addListener === 'function') {
+        probeListener = await P.addListener('probe', (probe) => {
+          let replyText = '';
+          if (probe.outcome === 'REPLY') {
+            const addr = probe.resolvedAddress || val;
+            replyText = `Reply from ${addr}`;
+          } else if (probe.outcome === 'TIMEOUT') {
+            replyText = 'Request timed out';
+          } else if (probe.outcome === 'UNREACHABLE') {
+            replyText = 'Destination unreachable';
+          } else if (probe.outcome === 'UNKNOWN_HOST') {
+            replyText = 'Unknown host';
+          } else {
+            replyText = `Error: ${probe.message || 'Ping failed'}`;
+          }
+
+          const timeText = (probe.timeMs !== null && probe.timeMs !== undefined) ? `${probe.timeMs} ms` : '—';
+          const ttlText = (probe.ttl !== null && probe.ttl !== undefined) ? String(probe.ttl) : '—';
+
+          rowsData.push({
+            seq: probe.seq,
+            reply: replyText,
+            time: timeText,
+            ttl: ttlText
+          });
+
+          const replyColor = (probe.outcome === 'REPLY') ? 'var(--accent-success)' : 'var(--accent-danger)';
+          const timeColor = (timeText !== '—') ? 'var(--accent-primary)' : 'var(--text-muted)';
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${escapeHTML(String(probe.seq))}</td>
+            <td style="word-break: break-all; color: ${replyColor};">${escapeHTML(replyText)}</td>
+            <td style="color: ${timeColor};">${escapeHTML(timeText)}</td>
+            <td style="color: var(--text-muted);">${escapeHTML(ttlText)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      const res = await P.ping({ host: val, count: 4, timeoutMs: 3000 });
+      outcome = res.cancelled ? 'cancelled' : 'ok';
+
+      const sent = res.sent || 0;
+      const received = res.received || 0;
+      const loss = (res.lossPercent !== null && res.lossPercent !== undefined) ? res.lossPercent : (sent > 0 ? Math.round(((sent - received) / sent) * 100) : 0);
+
+      let summary = `${sent} sent · ${received} received · ${loss}% loss`;
+      if (received > 0 && res.minMs !== null && res.minMs !== undefined && res.avgMs !== null && res.avgMs !== undefined && res.maxMs !== null && res.maxMs !== undefined) {
+        summary += ` · min ${res.minMs} / avg ${res.avgMs} / max ${res.maxMs} ms`;
+      }
+      statusLine.textContent = summary;
+
+      const hostHdr = `Ping ${val}${res.resolvedAddress ? ` (${res.resolvedAddress})` : ''}`;
+      lastPingResultText = `${hostHdr}\n${summary}\n\n#\tReply\tTime\tTTL\n` + rowsData.map(r => `${r.seq}\t${r.reply}\t${r.time}\t${r.ttl}`).join('\n') + '\n';
+      lastPingNoteTitle = `Ping: ${val}`;
+
+      pingLog(`result: sent=${sent} | received=${received} | loss=${loss}% | cancelled=${!!res.cancelled}`);
+
+    } catch (err) {
+      outcome = 'error';
+      showError(err.message || 'Ping failed');
+    } finally {
+      if (probeListener && typeof probeListener.remove === 'function') {
+        try { await probeListener.remove(); } catch (e) { /* ignore */ }
+        probeListener = null;
+      }
+      isRunning = false;
+      btnRun.textContent = 'Ping';
+      pingLog(`outcome: ${outcome}`);
+    }
+  }
+
+  btnRun.addEventListener('click', runPing);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runPing();
+  });
+
+  btnClear.addEventListener('click', () => {
+    pingLog('ui: clear tap');
+    input.value = '';
+    hideError();
+    resultsCard.style.display = 'none';
+    lastPingResultText = '';
+    lastPingNoteTitle = '';
+    tbody.innerHTML = '';
+  });
+
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      pingLog('ui: copy tap');
+      if (lastPingResultText && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(lastPingResultText)
+          .then(() => {
+            pingLog('ui: copy success');
+            if (typeof showToast === 'function') showToast('Ping results copied!');
+          })
+          .catch(() => {
+            if (typeof showToast === 'function') showToast('Copy failed');
+          });
+      }
+    });
+  }
+
+  if (btnShare) {
+    btnShare.addEventListener('click', () => {
+      pingLog('ui: share tap');
+      if (lastPingResultText && typeof shareText === 'function') {
+        shareText('Ping Results', lastPingResultText);
+      }
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      pingLog('ui: save tap');
+      if (!lastPingResultText || typeof addNote !== 'function') return;
+      addNote(lastPingNoteTitle || 'Ping', lastPingResultText, 'Ping');
+      if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+      if (typeof switchToNotesTab === 'function') switchToNotesTab();
+    });
+  }
 })();

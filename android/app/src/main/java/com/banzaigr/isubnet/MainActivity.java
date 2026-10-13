@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
             setTheme(R.style.AppTheme_NoActionBarLaunchLight);
         }
         
+        registerPlugin(PingPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
