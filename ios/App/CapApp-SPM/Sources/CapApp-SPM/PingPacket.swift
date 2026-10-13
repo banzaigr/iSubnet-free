@@ -121,3 +121,6 @@ func parseReply(family: Int32, buf: [UInt8], length: Int, expectedSeq: Int) -> P
         }
     }
 }
+
+func clampProbeCount(_ raw: Int) -> Int { return min(max(raw, 1), 100) }
+func clampTimeoutMs(_ raw: Int) -> Int { return min(max(raw, 1000), 5000) }

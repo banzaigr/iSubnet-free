@@ -4,6 +4,8 @@ import Capacitor
 public class PingBridgeViewController: CAPBridgeViewController {
     override public func capacitorDidLoad() {
         super.capacitorDidLoad()
-        bridge?.registerPluginInstance(PingPlugin())
+        let ping = PingPlugin()
+        bridge?.registerPluginInstance(ping)
+        ping.observeAppBackground()
     }
 }

@@ -46,9 +46,11 @@ public class PingPlugin extends Plugin {
             return;
         }
 
+        boolean continuous = Boolean.TRUE.equals(call.getBoolean("continuous", false));
+
         int count = call.getInt("count", 4);
         if (count < 1) count = 1;
-        if (count > 10) count = 10;
+        if (count > 100) count = 100;
 
         int timeoutMs = call.getInt("timeoutMs", 3000);
         if (timeoutMs < 1000) timeoutMs = 1000;
@@ -57,6 +59,7 @@ public class PingPlugin extends Plugin {
         final String targetHost = host;
         final int targetCount = count;
         final int targetTimeoutMs = timeoutMs;
+        final boolean targetContinuous = continuous;
 
         synchronized (lock) {
             if (isRunning) {
@@ -77,7 +80,7 @@ public class PingPlugin extends Plugin {
             String resolvedAddress = null;
 
             try {
-                for (int i = 1; i <= targetCount; i++) {
+                for (int i = 1; targetContinuous || i <= targetCount; i++) {
                     synchronized (lock) {
                         if (isCancelled) {
                             break;
@@ -160,7 +163,7 @@ public class PingPlugin extends Plugin {
                         probeEvent.put("message", "Request timed out");
                         notifyListeners("probe", probeEvent);
 
-                        if (i < targetCount) {
+                        if (targetContinuous || i < targetCount) {
                             synchronized (lock) {
                                 if (isCancelled) break;
                             }
@@ -192,6 +195,17 @@ public class PingPlugin extends Plugin {
                         else probeEvent.put("resolvedAddress", JSObject.NULL);
                         probeEvent.put("message", parsed.message);
                         notifyListeners("probe", probeEvent);
+                        if (targetContinuous || i < targetCount) {
+                            synchronized (lock) {
+                                if (isCancelled) break;
+                            }
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        }
                         continue;
                     }
 
@@ -225,7 +239,11 @@ public class PingPlugin extends Plugin {
 
                     notifyListeners("probe", probeEvent);
 
-                    if (i < targetCount) {
+                    if (targetContinuous && parsed.outcome == PingOutputParser.Outcome.UNKNOWN_HOST && resolvedAddress == null) {
+                        break;
+                    }
+
+                    if (targetContinuous || i < targetCount) {
                         synchronized (lock) {
                             if (isCancelled) break;
                         }
@@ -282,6 +300,19 @@ public class PingPlugin extends Plugin {
             }
         }
         call.resolve();
+    }
+
+    @Override
+    protected void handleOnStop() {
+        super.handleOnStop();
+        synchronized (lock) {
+            if (isRunning) {
+                isCancelled = true;
+                if (currentProcess != null) {
+                    currentProcess.destroy();
+                }
+            }
+        }
     }
 
     @Override

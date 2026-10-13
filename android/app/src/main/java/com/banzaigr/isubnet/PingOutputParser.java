@@ -102,7 +102,8 @@ public class PingOutputParser {
             }
 
             if (lower.contains("destination host unreachable") || lower.contains("destination net unreachable")
-                    || lower.contains("destination protocol unreachable") || lower.contains("destination port unreachable")) {
+                    || lower.contains("destination protocol unreachable") || lower.contains("destination port unreachable")
+                    || lower.contains("network is unreachable") || lower.contains("no route to host")) {
                 hasUnreachable = true;
             }
 

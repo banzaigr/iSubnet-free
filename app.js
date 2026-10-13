@@ -655,7 +655,8 @@ let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
 
 const PRO_FEATURE_INFO = {
   tools: { title: '🌐 DNS Lookup', text: 'Look up A, AAAA, MX, NS, TXT, CNAME, SOA and CAA records for any domain, or enter an IP address to find its hostname with a reverse DNS (PTR) lookup. Copy, share or save results to Notes.' },
-  splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' }
+  splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' },
+  ping: { title: '📶 Ping options', text: 'Choose how many probes to send (up to 100), or turn on -t to ping continuously until you stop it, with the newest result at the top.' }
 };
 
 function showProModal(feature) {
@@ -824,6 +825,7 @@ function applyProState() {
     renderNotes();
     renderHistory();
   }
+  if (typeof window.updatePingControls === 'function') window.updatePingControls();
 }
 
 // --- Safe Storage Wrapper for Local file:// CORS constraints ---
@@ -6888,6 +6890,9 @@ function updateUpgradeUI(planTier) {
   const btnCopy = document.getElementById('btn-ping-copy');
   const btnSave = document.getElementById('btn-ping-save');
   const btnShare = document.getElementById('btn-ping-share');
+  const countInput = document.getElementById('ping-count-input');
+  const continuousBtn = document.getElementById('btn-ping-continuous');
+  const proBadge = document.getElementById('ping-pro-badge');
 
   if (!input || !btnRun || !btnClear || !resultsCard || !statusLine || !tbody || !errorMsg) {
     return;
@@ -6927,6 +6932,75 @@ function updateUpgradeUI(planTier) {
   let lastPingResultText = '';
   let lastPingNoteTitle = '';
   let rowsData = [];
+
+  let continuousOn = false;
+  let liveSent = 0;
+  let liveReceived = 0;
+  let liveSum = 0;
+  let liveMin = null;
+  let liveMax = null;
+  let droppedRows = 0;
+  let runContinuous = false;
+  let newestFirst = false;
+
+  function isProNow() {
+    return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
+  }
+
+  function updatePingControls() {
+    const isPro = isProNow();
+    if (proBadge) {
+      proBadge.style.display = isPro ? 'none' : 'inline-block';
+    }
+    if (!isPro) {
+      if (countInput) {
+        countInput.value = '4';
+        countInput.readOnly = true;
+      }
+      continuousOn = false;
+    } else {
+      if (countInput) {
+        countInput.readOnly = false;
+      }
+    }
+    if (continuousBtn) {
+      continuousBtn.classList.toggle('active', continuousOn);
+      continuousBtn.setAttribute('aria-pressed', continuousOn ? 'true' : 'false');
+      continuousBtn.disabled = (!isNative) || isRunning;
+    }
+    if (countInput) {
+      countInput.disabled = (!isNative) || isRunning || continuousOn;
+    }
+  }
+  window.updatePingControls = updatePingControls;
+  updatePingControls();
+
+  if (countInput) {
+    const onCountInteract = (e) => {
+      if (!isProNow() && isNative) {
+        if (e.cancelable) e.preventDefault();
+        countInput.blur();
+        showProModal('ping');
+      }
+    };
+    countInput.addEventListener('pointerdown', onCountInteract);
+    countInput.addEventListener('focus', onCountInteract);
+    countInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runPing();
+    });
+  }
+
+  if (continuousBtn) {
+    continuousBtn.addEventListener('click', () => {
+      if (!isNative || isRunning) return;
+      if (!isProNow()) {
+        showProModal('ping');
+        return;
+      }
+      continuousOn = !continuousOn;
+      updatePingControls();
+    });
+  }
 
   function showError(msg) {
     errorMsg.textContent = msg;
@@ -6988,6 +7062,30 @@ function updateUpgradeUI(planTier) {
       return;
     }
 
+    let countToSend = 4;
+    if (isProNow() && continuousOn) {
+      runContinuous = true;
+      countToSend = 4;
+    } else if (isProNow() && !continuousOn) {
+      const trimmedCount = (countInput ? countInput.value : '').trim();
+      if (!/^\d{1,3}$/.test(trimmedCount)) {
+        showError('Probe count must be a whole number from 1 to 100.');
+        return;
+      }
+      const num = parseInt(trimmedCount, 10);
+      if (num < 1 || num > 100) {
+        showError('Probe count must be a whole number from 1 to 100.');
+        return;
+      }
+      runContinuous = false;
+      countToSend = num;
+    } else {
+      runContinuous = false;
+      countToSend = 4;
+      if (countInput) countInput.value = '4';
+    }
+    newestFirst = runContinuous || countToSend > 10;
+
     if (!P) {
       if (cap && cap.Plugins && cap.Plugins.Ping) {
         P = cap.Plugins.Ping;
@@ -7014,16 +7112,42 @@ function updateUpgradeUI(planTier) {
     }
 
     isRunning = true;
+    updatePingControls();
     btnRun.textContent = 'Stop';
-    tbody.innerHTML = '';
-    rowsData = [];
     resultsCard.style.display = 'block';
     statusLine.textContent = 'Pinging...';
+    tbody.innerHTML = '';
+    rowsData = [];
+    lastPingResultText = '';
+    lastPingNoteTitle = '';
+    liveSent = 0;
+    liveReceived = 0;
+    liveSum = 0;
+    liveMin = null;
+    liveMax = null;
+    droppedRows = 0;
+
     let outcome = 'ok';
+    pingLog(`ui: params | count=${countToSend} | continuous=${runContinuous} | newestFirst=${newestFirst} | pro=${isProNow()}`);
 
     try {
       if (typeof P.addListener === 'function') {
         probeListener = await P.addListener('probe', (probe) => {
+          liveSent++;
+          if (probe.outcome === 'REPLY' && typeof probe.timeMs === 'number') {
+            liveReceived++;
+            liveSum += probe.timeMs;
+            if (liveMin === null || probe.timeMs < liveMin) liveMin = probe.timeMs;
+            if (liveMax === null || probe.timeMs > liveMax) liveMax = probe.timeMs;
+          }
+          const loss = Math.round(((liveSent - liveReceived) / liveSent) * 100);
+          let liveText = `Pinging... · ${liveSent} sent · ${liveReceived} received · ${loss}% loss`;
+          if (liveReceived > 0) {
+            const avg = Math.round((liveSum / liveReceived) * 10) / 10;
+            liveText += ` · min ${liveMin} / avg ${avg} / max ${liveMax} ms`;
+          }
+          statusLine.textContent = liveText;
+
           let replyText = '';
           if (probe.outcome === 'REPLY') {
             const addr = probe.resolvedAddress || val;
@@ -7041,12 +7165,12 @@ function updateUpgradeUI(planTier) {
           const timeText = (probe.timeMs !== null && probe.timeMs !== undefined) ? `${probe.timeMs} ms` : '—';
           const ttlText = (probe.ttl !== null && probe.ttl !== undefined) ? String(probe.ttl) : '—';
 
-          rowsData.push({
-            seq: probe.seq,
-            reply: replyText,
-            time: timeText,
-            ttl: ttlText
-          });
+          const rowObj = { seq: probe.seq, reply: replyText, time: timeText, ttl: ttlText };
+          if (newestFirst) {
+            rowsData.unshift(rowObj);
+          } else {
+            rowsData.push(rowObj);
+          }
 
           const replyColor = (probe.outcome === 'REPLY') ? 'var(--accent-success)' : 'var(--accent-danger)';
           const timeColor = (timeText !== '—') ? 'var(--accent-primary)' : 'var(--text-muted)';
@@ -7058,11 +7182,22 @@ function updateUpgradeUI(planTier) {
             <td style="color: ${timeColor};">${escapeHTML(timeText)}</td>
             <td style="color: var(--text-muted);">${escapeHTML(ttlText)}</td>
           `;
-          tbody.appendChild(tr);
+
+          if (newestFirst) {
+            tbody.insertBefore(tr, tbody.firstChild);
+          } else {
+            tbody.appendChild(tr);
+          }
+
+          if (runContinuous && tbody.children.length > 1500) {
+            tbody.removeChild(tbody.lastChild);
+            rowsData.pop();
+            droppedRows++;
+          }
         });
       }
 
-      const res = await P.ping({ host: val, count: 4, timeoutMs: 3000 });
+      const res = await P.ping({ host: val, count: countToSend, timeoutMs: 3000, continuous: runContinuous });
       outcome = res.cancelled ? 'cancelled' : 'ok';
 
       const sent = res.sent || 0;
@@ -7076,7 +7211,14 @@ function updateUpgradeUI(planTier) {
       statusLine.textContent = summary;
 
       const hostHdr = `Ping ${val}${res.resolvedAddress ? ` (${res.resolvedAddress})` : ''}`;
-      lastPingResultText = `${hostHdr}\n${summary}\n\n#\tReply\tTime\tTTL\n` + rowsData.map(r => `${r.seq}\t${r.reply}\t${r.time}\t${r.ttl}`).join('\n') + '\n';
+      let extraHdr = '';
+      if (newestFirst) {
+        extraHdr = runContinuous ? '\nContinuous (-t) · newest first' : '\nNewest first';
+      }
+      if (droppedRows > 0) {
+        extraHdr += `\nShowing the latest 1500 of ${liveSent} probes`;
+      }
+      lastPingResultText = `${hostHdr}${extraHdr}\n${summary}\n\n#\tReply\tTime\tTTL\n` + rowsData.map(r => `${r.seq}\t${r.reply}\t${r.time}\t${r.ttl}`).join('\n') + '\n';
       lastPingNoteTitle = `Ping: ${val}`;
 
       pingLog(`result: sent=${sent} | received=${received} | loss=${loss}% | cancelled=${!!res.cancelled}`);
@@ -7091,6 +7233,7 @@ function updateUpgradeUI(planTier) {
       }
       isRunning = false;
       btnRun.textContent = 'Ping';
+      updatePingControls();
       pingLog(`outcome: ${outcome}`);
     }
   }
@@ -7100,14 +7243,18 @@ function updateUpgradeUI(planTier) {
     if (e.key === 'Enter') runPing();
   });
 
-  btnClear.addEventListener('click', () => {
+  btnClear.addEventListener('click', async () => {
     pingLog('ui: clear tap');
+    if (isRunning && P && typeof P.stop === 'function') {
+      try { await P.stop(); } catch (e) { /* ignore */ }
+    }
     input.value = '';
     hideError();
     resultsCard.style.display = 'none';
     lastPingResultText = '';
     lastPingNoteTitle = '';
     tbody.innerHTML = '';
+    rowsData = [];
   });
 
   if (btnCopy) {
@@ -7144,6 +7291,26 @@ function updateUpgradeUI(planTier) {
       if (typeof switchToNotesTab === 'function') switchToNotesTab();
     });
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && isRunning && P && typeof P.stop === 'function') {
+      pingLog('stop: app hidden');
+      try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
+    }
+  });
+
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App && typeof window.Capacitor.Plugins.App.addListener === 'function') {
+      window.Capacitor.Plugins.App.addListener('appStateChange', (state) => {
+        try {
+          if (state && state.isActive === false && isRunning && P && typeof P.stop === 'function') {
+            pingLog('stop: app hidden');
+            try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
+          }
+        } catch (e) { /* ignore */ }
+      });
+    }
+  } catch (e) { /* ignore */ }
 })();
 
 // --- ANDROID BACK BUTTON ---

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Capacitor
 import Darwin
 
@@ -15,6 +16,26 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
     private var isRunning = false
     private var isCancelled = false
     private let pingQueue = DispatchQueue(label: "com.banzaigr.isubnet.ping", qos: .userInitiated)
+    private var backgroundObserver: NSObjectProtocol?
+
+    public func cancelIfRunning() {
+        stateLock.lock()
+        if isRunning { isCancelled = true }
+        stateLock.unlock()
+    }
+
+    public func observeAppBackground() {
+        if backgroundObserver != nil { return }
+        backgroundObserver = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.cancelIfRunning()
+        }
+    }
+
+    deinit {
+        if let o = backgroundObserver {
+            NotificationCenter.default.removeObserver(o)
+        }
+    }
 
     private func checkCancelled() -> Bool {
         stateLock.lock()
@@ -44,9 +65,10 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         let rawCount = call.getInt("count") ?? 4
-        let count = min(max(rawCount, 1), 10)
+        let count = clampProbeCount(rawCount)
         let rawTimeout = call.getInt("timeoutMs") ?? 3000
-        let timeoutMs = min(max(rawTimeout, 1000), 5000)
+        let timeoutMs = clampTimeoutMs(rawTimeout)
+        let continuous = call.getBool("continuous") ?? false
 
         stateLock.lock()
         if isRunning {
@@ -75,7 +97,8 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
             let gaiStatus = getaddrinfo(host, nil, &hints, &res)
 
             if gaiStatus != 0 || res == nil {
-                for seq in 1...count {
+                let eventCount = continuous ? 1 : count
+                for seq in 1...eventCount {
                     self.notifyListeners("probe", data: [
                         "seq": seq,
                         "outcome": "UNKNOWN_HOST",
@@ -89,7 +112,7 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve([
                     "host": host,
                     "resolvedAddress": NSNull(),
-                    "sent": count,
+                    "sent": eventCount,
                     "received": 0,
                     "lossPercent": 100,
                     "minMs": NSNull(),
@@ -146,7 +169,8 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
             freeaddrinfo(res)
 
             if !foundNode {
-                for seq in 1...count {
+                let eventCount = continuous ? 1 : count
+                for seq in 1...eventCount {
                     self.notifyListeners("probe", data: [
                         "seq": seq,
                         "outcome": "UNKNOWN_HOST",
@@ -160,7 +184,7 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve([
                     "host": host,
                     "resolvedAddress": NSNull(),
-                    "sent": count,
+                    "sent": eventCount,
                     "received": 0,
                     "lossPercent": 100,
                     "minMs": NSNull(),
@@ -191,7 +215,9 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
             var maxMs: Double? = nil
             var sumMs = 0.0
 
-            for seq in 1...count {
+            var seq = 0
+            while continuous || seq < count {
+                seq += 1
                 if self.checkCancelled() {
                     break
                 }
@@ -227,7 +253,7 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
                         "message": message
                     ])
 
-                    if seq < count {
+                    if continuous || seq < count {
                         var waitedMs = 0
                         while waitedMs < 1000 {
                             if self.checkCancelled() { break }
@@ -360,7 +386,7 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
                     "message": msgValue
                 ])
 
-                if seq < count {
+                if continuous || seq < count {
                     var waitedMs = 0
                     while waitedMs < 1000 {
                         if self.checkCancelled() {

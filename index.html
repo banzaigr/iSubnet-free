@@ -1631,6 +1631,11 @@
             <input type="text" id="ping-input" placeholder="example.com or 8.8.8.8" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off">
             <div id="ping-error-msg" style="color: var(--accent-danger); font-size: 13px; margin-top: 6px; display: none;"></div>
           </div>
+          <div id="ping-options-row" class="ping-options-row">
+            <label for="ping-count-input" class="ping-options-label">Probes <span id="ping-pro-badge" class="pro-badge" style="display: none;">🔒 Pro</span></label>
+            <input type="text" id="ping-count-input" class="ping-count-input" inputmode="numeric" pattern="[0-9]*" maxlength="3" value="4" autocomplete="off">
+            <button type="button" id="btn-ping-continuous" class="ping-continuous-btn" aria-pressed="false">-t</button>
+          </div>
           <div id="ping-platform-note" class="helper-text" style="display: none; margin-top: 12px; font-size: 13px; color: var(--text-secondary);">
             Ping is available in the iOS and Android apps.
           </div>

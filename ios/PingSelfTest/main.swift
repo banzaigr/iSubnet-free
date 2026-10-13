@@ -136,5 +136,10 @@ check("H2", h2Ok)
 let str253 = String(repeating: "a", count: 253)
 check("H3", isValidHost(str253))
 
+check("K1", clampProbeCount(0) == 1 && clampProbeCount(-5) == 1)
+check("K2", clampProbeCount(1) == 1 && clampProbeCount(4) == 4 && clampProbeCount(100) == 100)
+check("K3", clampProbeCount(101) == 100 && clampProbeCount(1_000_000) == 100)
+check("K4", clampTimeoutMs(500) == 1000 && clampTimeoutMs(3000) == 3000 && clampTimeoutMs(9000) == 5000)
+
 print("failures: \(failures)")
 exit(failures == 0 ? 0 : 1)
