@@ -1,12 +1,18 @@
 package com.banzaigr.isubnet;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.os.Build;
 
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -22,7 +28,12 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@CapacitorPlugin(name = "Ping")
+@CapacitorPlugin(
+    name = "Ping",
+    permissions = {
+        @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS })
+    }
+)
 public class PingPlugin extends Plugin {
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -66,6 +77,33 @@ public class PingPlugin extends Plugin {
 
     @PluginMethod
     public void ping(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 33
+                && getPermissionState("notifications") != PermissionState.GRANTED
+                && !hasAskedForNotifications()) {
+            markAskedForNotifications();
+            requestPermissionForAlias("notifications", call, "notificationPermissionCallback");
+            return;
+        }
+        startPing(call);
+    }
+
+    @PermissionCallback
+    private void notificationPermissionCallback(PluginCall call) {
+        // Whether the user allowed or declined, the ping still runs; only the notification differs.
+        startPing(call);
+    }
+
+    private boolean hasAskedForNotifications() {
+        SharedPreferences prefs = getContext().getSharedPreferences("ping_prefs", Context.MODE_PRIVATE);
+        return prefs.getBoolean("asked_notifications", false);
+    }
+
+    private void markAskedForNotifications() {
+        SharedPreferences prefs = getContext().getSharedPreferences("ping_prefs", Context.MODE_PRIVATE);
+        prefs.edit().putBoolean("asked_notifications", true).apply();
+    }
+
+    private void startPing(PluginCall call) {
         String host = call.getString("host");
         if (!PingHostValidator.isValid(host)) {
             call.reject("Invalid host");
