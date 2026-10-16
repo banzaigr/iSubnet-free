@@ -1883,3 +1883,87 @@ body.dark-mode .bit-level-off {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* --- Ping results: List | Graph toggle --- */
+.ping-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 12px;
+  background: rgba(var(--accent-primary-rgb), 0.08);
+  border-radius: 10px;
+}
+
+.ping-view-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.ping-view-btn.active {
+  background: var(--accent-primary);
+  color: #FFF;
+}
+
+.ping-graph-wrap {
+  margin-bottom: 4px;
+}
+
+.ping-graph-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ping-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ping-graph-legend .lg-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.ping-graph-legend .lg-dot.ok { background: var(--accent-primary); }
+.ping-graph-legend .lg-dot.bad { background: var(--accent-danger); }
+
+/* --- Layout fixes: result action buttons wrap instead of clipping; tab bar edge spacing --- */
+.result-actions {
+  flex-wrap: wrap;
+}
+
+.result-actions > .btn-action {
+  flex: 1 1 auto !important;
+  white-space: nowrap;
+}
+
+.result-actions .pro-badge {
+  margin-left: 2px !important;
+  padding: 1px 4px;
+  font-size: 9px;
+}
+
+.app-tab-bar {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.tab-btn.active {
+  padding: 10px 2px 8px;
+}

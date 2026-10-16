@@ -6919,6 +6919,12 @@ function updateUpgradeUI(planTier) {
   const countInput = document.getElementById('ping-count-input');
   const continuousBtn = document.getElementById('btn-ping-continuous');
   const proBadge = document.getElementById('ping-pro-badge');
+  const tableContainer = document.getElementById('ping-table-container');
+  const graphWrap = document.getElementById('ping-graph-wrap');
+  const graphSvg = document.getElementById('ping-graph-svg');
+  const graphLegend = document.getElementById('ping-graph-legend');
+  const btnViewList = document.getElementById('btn-ping-view-list');
+  const btnViewGraph = document.getElementById('btn-ping-view-graph');
 
   if (!input || !btnRun || !btnClear || !resultsCard || !statusLine || !tbody || !errorMsg) {
     return;
@@ -6968,6 +6974,140 @@ function updateUpgradeUI(planTier) {
   let droppedRows = 0;
   let runContinuous = false;
   let newestFirst = false;
+
+  // --- Latency graph (List | Graph view) ---
+  const GRAPH_WINDOW = 100;
+  let graphData = [];
+  let viewMode = 'list';
+  let graphTimer = null;
+
+  function graphNiceMax(v) {
+    if (!(v > 10)) return 10;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    const n = v / p;
+    const steps = [1, 1.5, 2, 3, 5, 7.5, 10];
+    let m = 10;
+    for (let i = 0; i < steps.length; i++) {
+      if (n <= steps[i]) { m = steps[i]; break; }
+    }
+    return m * p;
+  }
+
+  function graphFmt(v) {
+    return String(Math.round(v * 10) / 10);
+  }
+
+  function renderGraph() {
+    if (!graphSvg || !graphLegend) return;
+    const W = 300, H = 170, L = 36, R = 8, T = 16, B = 22;
+    const plotW = W - L - R;
+    const plotH = H - T - B;
+    const pts = graphData.slice(-GRAPH_WINDOW);
+    if (pts.length === 0) {
+      graphSvg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="11" fill="var(--text-muted)">Waiting for replies...</text>`;
+      graphSvg.setAttribute('aria-label', 'Ping latency graph, no data yet');
+      graphLegend.innerHTML = '';
+      return;
+    }
+
+    let maxMs = 0;
+    let sum = 0;
+    let okCount = 0;
+    pts.forEach((p) => {
+      if (p.ms !== null) {
+        okCount++;
+        sum += p.ms;
+        if (p.ms > maxMs) maxMs = p.ms;
+      }
+    });
+    const lost = pts.length - okCount;
+    const avg = okCount > 0 ? sum / okCount : null;
+    const maxY = graphNiceMax(maxMs);
+    const xAt = (i) => L + (pts.length <= 1 ? plotW / 2 : (i * plotW) / (pts.length - 1));
+    const yAt = (ms) => T + plotH - (ms / maxY) * plotH;
+    const f = (n) => (Math.round(n * 10) / 10).toString();
+
+    let svg = '';
+    [0, 0.5, 1].forEach((frac) => {
+      const gy = T + plotH - frac * plotH;
+      svg += `<line x1="${L}" y1="${f(gy)}" x2="${W - R}" y2="${f(gy)}" stroke="var(--border-color)" stroke-width="1"/>`;
+      svg += `<text x="${L - 4}" y="${f(gy + 3)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${graphFmt(maxY * frac)}</text>`;
+    });
+    svg += `<text x="${L - 4}" y="${T - 6}" text-anchor="end" font-size="8" fill="var(--text-muted)">ms</text>`;
+
+    if (avg !== null && okCount > 1) {
+      svg += `<line x1="${L}" y1="${f(yAt(avg))}" x2="${W - R}" y2="${f(yAt(avg))}" stroke="var(--accent-cyan)" stroke-width="1" stroke-dasharray="3 3" opacity="0.8"/>`;
+    }
+
+    pts.forEach((p, i) => {
+      if (p.ms === null) {
+        const x = f(xAt(i));
+        svg += `<line x1="${x}" y1="${T}" x2="${x}" y2="${T + plotH}" stroke="var(--accent-danger)" stroke-width="2" opacity="0.35"/>`;
+        svg += `<circle cx="${x}" cy="${T + plotH}" r="3" fill="var(--accent-danger)"/>`;
+      }
+    });
+
+    let seg = [];
+    const flush = () => {
+      if (seg.length >= 2) {
+        svg += `<polyline points="${seg.join(' ')}" fill="none" stroke="var(--accent-primary)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      seg = [];
+    };
+    pts.forEach((p, i) => {
+      if (p.ms === null) {
+        flush();
+      } else {
+        seg.push(`${f(xAt(i))},${f(yAt(p.ms))}`);
+      }
+    });
+    flush();
+
+    pts.forEach((p, i) => {
+      if (p.ms === null) return;
+      const prevOk = i > 0 && pts[i - 1].ms !== null;
+      const nextOk = i < pts.length - 1 && pts[i + 1].ms !== null;
+      if (pts.length <= 40 || (!prevOk && !nextOk)) {
+        svg += `<circle cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="2.5" fill="var(--accent-primary)"/>`;
+      }
+    });
+
+    svg += `<text x="${L}" y="${H - 6}" text-anchor="start" font-size="9" fill="var(--text-muted)">#${pts[0].seq}</text>`;
+    if (pts.length > 1) {
+      svg += `<text x="${W - R}" y="${H - 6}" text-anchor="end" font-size="9" fill="var(--text-muted)">#${pts[pts.length - 1].seq}</text>`;
+    }
+    graphSvg.innerHTML = svg;
+    graphSvg.setAttribute('aria-label', `Ping latency graph, ${pts.length} probes, ${lost} without reply`);
+
+    let legend = '<span><span class="lg-dot ok"></span>Reply</span><span><span class="lg-dot bad"></span>No reply</span>';
+    if (avg !== null) legend += `<span>Avg ${graphFmt(avg)} ms</span>`;
+    if (graphData.length > GRAPH_WINDOW) legend += `<span>Latest ${GRAPH_WINDOW} probes</span>`;
+    graphLegend.innerHTML = legend;
+  }
+
+  function scheduleGraph() {
+    if (viewMode !== 'graph' || graphTimer) return;
+    graphTimer = setTimeout(() => {
+      graphTimer = null;
+      renderGraph();
+    }, 60);
+  }
+
+  function setPingView(mode) {
+    viewMode = mode === 'graph' ? 'graph' : 'list';
+    const isGraph = viewMode === 'graph';
+    if (tableContainer) tableContainer.style.display = isGraph ? 'none' : '';
+    if (graphWrap) graphWrap.style.display = isGraph ? 'block' : 'none';
+    if (btnViewList) {
+      btnViewList.classList.toggle('active', !isGraph);
+      btnViewList.setAttribute('aria-pressed', isGraph ? 'false' : 'true');
+    }
+    if (btnViewGraph) {
+      btnViewGraph.classList.toggle('active', isGraph);
+      btnViewGraph.setAttribute('aria-pressed', isGraph ? 'true' : 'false');
+    }
+    if (isGraph) renderGraph();
+  }
 
   function isProNow() {
     return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
@@ -7161,6 +7301,8 @@ function updateUpgradeUI(planTier) {
     liveMin = null;
     liveMax = null;
     droppedRows = 0;
+    graphData = [];
+    renderGraph();
 
     let outcome = 'ok';
     pingLog(`ui: params | count=${countToSend} | continuous=${runContinuous} | newestFirst=${newestFirst} | pro=${isProNow()}`);
@@ -7199,6 +7341,10 @@ function updateUpgradeUI(planTier) {
 
           const timeText = (probe.timeMs !== null && probe.timeMs !== undefined) ? `${probe.timeMs} ms` : '—';
           const ttlText = (probe.ttl !== null && probe.ttl !== undefined) ? String(probe.ttl) : '—';
+
+          graphData.push({ seq: probe.seq, ms: (probe.outcome === 'REPLY' && typeof probe.timeMs === 'number') ? probe.timeMs : null });
+          if (graphData.length > 1500) graphData.shift();
+          scheduleGraph();
 
           const rowObj = { seq: probe.seq, reply: replyText, time: timeText, ttl: ttlText };
           if (newestFirst) {
@@ -7270,6 +7416,7 @@ function updateUpgradeUI(planTier) {
       btnRun.textContent = 'Ping';
       updatePingControls();
       pingLog(`outcome: ${outcome}`);
+      if (viewMode === 'graph') renderGraph();
     }
   }
 
@@ -7290,6 +7437,8 @@ function updateUpgradeUI(planTier) {
     lastPingNoteTitle = '';
     tbody.innerHTML = '';
     rowsData = [];
+    graphData = [];
+    renderGraph();
   });
 
   if (btnCopy) {
@@ -7326,6 +7475,22 @@ function updateUpgradeUI(planTier) {
       if (typeof switchToNotesTab === 'function') switchToNotesTab();
     });
   }
+
+  if (btnViewList) {
+    btnViewList.addEventListener('click', () => {
+      pingLog('ui: view list');
+      setPingView('list');
+    });
+  }
+  if (btnViewGraph) {
+    btnViewGraph.addEventListener('click', () => {
+      pingLog('ui: view graph');
+      setPingView('graph');
+    });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && viewMode === 'graph') renderGraph();
+  });
 
   // On iOS the app is suspended in the background, so a running ping is stopped there.
   // On Android a foreground service keeps it running (see PingForegroundService.java).
