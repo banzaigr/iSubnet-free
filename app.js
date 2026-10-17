@@ -349,6 +349,76 @@ async function getRevenueCatAppUserId() {
   return null;
 }
 
+// --- RevenueCat identity sync ---
+// If a Firebase user is signed in but RevenueCat is still on a different (anonymous) ID,
+// log in to RevenueCat with the Firebase UID. This covers a login that failed (for example no
+// connection at sign-in) or was skipped because RevenueCat was not ready yet.
+// Returns 'skip' (nothing to do), 'ok' (already correct), 'loggedIn' or 'failed'.
+let _rcIdentityPromise = null;
+let _rcIdentityRetryTimer = null;
+let _rcIdentityRetryCount = 0;
+
+function rcIdentityLog(msg) {
+  if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat identity: ${msg}`);
+}
+
+async function ensureRevenueCatIdentity(reason) {
+  if (!useRevenueCat || typeof useRealFirebase === 'undefined' || !useRealFirebase) return 'skip';
+  if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.Purchases) return 'skip';
+  if (typeof firebase === 'undefined' || !firebase.auth) return 'skip';
+  const user = firebase.auth().currentUser;
+  if (!user) return 'skip';
+  if (_rcIdentityPromise) return _rcIdentityPromise;
+  _rcIdentityPromise = (async () => {
+    try {
+      const { Purchases } = window.Capacitor.Plugins;
+      const current = await getRevenueCatAppUserId();
+      if (current === null) return 'skip';
+      if (current === user.uid) {
+        _rcIdentityRetryCount = 0;
+        return 'ok';
+      }
+      rcIdentityLog(`signed in as ${user.uid} but RevenueCat user is ${current} (${reason}) - logging in`);
+      await Purchases.logIn({ appUserID: user.uid });
+      try { await Purchases.setEmail({ email: user.email }); } catch (e) { /* ignore */ }
+      try { await Purchases.setDisplayName({ displayName: user.displayName || (user.email ? user.email.split('@')[0] : '') }); } catch (e) { /* ignore */ }
+      rcIdentityLog(`logIn succeeded (${reason})`);
+      _rcIdentityRetryCount = 0;
+      return 'loggedIn';
+    } catch (e) {
+      rcIdentityLog(`logIn failed (${reason}): ${e && e.message ? e.message : e}`);
+      scheduleRevenueCatIdentityRetry(reason);
+      return 'failed';
+    } finally {
+      _rcIdentityPromise = null;
+    }
+  })();
+  return _rcIdentityPromise;
+}
+
+function scheduleRevenueCatIdentityRetry(reason) {
+  if (_rcIdentityRetryTimer || _rcIdentityRetryCount >= 3) return;
+  const delays = [15000, 60000, 180000];
+  const delay = delays[_rcIdentityRetryCount];
+  _rcIdentityRetryCount++;
+  rcIdentityLog(`retry ${_rcIdentityRetryCount} of 3 in ${delay / 1000}s (${reason})`);
+  _rcIdentityRetryTimer = setTimeout(() => {
+    _rcIdentityRetryTimer = null;
+    syncRevenueCatIdentity('retry');
+  }, delay);
+}
+
+async function syncRevenueCatIdentity(reason) {
+  const result = await ensureRevenueCatIdentity(reason);
+  if (result === 'loggedIn') updateRevenueCatSubscriptionState();
+  return result;
+}
+
+window.addEventListener('online', () => { syncRevenueCatIdentity('network back'); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') syncRevenueCatIdentity('app visible');
+});
+
 async function refreshDebugUserIdDisplay() {
   const userIdRow = document.getElementById('debug-userid-row');
   const userIdStatus = document.getElementById('debug-userid-status');
@@ -405,6 +475,7 @@ async function initRevenueCat() {
       
       useRevenueCat = true;
       console.log("RevenueCat initialized successfully!");
+      syncRevenueCatIdentity('startup');
       updateRevenueCatSubscriptionState();
       fetchAndDisplayOfferings();
 
@@ -2295,7 +2366,7 @@ function switchToNotesTab() {
 
 async function shareText(title, text) {
   if (!PRO_UNLOCKED) {
-    text = text + "\n\n— Calculated with iSubnet · isubnet.net";
+    text = text + "\n\n— Calculated with iSubnet";
   }
 
   const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
@@ -4121,6 +4192,7 @@ function initSettings() {
               }
             } catch (err) {
               if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() error in modal flow: ${err.message}`);
+              scheduleRevenueCatIdentityRetry('sign-in login failed');
             }
           }
           btnAccountSubmit.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
@@ -4233,6 +4305,7 @@ function initSettings() {
               })
               .catch(err => {
                 console.error("RevenueCat login error:", err);
+                scheduleRevenueCatIdentityRetry('auth state login failed');
                 if (typeof window.debugLog==="function") window.debugLog(`ERROR in logIn: ${err.message}\n${err.stack}`);
                 updateRevenueCatSubscriptionState();
               });
@@ -5337,6 +5410,11 @@ function init() {
         return;
       }
       
+      const identity = await ensureRevenueCatIdentity('restore');
+      if (identity === 'failed') {
+        showErrorDialog('Could not connect to your account. Please check your internet connection and try again.');
+        return;
+      }
       const result = await Purchases.restorePurchases();
       const customerInfo = result.customerInfo || result;
       const activeEntitlements = customerInfo?.entitlements?.active || {};
@@ -6922,6 +7000,8 @@ function updateUpgradeUI(planTier) {
   const tableContainer = document.getElementById('ping-table-container');
   const graphWrap = document.getElementById('ping-graph-wrap');
   const graphSvg = document.getElementById('ping-graph-svg');
+  const graphScroll = document.getElementById('ping-graph-scroll');
+  const graphYAxis = document.getElementById('ping-graph-yaxis');
   const graphLegend = document.getElementById('ping-graph-legend');
   const btnViewList = document.getElementById('btn-ping-view-list');
   const btnViewGraph = document.getElementById('btn-ping-view-graph');
@@ -6976,10 +7056,23 @@ function updateUpgradeUI(planTier) {
   let newestFirst = false;
 
   // --- Latency graph (List | Graph view) ---
-  const GRAPH_WINDOW = 100;
+  // The graph keeps every probe of the run (up to 1500). When the run is long the plot is wider
+  // than the screen and scrolls sideways; the y-axis stays fixed. While a run is live the view
+  // follows the newest probe unless the user scrolls back. Tapping the plot shows one probe.
+  const GRAPH_MAX_POINTS = 1500;
+  const GRAPH_STEP_MIN = 8;
+  const GRAPH_H = 170;
+  const GRAPH_T = 16;
+  const GRAPH_B = 22;
+  const GRAPH_PADL = 8;
+  const GRAPH_PADR = 8;
   let graphData = [];
   let viewMode = 'list';
   let graphTimer = null;
+  let graphFollow = true;
+  let graphSelectedSeq = null;
+  let lastPingHeader = '';
+  let lastPingSummary = '';
 
   function graphNiceMax(v) {
     if (!(v > 10)) return 10;
@@ -6997,60 +7090,117 @@ function updateUpgradeUI(planTier) {
     return String(Math.round(v * 10) / 10);
   }
 
-  function renderGraph() {
-    if (!graphSvg || !graphLegend) return;
-    const W = 300, H = 170, L = 36, R = 8, T = 16, B = 22;
-    const plotW = W - L - R;
-    const plotH = H - T - B;
-    const pts = graphData.slice(-GRAPH_WINDOW);
-    if (pts.length === 0) {
-      graphSvg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="11" fill="var(--text-muted)">Waiting for replies...</text>`;
-      graphSvg.setAttribute('aria-label', 'Ping latency graph, no data yet');
-      graphLegend.innerHTML = '';
-      return;
-    }
-
+  function graphStats(data) {
     let maxMs = 0;
     let sum = 0;
     let okCount = 0;
-    pts.forEach((p) => {
+    data.forEach((p) => {
       if (p.ms !== null) {
         okCount++;
         sum += p.ms;
         if (p.ms > maxMs) maxMs = p.ms;
       }
     });
-    const lost = pts.length - okCount;
-    const avg = okCount > 0 ? sum / okCount : null;
-    const maxY = graphNiceMax(maxMs);
-    const xAt = (i) => L + (pts.length <= 1 ? plotW / 2 : (i * plotW) / (pts.length - 1));
-    const yAt = (ms) => T + plotH - (ms / maxY) * plotH;
-    const f = (n) => (Math.round(n * 10) / 10).toString();
+    return { maxMs: maxMs, okCount: okCount, lost: data.length - okCount, avg: okCount > 0 ? sum / okCount : null };
+  }
+
+  // Colour of the reply line. If the theme colour is red-ish it would look the same as the red
+  // "no reply" markers, so the line switches to the success green in that case.
+  function graphReplyColor() {
+    let c = '';
+    try { c = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary').trim(); } catch (e) { c = ''; }
+    let r, g, b;
+    const hx = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(c);
+    if (hx) {
+      r = parseInt(hx[1], 16); g = parseInt(hx[2], 16); b = parseInt(hx[3], 16);
+    } else {
+      const q = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(c);
+      if (!q) return 'var(--accent-primary)';
+      r = +q[1]; g = +q[2]; b = +q[3];
+    }
+    const mx = Math.max(r, g, b);
+    const d = mx - Math.min(r, g, b);
+    if (d === 0 || mx === 0) return 'var(--accent-primary)';
+    let h;
+    if (mx === r) h = ((g - b) / d) % 6;
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+    const sat = d / mx;
+    const nearRed = (h <= 40 || h >= 330) && sat > 0.3 && mx > 90;
+    return nearRed ? 'var(--accent-success)' : 'var(--accent-primary)';
+  }
+
+  function resetPingGraph() {
+    graphData = [];
+    graphSelectedSeq = null;
+    graphFollow = true;
+    lastPingHeader = '';
+    lastPingSummary = '';
+    renderGraph();
+  }
+
+  function renderGraph() {
+    if (!graphSvg || !graphLegend || !graphScroll || !graphYAxis) return;
+    if (viewMode !== 'graph') return;
+    const plotH = GRAPH_H - GRAPH_T - GRAPH_B;
+    const pts = graphData;
+    const n = pts.length;
+    const viewportW = graphScroll.clientWidth || 250;
+    const f = (v) => (Math.round(v * 10) / 10).toString();
+    const okColor = graphReplyColor();
+
+    if (n === 0) {
+      graphYAxis.innerHTML = '';
+      graphSvg.setAttribute('width', String(viewportW));
+      graphSvg.innerHTML = `<text x="${viewportW / 2}" y="${GRAPH_H / 2}" text-anchor="middle" font-size="11" fill="var(--text-muted)">Waiting for replies...</text>`;
+      graphSvg.setAttribute('aria-label', 'Ping latency graph, no data yet');
+      graphLegend.innerHTML = '';
+      return;
+    }
+
+    const wasAtEnd = graphScroll.scrollWidth - graphScroll.scrollLeft - graphScroll.clientWidth < 12;
+    const stats = graphStats(pts);
+    const maxY = graphNiceMax(stats.maxMs);
+    const innerW = viewportW - GRAPH_PADL - GRAPH_PADR;
+    const step = n > 1 ? Math.max(GRAPH_STEP_MIN, innerW / (n - 1)) : 0;
+    const contentW = n > 1 ? Math.round(GRAPH_PADL + step * (n - 1) + GRAPH_PADR) : viewportW;
+    const scrollable = contentW > viewportW + 1;
+    const xAt = (i) => (n <= 1 ? contentW / 2 : GRAPH_PADL + i * step);
+    const yAt = (ms) => GRAPH_T + plotH - (ms / maxY) * plotH;
+
+    let axis = '';
+    [0, 0.5, 1].forEach((frac) => {
+      const gy = GRAPH_T + plotH - frac * plotH;
+      axis += `<text x="32" y="${f(gy + 3)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${graphFmt(maxY * frac)}</text>`;
+    });
+    axis += `<text x="32" y="${GRAPH_T - 6}" text-anchor="end" font-size="8" fill="var(--text-muted)">ms</text>`;
+    graphYAxis.innerHTML = axis;
 
     let svg = '';
     [0, 0.5, 1].forEach((frac) => {
-      const gy = T + plotH - frac * plotH;
-      svg += `<line x1="${L}" y1="${f(gy)}" x2="${W - R}" y2="${f(gy)}" stroke="var(--border-color)" stroke-width="1"/>`;
-      svg += `<text x="${L - 4}" y="${f(gy + 3)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${graphFmt(maxY * frac)}</text>`;
+      const gy = GRAPH_T + plotH - frac * plotH;
+      svg += `<line x1="0" y1="${f(gy)}" x2="${contentW}" y2="${f(gy)}" stroke="var(--border-color)" stroke-width="1"/>`;
     });
-    svg += `<text x="${L - 4}" y="${T - 6}" text-anchor="end" font-size="8" fill="var(--text-muted)">ms</text>`;
 
-    if (avg !== null && okCount > 1) {
-      svg += `<line x1="${L}" y1="${f(yAt(avg))}" x2="${W - R}" y2="${f(yAt(avg))}" stroke="var(--accent-cyan)" stroke-width="1" stroke-dasharray="3 3" opacity="0.8"/>`;
+    if (stats.avg !== null && stats.okCount > 1) {
+      svg += `<line x1="0" y1="${f(yAt(stats.avg))}" x2="${contentW}" y2="${f(yAt(stats.avg))}" stroke="var(--accent-cyan)" stroke-width="1" stroke-dasharray="3 3" opacity="0.8"/>`;
     }
 
     pts.forEach((p, i) => {
       if (p.ms === null) {
         const x = f(xAt(i));
-        svg += `<line x1="${x}" y1="${T}" x2="${x}" y2="${T + plotH}" stroke="var(--accent-danger)" stroke-width="2" opacity="0.35"/>`;
-        svg += `<circle cx="${x}" cy="${T + plotH}" r="3" fill="var(--accent-danger)"/>`;
+        const bx = xAt(i);
+        const by = GRAPH_T + plotH;
+        svg += `<line x1="${x}" y1="${GRAPH_T}" x2="${x}" y2="${by}" stroke="var(--accent-danger)" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.55"/>`;
+        svg += `<path d="M${f(bx - 3.5)} ${f(by - 3.5)}L${f(bx + 3.5)} ${f(by + 3.5)}M${f(bx + 3.5)} ${f(by - 3.5)}L${f(bx - 3.5)} ${f(by + 3.5)}" stroke="var(--accent-danger)" stroke-width="2" stroke-linecap="round" fill="none"/>`;
       }
     });
 
     let seg = [];
     const flush = () => {
       if (seg.length >= 2) {
-        svg += `<polyline points="${seg.join(' ')}" fill="none" stroke="var(--accent-primary)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+        svg += `<polyline points="${seg.join(' ')}" fill="none" stroke="${okColor}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
       }
       seg = [];
     };
@@ -7066,23 +7216,58 @@ function updateUpgradeUI(planTier) {
     pts.forEach((p, i) => {
       if (p.ms === null) return;
       const prevOk = i > 0 && pts[i - 1].ms !== null;
-      const nextOk = i < pts.length - 1 && pts[i + 1].ms !== null;
-      if (pts.length <= 40 || (!prevOk && !nextOk)) {
-        svg += `<circle cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="2.5" fill="var(--accent-primary)"/>`;
+      const nextOk = i < n - 1 && pts[i + 1].ms !== null;
+      if (n <= 40 || (!prevOk && !nextOk)) {
+        svg += `<circle cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="2.5" fill="${okColor}"/>`;
       }
     });
 
-    svg += `<text x="${L}" y="${H - 6}" text-anchor="start" font-size="9" fill="var(--text-muted)">#${pts[0].seq}</text>`;
-    if (pts.length > 1) {
-      svg += `<text x="${W - R}" y="${H - 6}" text-anchor="end" font-size="9" fill="var(--text-muted)">#${pts[pts.length - 1].seq}</text>`;
+    const labelSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+    let every = 500;
+    for (let k = 0; k < labelSteps.length; k++) {
+      if (labelSteps[k] * step >= 56) { every = labelSteps[k]; break; }
     }
-    graphSvg.innerHTML = svg;
-    graphSvg.setAttribute('aria-label', `Ping latency graph, ${pts.length} probes, ${lost} without reply`);
+    if (n === 1) every = 1;
+    pts.forEach((p, i) => {
+      if (p.seq % every !== 0 && i !== 0) return;
+      if (i === 0 && n > 1 && p.seq % every !== 0 && step * every < 120) {
+        // skip an odd first label when it would crowd the next one
+        const nextLabelled = pts.findIndex((q, j) => j > 0 && q.seq % every === 0);
+        if (nextLabelled !== -1 && (nextLabelled * step) < 40) return;
+      }
+      const x = xAt(i);
+      const anchor = x < 14 ? 'start' : 'middle';
+      svg += `<text x="${f(x)}" y="${GRAPH_H - 6}" text-anchor="${anchor}" font-size="9" fill="var(--text-muted)">#${p.seq}</text>`;
+    });
 
-    let legend = '<span><span class="lg-dot ok"></span>Reply</span><span><span class="lg-dot bad"></span>No reply</span>';
-    if (avg !== null) legend += `<span>Avg ${graphFmt(avg)} ms</span>`;
-    if (graphData.length > GRAPH_WINDOW) legend += `<span>Latest ${GRAPH_WINDOW} probes</span>`;
+    let selIdx = -1;
+    if (graphSelectedSeq !== null) selIdx = pts.findIndex((p) => p.seq === graphSelectedSeq);
+    if (selIdx >= 0) {
+      const sx = f(xAt(selIdx));
+      svg += `<line x1="${sx}" y1="${GRAPH_T}" x2="${sx}" y2="${GRAPH_T + plotH}" stroke="var(--text-secondary)" stroke-width="1" stroke-dasharray="2 2"/>`;
+      if (pts[selIdx].ms !== null) {
+        svg += `<circle cx="${sx}" cy="${f(yAt(pts[selIdx].ms))}" r="4.5" fill="none" stroke="${okColor}" stroke-width="2"/>`;
+      }
+    }
+
+    graphSvg.setAttribute('width', String(contentW));
+    graphSvg.innerHTML = svg;
+    graphSvg.setAttribute('aria-label', `Ping latency graph, ${n} probes, ${stats.lost} without reply`);
+
+    let legend = `<span><span class="lg-dot" style="background:${okColor}"></span>Reply</span><span><span style="color:var(--accent-danger);font-weight:700;margin-right:4px">&#10005;</span>No reply</span>`;
+    if (stats.avg !== null) legend += `<span>Avg ${graphFmt(stats.avg)} ms</span>`;
+    if (selIdx >= 0) {
+      legend += `<span class="rd">#${pts[selIdx].seq} · ${pts[selIdx].ms !== null ? graphFmt(pts[selIdx].ms) + ' ms' : 'no reply'}</span>`;
+    } else if (scrollable) {
+      legend += '<span>Swipe sideways for earlier probes, tap a point for its value</span>';
+    } else if (n > 1) {
+      legend += '<span>Tap a point for its value</span>';
+    }
     graphLegend.innerHTML = legend;
+
+    if (graphFollow || wasAtEnd) {
+      graphScroll.scrollLeft = graphScroll.scrollWidth;
+    }
   }
 
   function scheduleGraph() {
@@ -7106,7 +7291,146 @@ function updateUpgradeUI(planTier) {
       btnViewGraph.classList.toggle('active', isGraph);
       btnViewGraph.setAttribute('aria-pressed', isGraph ? 'true' : 'false');
     }
-    if (isGraph) renderGraph();
+    if (isGraph) {
+      graphFollow = true;
+      renderGraph();
+    }
+  }
+
+  if (graphScroll) {
+    graphScroll.addEventListener('scroll', () => {
+      graphFollow = graphScroll.scrollWidth - graphScroll.scrollLeft - graphScroll.clientWidth < 12;
+    });
+  }
+  if (graphSvg) {
+    graphSvg.addEventListener('click', (e) => {
+      const n = graphData.length;
+      if (n === 0) return;
+      const rect = graphSvg.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const innerW = (graphScroll.clientWidth || 250) - GRAPH_PADL - GRAPH_PADR;
+      const step = n > 1 ? Math.max(GRAPH_STEP_MIN, innerW / (n - 1)) : 0;
+      let idx = n > 1 ? Math.round((x - GRAPH_PADL) / step) : 0;
+      if (idx < 0) idx = 0;
+      if (idx > n - 1) idx = n - 1;
+      const seq = graphData[idx].seq;
+      graphSelectedSeq = (graphSelectedSeq === seq) ? null : seq;
+      renderGraph();
+    });
+  }
+
+  // --- Share the graph as an image (used by Share while the Graph view is selected) ---
+  function buildGraphShareSvg() {
+    const W = 1080, H = 720;
+    const padL = 80, padR = 40, top = 220, bottom = 100;
+    const plotW = W - padL - padR;
+    const plotH = H - top - bottom;
+    const pts = graphData;
+    const n = pts.length;
+    const stats = graphStats(pts);
+    const maxY = graphNiceMax(stats.maxMs);
+    const f = (v) => (Math.round(v * 10) / 10).toString();
+    const xAt = (i) => padL + (n <= 1 ? plotW / 2 : (i * plotW) / (n - 1));
+    const yAt = (ms) => top + plotH - (ms / maxY) * plotH;
+    const INK = '#1e293b', MUTED = '#64748b', GRID = '#e2e8f0', ACC = '#4f46e5', BAD = '#ef4444', AVG = '#0ea5e9';
+
+    let header = lastPingHeader || `Ping ${input.value.trim()}`.trim();
+    if (header.length > 46) header = header.slice(0, 45) + '…';
+    const sum = lastPingSummary || (statusLine ? statusLine.textContent : '') || '';
+    const cut = sum.indexOf(' · min ');
+    const line1 = cut >= 0 ? sum.slice(0, cut) : sum;
+    const line2 = cut >= 0 ? 'min ' + sum.slice(cut + 7) : '';
+
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system, Roboto, Helvetica, Arial, sans-serif">`;
+    s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+    s += `<text x="${padL}" y="76" font-size="40" font-weight="700" fill="${INK}">${escapeHTML(header)}</text>`;
+    s += `<text x="${padL}" y="124" font-size="27" fill="${MUTED}">${escapeHTML(line1)}</text>`;
+    if (line2) s += `<text x="${padL}" y="164" font-size="27" fill="${MUTED}">${escapeHTML(line2)}</text>`;
+
+    [0, 0.5, 1].forEach((frac) => {
+      const gy = top + plotH - frac * plotH;
+      s += `<line x1="${padL}" y1="${f(gy)}" x2="${W - padR}" y2="${f(gy)}" stroke="${GRID}" stroke-width="2"/>`;
+      s += `<text x="${padL - 10}" y="${f(gy + 8)}" text-anchor="end" font-size="22" fill="${MUTED}">${graphFmt(maxY * frac)}</text>`;
+    });
+    s += `<text x="${padL - 10}" y="${top - 18}" text-anchor="end" font-size="20" fill="${MUTED}">ms</text>`;
+
+    if (stats.avg !== null && stats.okCount > 1) {
+      s += `<line x1="${padL}" y1="${f(yAt(stats.avg))}" x2="${W - padR}" y2="${f(yAt(stats.avg))}" stroke="${AVG}" stroke-width="2.5" stroke-dasharray="10 8"/>`;
+    }
+    pts.forEach((p, i) => {
+      if (p.ms === null) {
+        const x = f(xAt(i));
+        s += `<line x1="${x}" y1="${top}" x2="${x}" y2="${top + plotH}" stroke="${BAD}" stroke-width="${n > 200 ? 2 : 5}" opacity="0.3"/>`;
+        s += `<circle cx="${x}" cy="${top + plotH}" r="${n > 200 ? 3 : 8}" fill="${BAD}"/>`;
+      }
+    });
+    let seg = [];
+    const flush = () => {
+      if (seg.length >= 2) {
+        s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${ACC}" stroke-width="${n > 200 ? 2.5 : 4.5}" stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      seg = [];
+    };
+    pts.forEach((p, i) => {
+      if (p.ms === null) flush(); else seg.push(`${f(xAt(i))},${f(yAt(p.ms))}`);
+    });
+    flush();
+    pts.forEach((p, i) => {
+      if (p.ms === null) return;
+      const prevOk = i > 0 && pts[i - 1].ms !== null;
+      const nextOk = i < n - 1 && pts[i + 1].ms !== null;
+      if (n <= 40 || (!prevOk && !nextOk && n <= 300)) {
+        s += `<circle cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="7" fill="${ACC}"/>`;
+      }
+    });
+    s += `<text x="${padL}" y="${top + plotH + 44}" text-anchor="start" font-size="22" fill="${MUTED}">#${pts[0].seq}</text>`;
+    if (n > 1) s += `<text x="${W - padR}" y="${top + plotH + 44}" text-anchor="end" font-size="22" fill="${MUTED}">#${pts[n - 1].seq}</text>`;
+    if (!isProNow()) s += `<text x="${padL}" y="${H - 22}" font-size="22" fill="${MUTED}">Calculated with iSubnet</text>`;
+    s += '</svg>';
+    return s;
+  }
+
+  function svgToPngBase64(svgStr, w, h) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/png').split(',')[1]);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error('graph image render failed'));
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+    });
+  }
+
+  async function sharePingGraph() {
+    if (graphData.length === 0) return false;
+    const isNativeShare = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    if (!isNativeShare) return false;
+    try {
+      const png = await svgToPngBase64(buildGraphShareSvg(), 1080, 720);
+      const { Filesystem, Share } = window.Capacitor.Plugins;
+      const written = await Filesystem.writeFile({ path: 'isubnet_ping_graph.png', data: png, directory: 'CACHE' });
+      try {
+        await Share.share({ title: 'Ping Graph', url: written.uri });
+      } catch (e) {
+        // Same Android Share-plugin quirk as shareText(): the promise can reject even after a real share.
+        console.error('Capacitor Share (graph) failed/rejected:', e);
+      }
+      return true;
+    } catch (e) {
+      pingLog(`share graph failed: ${e && e.message ? e.message : e}`);
+      return false;
+    }
   }
 
   function isProNow() {
@@ -7301,8 +7625,7 @@ function updateUpgradeUI(planTier) {
     liveMin = null;
     liveMax = null;
     droppedRows = 0;
-    graphData = [];
-    renderGraph();
+    resetPingGraph();
 
     let outcome = 'ok';
     pingLog(`ui: params | count=${countToSend} | continuous=${runContinuous} | newestFirst=${newestFirst} | pro=${isProNow()}`);
@@ -7343,7 +7666,7 @@ function updateUpgradeUI(planTier) {
           const ttlText = (probe.ttl !== null && probe.ttl !== undefined) ? String(probe.ttl) : '—';
 
           graphData.push({ seq: probe.seq, ms: (probe.outcome === 'REPLY' && typeof probe.timeMs === 'number') ? probe.timeMs : null });
-          if (graphData.length > 1500) graphData.shift();
+          if (graphData.length > GRAPH_MAX_POINTS) graphData.shift();
           scheduleGraph();
 
           const rowObj = { seq: probe.seq, reply: replyText, time: timeText, ttl: ttlText };
@@ -7401,6 +7724,8 @@ function updateUpgradeUI(planTier) {
       }
       lastPingResultText = `${hostHdr}${extraHdr}\n${summary}\n\n#\tReply\tTime\tTTL\n` + rowsData.map(r => `${r.seq}\t${r.reply}\t${r.time}\t${r.ttl}`).join('\n') + '\n';
       lastPingNoteTitle = `Ping: ${val}`;
+      lastPingHeader = hostHdr;
+      lastPingSummary = summary;
 
       pingLog(`result: sent=${sent} | received=${received} | loss=${loss}% | cancelled=${!!res.cancelled}`);
 
@@ -7437,8 +7762,7 @@ function updateUpgradeUI(planTier) {
     lastPingNoteTitle = '';
     tbody.innerHTML = '';
     rowsData = [];
-    graphData = [];
-    renderGraph();
+    resetPingGraph();
   });
 
   if (btnCopy) {
@@ -7458,8 +7782,12 @@ function updateUpgradeUI(planTier) {
   }
 
   if (btnShare) {
-    btnShare.addEventListener('click', () => {
+    btnShare.addEventListener('click', async () => {
       pingLog('ui: share tap');
+      if (viewMode === 'graph' && graphData.length > 0) {
+        const sharedGraph = await sharePingGraph();
+        if (sharedGraph) return;
+      }
       if (lastPingResultText && typeof shareText === 'function') {
         shareText('Ping Results', lastPingResultText);
       }

@@ -1967,3 +1967,34 @@ body.dark-mode .bit-level-off {
 .tab-btn.active {
   padding: 10px 2px 8px;
 }
+
+/* --- Scrollable ping graph: fixed y-axis, sideways-scrolling plot --- */
+.ping-graph-body {
+  display: flex;
+  align-items: flex-start;
+}
+
+.ping-graph-yaxis {
+  flex: 0 0 36px;
+  display: block;
+}
+
+.ping-graph-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.ping-graph-plot {
+  display: block;
+  max-width: none;
+}
+
+.ping-graph-legend .rd {
+  font-weight: 600;
+  color: var(--text-primary);
+}

@@ -1655,7 +1655,12 @@
             <button type="button" id="btn-ping-view-graph" class="ping-view-btn" aria-pressed="false">Graph</button>
           </div>
           <div id="ping-graph-wrap" class="ping-graph-wrap" style="display: none;">
-            <svg id="ping-graph-svg" class="ping-graph-svg" viewBox="0 0 300 170" role="img" aria-label="Ping latency graph"></svg>
+            <div class="ping-graph-body">
+              <svg id="ping-graph-yaxis" class="ping-graph-yaxis" width="36" height="170" aria-hidden="true"></svg>
+              <div id="ping-graph-scroll" class="ping-graph-scroll">
+                <svg id="ping-graph-svg" class="ping-graph-plot" width="300" height="170" role="img" aria-label="Ping latency graph"></svg>
+              </div>
+            </div>
             <div id="ping-graph-legend" class="ping-graph-legend"></div>
           </div>
           <div class="table-container" id="ping-table-container">
