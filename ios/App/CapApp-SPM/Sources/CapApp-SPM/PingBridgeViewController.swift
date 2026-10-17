@@ -7,5 +7,8 @@ public class PingBridgeViewController: CAPBridgeViewController {
         let ping = PingPlugin()
         bridge?.registerPluginInstance(ping)
         ping.observeAppBackground()
+        let traceroute = TraceroutePlugin()
+        bridge?.registerPluginInstance(traceroute)
+        traceroute.observeAppBackground()
     }
 }

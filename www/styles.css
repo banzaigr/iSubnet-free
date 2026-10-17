@@ -1998,3 +1998,127 @@ body.dark-mode .bit-level-off {
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* --- Traceroute --- */
+.trace-options-head {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 16px;
+  font-weight: 600;
+}
+
+.trace-options-head .pro-badge {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.trace-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.trace-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.trace-opt label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trace-opt .ping-count-input {
+  width: 100%;
+  text-align: center;
+}
+
+.trace-resolve-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.trace-resolve-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.trace-table td {
+  vertical-align: top;
+}
+
+.trace-table td.trace-hop {
+  color: var(--text-muted);
+}
+
+.trace-host-name {
+  display: block;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.trace-host-ip {
+  display: block;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.trace-host-name + .trace-host-ip {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.trace-host-muted {
+  color: var(--text-muted);
+}
+
+.trace-host-dest .trace-host-ip,
+.trace-host-dest .trace-host-name {
+  color: var(--accent-success);
+}
+
+.trace-host-bad .trace-host-ip,
+.trace-host-bad .trace-host-name {
+  color: var(--accent-danger);
+}
+
+.trace-time {
+  display: block;
+  color: var(--accent-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trace-time.none {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.trace-probes {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* --- Field Clear buttons --- */
+.quick-copy-paste.compact .btn-action {
+  font-size: 0 !important;
+  gap: 0 !important;
+  padding: 5px 7px !important;
+}
+
+.btn-clear-field {
+  color: var(--accent-danger);
+  border-color: rgba(239, 68, 68, 0.25);
+}

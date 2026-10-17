@@ -46,3 +46,11 @@
 }
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# --- Traceroute JNI ---
+-keep class com.banzaigr.isubnet.TraceroutePlugin {
+    *;
+}
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}

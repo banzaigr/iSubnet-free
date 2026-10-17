@@ -727,7 +727,8 @@ let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
 const PRO_FEATURE_INFO = {
   tools: { title: '🌐 DNS Lookup', text: 'Look up A, AAAA, MX, NS, TXT, CNAME, SOA and CAA records for any domain, or enter an IP address to find its hostname with a reverse DNS (PTR) lookup. Copy, share or save results to Notes.' },
   splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' },
-  ping: { title: '📶 Ping options', text: 'Choose how many probes to send (up to 100), or turn on -t to ping continuously until you stop it, with the newest result at the top.' }
+  ping: { title: '📶 Ping options', text: 'Choose how many probes to send (up to 100), or turn on -t to ping continuously until you stop it, with the newest result at the top.' },
+  traceroute: { title: '🧭 Traceroute options', text: 'Set the maximum number of hops (up to 64), the probes per hop and the timeout, and turn on host name lookup to see a name for every hop.' }
 };
 
 function showProModal(feature) {
@@ -897,6 +898,7 @@ function applyProState() {
     renderHistory();
   }
   if (typeof window.updatePingControls === 'function') window.updatePingControls();
+  if (typeof window.updateTraceControls === 'function') window.updateTraceControls();
 }
 
 // --- Safe Storage Wrapper for Local file:// CORS constraints ---
@@ -2810,6 +2812,71 @@ function logBaseConverterDebounced(sourceId) {
   }, 800);
 }
 
+// IP address support for the Number Base Converter: an IPv4 address typed in Decimal (or as dotted groups in
+// any base) and an IPv6 address typed in Hex (colon notation, or dotted groups) are converted group by group.
+// Returns { status: 'plain' | 'incomplete' | 'invalid' | 'v4' | 'v6', groups }.
+function parseBaseGroups(raw, base) {
+  const v = String(raw).trim();
+  const hasDot = v.indexOf('.') !== -1;
+  const hasColon = v.indexOf(':') !== -1;
+  if (!hasDot && !hasColon) return { status: 'plain' };
+  const digitRe = { 2: /^[01]+$/, 8: /^[0-7]+$/, 10: /^[0-9]+$/, 16: /^[0-9a-fA-F]+$/ }[base];
+  if (hasColon) {
+    if (base !== 16) return { status: 'invalid' };
+    if (!/^[0-9a-fA-F:.]+$/.test(v) || v.indexOf(':::') !== -1) return { status: 'invalid' };
+    const big = parseIPv6(v);
+    if (big !== null) {
+      const groups = [];
+      for (let i = 7; i >= 0; i--) groups.push(Number((big >> BigInt(i * 16)) & BigInt(0xffff)));
+      return { status: 'v6', groups: groups };
+    }
+    const parts = v.split(':');
+    const last = parts[parts.length - 1];
+    const tailV4 = last.indexOf('.') !== -1;
+    const tailOk = /^[0-9]{0,3}(\.[0-9]{0,3}){0,3}$/.test(last);
+    const body = tailV4 ? parts.slice(0, -1) : parts;
+    if (body.some((p) => p.length > 4)) return { status: 'invalid' };
+    if (tailV4 && !tailOk) return { status: 'invalid' };
+    if (v.indexOf('::') !== -1) return tailV4 ? { status: 'incomplete' } : { status: 'invalid' };
+    if (parts.length > 8) return { status: 'invalid' };
+    return { status: 'incomplete' };
+  }
+  const parts = v.split('.');
+  if (parts.length > 8) return { status: 'invalid' };
+  const vals = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p === '') {
+      if (i === parts.length - 1) continue;
+      return { status: 'invalid' };
+    }
+    if (p.length > 20 || !digitRe.test(p)) return { status: 'invalid' };
+    const n = parseInt(p, base);
+    if (n > 0xffff) return { status: 'invalid' };
+    vals.push(n);
+  }
+  const endsOpen = parts[parts.length - 1] === '';
+  if (!endsOpen && parts.length === 4) {
+    return vals.every((n) => n <= 255) ? { status: 'v4', groups: vals } : { status: 'invalid' };
+  }
+  if (!endsOpen && parts.length === 8) return { status: 'v6', groups: vals };
+  return { status: 'incomplete' };
+}
+
+function formatBaseGroups(info) {
+  const v4 = info.status === 'v4';
+  const binW = v4 ? 8 : 16;
+  const octW = v4 ? 3 : 6;
+  const hexW = v4 ? 2 : 4;
+  const g = info.groups;
+  return {
+    bin: g.map((n) => n.toString(2).padStart(binW, '0')).join('.'),
+    oct: g.map((n) => n.toString(8).padStart(octW, '0')).join('.'),
+    dec: g.map((n) => String(n)).join('.'),
+    hex: g.map((n) => n.toString(16).toUpperCase().padStart(hexW, '0')).join('.')
+  };
+}
+
 function runBaseConverter(sourceId, fromBase) {
   logBaseConverterDebounced(sourceId);
   if (_baseConverting) return;
@@ -2844,14 +2911,26 @@ function runBaseConverter(sourceId, fromBase) {
     return;
   }
 
-  const result = convertBase(rawValue, fromBase);
+  const grouped = parseBaseGroups(rawValue, fromBase);
+  if (grouped.status === 'incomplete') {
+    // Still typing an IP address: no error yet, and the other fields stay empty until it is complete.
+    Object.entries(inputs).forEach(([key, el]) => {
+      if (el && key !== sourceId) el.value = '';
+    });
+    _baseConverting = false;
+    return;
+  }
+  let result;
+  if (grouped.status === 'plain') result = convertBase(rawValue, fromBase);
+  else if (grouped.status === 'invalid') result = null;
+  else result = formatBaseGroups(grouped);
 
   if (!result) {
     // Show error on the active field
     const errorEl = errors[sourceId];
     if (errorEl) {
       const baseNames = { bin: 'binary (0–1)', oct: 'octal (0–7)', dec: 'decimal (0–9)', hex: 'hex (0–9, A–F)' };
-      errorEl.textContent = `Invalid ${baseNames[sourceId]} value`;
+      errorEl.textContent = (grouped.status === 'invalid' && /[.:]/.test(rawValue)) ? `Invalid ${baseNames[sourceId]} value or IP address` : `Invalid ${baseNames[sourceId]} value`;
       sourceEl.classList.add('error');
     }
     _baseConverting = false;
@@ -4963,15 +5042,16 @@ function setupInputSanitizers() {
     { id: 'split-base-ip',    allowed: /[0-9a-fA-F.:/]/ },
     { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ },
     { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
-    { id: 'ping-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
+    { id: 'ping-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
+    { id: 'trace-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
   ];
   rules.forEach(({ id, allowed }) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', () => {
-      if (id === 'dns-input' || id === 'ping-input') normalizeDnsInput(el);
+      if (id === 'dns-input' || id === 'ping-input' || id === 'trace-input') normalizeDnsInput(el);
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input' || id === 'ping-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input') {
         collapseDuplicateDots(el);
         collapseDuplicateColons(el);
       }
@@ -5512,6 +5592,8 @@ function init() {
   if (toolsSwitchChip) toolsSwitchChip.addEventListener('click', openToolsPicker);
   const pingSwitchChip = document.getElementById('btn-ping-switch');
   if (pingSwitchChip) pingSwitchChip.addEventListener('click', openToolsPicker);
+  const traceSwitchChip = document.getElementById('btn-trace-switch');
+  if (traceSwitchChip) traceSwitchChip.addEventListener('click', openToolsPicker);
   const toolsPickerModal = document.getElementById('tools-picker-modal');
   const toolsPickerClose = document.getElementById('btn-tools-picker-close');
   if (toolsPickerClose) toolsPickerClose.addEventListener('click', closeToolsPicker);
@@ -5524,7 +5606,8 @@ function init() {
 // --- Tools Picker ---
 const TOOLS_LIST = [
   { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, MX, NS, TXT, reverse DNS and more', screen: 'tools-tab', feature: 'tools', pro: true },
-  { id: 'ping', icon: '📶', title: 'Ping', desc: 'Test reachability and round-trip time', screen: 'ping-tab', pro: false }
+  { id: 'ping', icon: '📶', title: 'Ping', desc: 'Test reachability and round-trip time', screen: 'ping-tab', pro: false },
+  { id: 'traceroute', icon: '🧭', title: 'Traceroute', desc: 'See the path your packets take, hop by hop', screen: 'traceroute-tab', feature: 'traceroute', pro: false }
 ];
 
 function openToolsPicker() {
@@ -7335,7 +7418,7 @@ function updateUpgradeUI(planTier) {
     const INK = '#1e293b', MUTED = '#64748b', GRID = '#e2e8f0', ACC = '#4f46e5', BAD = '#ef4444', AVG = '#0ea5e9';
 
     let header = lastPingHeader || `Ping ${input.value.trim()}`.trim();
-    if (header.length > 46) header = header.slice(0, 45) + '…';
+    if (header.length > 40) header = header.slice(0, 39) + '…';
     const sum = lastPingSummary || (statusLine ? statusLine.textContent : '') || '';
     const cut = sum.indexOf(' · min ');
     const line1 = cut >= 0 ? sum.slice(0, cut) : sum;
@@ -7343,6 +7426,7 @@ function updateUpgradeUI(planTier) {
 
     let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system, Roboto, Helvetica, Arial, sans-serif">`;
     s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+    s += `<text x="${W - padR}" y="40" text-anchor="end" font-size="30" font-weight="700" fill="${ACC}">iSubnet</text>`;
     s += `<text x="${padL}" y="76" font-size="40" font-weight="700" fill="${INK}">${escapeHTML(header)}</text>`;
     s += `<text x="${padL}" y="124" font-size="27" fill="${MUTED}">${escapeHTML(line1)}</text>`;
     if (line2) s += `<text x="${padL}" y="164" font-size="27" fill="${MUTED}">${escapeHTML(line2)}</text>`;
@@ -7839,6 +7923,552 @@ function updateUpgradeUI(planTier) {
             pingLog('stop: app hidden');
             try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
           }
+        } catch (e) { /* ignore */ }
+      });
+    }
+  } catch (e) { /* ignore */ }
+})();
+
+// --- FIELD CLEAR BUTTONS ---
+// Every button with class "btn-clear-field" and data-clear-for="<input id>" erases that field and lets the
+// normal input handlers recalculate (the same as deleting the text by hand).
+(function initClearButtons() {
+  document.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest('.btn-clear-field') : null;
+    if (!btn) return;
+    const id = btn.getAttribute('data-clear-for');
+    const el = id ? document.getElementById(id) : null;
+    if (!el) return;
+    el.value = '';
+    el.classList.remove('error');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    const locked = el.getAttribute('data-pro') === 'true' && typeof PRO_UNLOCKED !== 'undefined' && !PRO_UNLOCKED;
+    if (!locked) {
+      try { el.focus(); } catch (err) { /* ignore */ }
+    }
+  });
+})();
+
+// --- TRACEROUTE TOOL ---
+(function initTracerouteTool() {
+  const input = document.getElementById('trace-input');
+  const btnRun = document.getElementById('btn-trace-run');
+  const btnClear = document.getElementById('btn-trace-clear');
+  const resultsCard = document.getElementById('trace-results-card');
+  const statusLine = document.getElementById('trace-status-line');
+  const tbody = document.getElementById('trace-results-tbody');
+  const errorMsg = document.getElementById('trace-error-msg');
+  const platformNote = document.getElementById('trace-platform-note');
+  const btnCopy = document.getElementById('btn-trace-copy');
+  const btnSave = document.getElementById('btn-trace-save');
+  const btnShare = document.getElementById('btn-trace-share');
+  const hopsInput = document.getElementById('trace-hops-input');
+  const probesInput = document.getElementById('trace-probes-input');
+  const timeoutInput = document.getElementById('trace-timeout-input');
+  const resolveBtn = document.getElementById('btn-trace-resolve');
+  const proBadge = document.getElementById('trace-pro-badge');
+
+  if (!input || !btnRun || !btnClear || !resultsCard || !statusLine || !tbody || !errorMsg) {
+    return;
+  }
+
+  const DEFAULT_HOPS = 30;
+  const DEFAULT_PROBES = 3;
+  const DEFAULT_TIMEOUT_S = 2;
+  const MAX_HOPS = 64;
+  const MAX_PROBES = 5;
+  const MAX_TIMEOUT_S = 5;
+
+  function traceLog(msg) {
+    if (typeof window.debugLog === 'function') window.debugLog(`[Traceroute] ${msg}`);
+  }
+
+  const cap = window.Capacitor;
+  const platform = cap && cap.getPlatform ? cap.getPlatform() : 'web';
+  const isNative = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+
+  function findPlugin() {
+    if (cap && cap.Plugins && cap.Plugins.Traceroute) return { plugin: cap.Plugins.Traceroute, path: 'Plugins.Traceroute' };
+    if (cap && typeof cap.registerPlugin === 'function') {
+      try {
+        const p = cap.registerPlugin('Traceroute');
+        if (p) return { plugin: p, path: 'registerPlugin' };
+      } catch (e) {
+        return { plugin: null, path: 'registerPlugin_failed' };
+      }
+    }
+    return { plugin: null, path: 'none' };
+  }
+
+  let P = null;
+  {
+    const found = findPlugin();
+    P = found.plugin;
+    traceLog(`init: platform=${platform} | isNative=${isNative} | pluginFound=${!!P} | path=${found.path}`);
+  }
+
+  if (!isNative) {
+    btnRun.disabled = true;
+    if (platformNote) platformNote.style.display = 'block';
+  }
+
+  let isRunning = false;
+  let listeners = [];
+  let hops = [];            // [{ ttl, probes: [{outcome, address, timeMs}], tr }]
+  let names = {};           // address -> host name
+  let runHost = '';
+  let runResolved = '';
+  let runMaxHops = DEFAULT_HOPS;
+  let runProbes = DEFAULT_PROBES;
+  let lastSummary = '';
+  let lastTraceText = '';
+  let lastTraceTitle = '';
+  let resolveOn = false;
+  let wasPro = false;
+
+  function isProNow() {
+    return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
+  }
+
+  function updateTraceControls() {
+    const isPro = isProNow();
+    if (proBadge) proBadge.style.display = isPro ? 'none' : 'inline-block';
+    if (!isPro) {
+      if (hopsInput) { hopsInput.value = String(DEFAULT_HOPS); hopsInput.readOnly = true; }
+      if (probesInput) { probesInput.value = String(DEFAULT_PROBES); probesInput.readOnly = true; }
+      if (timeoutInput) { timeoutInput.value = String(DEFAULT_TIMEOUT_S); timeoutInput.readOnly = true; }
+      resolveOn = false;
+    } else {
+      if (hopsInput) hopsInput.readOnly = false;
+      if (probesInput) probesInput.readOnly = false;
+      if (timeoutInput) timeoutInput.readOnly = false;
+      if (!wasPro) resolveOn = true;
+    }
+    wasPro = isPro;
+    if (resolveBtn) {
+      resolveBtn.textContent = resolveOn ? 'On' : 'Off';
+      resolveBtn.classList.toggle('active', resolveOn);
+      resolveBtn.setAttribute('aria-pressed', resolveOn ? 'true' : 'false');
+      resolveBtn.disabled = (!isNative) || isRunning;
+    }
+    [hopsInput, probesInput, timeoutInput].forEach((el) => {
+      if (el) el.disabled = (!isNative) || isRunning;
+    });
+  }
+  window.updateTraceControls = updateTraceControls;
+  updateTraceControls();
+
+  function onOptionInteract(e) {
+    if (!isProNow() && isNative) {
+      if (e.cancelable) e.preventDefault();
+      if (e.target && typeof e.target.blur === 'function') e.target.blur();
+      showProModal('traceroute');
+    }
+  }
+  [hopsInput, probesInput, timeoutInput].forEach((el) => {
+    if (!el) return;
+    el.addEventListener('pointerdown', onOptionInteract);
+    el.addEventListener('focus', onOptionInteract);
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runTrace();
+    });
+    el.addEventListener('input', () => {
+      el.value = el.value.replace(/\D/g, '');
+    });
+  });
+
+  if (resolveBtn) {
+    resolveBtn.addEventListener('click', () => {
+      if (!isNative || isRunning) return;
+      if (!isProNow()) {
+        showProModal('traceroute');
+        return;
+      }
+      resolveOn = !resolveOn;
+      updateTraceControls();
+    });
+  }
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+    resultsCard.style.display = 'none';
+  }
+
+  function hideError() {
+    errorMsg.style.display = 'none';
+  }
+
+  function fmtMs(v) {
+    return String(Math.round(v * 10) / 10);
+  }
+
+  function removeListeners() {
+    const old = listeners;
+    listeners = [];
+    old.forEach((h) => {
+      try {
+        if (h && typeof h.remove === 'function') Promise.resolve(h.remove()).catch(() => {});
+      } catch (e) { /* ignore */ }
+    });
+  }
+
+  function hopAddresses(h) {
+    const out = [];
+    h.probes.forEach((p) => {
+      if (p && p.address && out.indexOf(p.address) === -1) out.push(p.address);
+    });
+    return out;
+  }
+
+  function hopTimes(h) {
+    const out = [];
+    for (let i = 0; i < runProbes; i++) {
+      const p = h.probes[i];
+      if (!p) { out.push('…'); continue; }
+      out.push((typeof p.timeMs === 'number') ? fmtMs(p.timeMs) : '*');
+    }
+    return out;
+  }
+
+  function hopAvg(h) {
+    let sum = 0;
+    let n = 0;
+    h.probes.forEach((p) => {
+      if (p && typeof p.timeMs === 'number') { sum += p.timeMs; n++; }
+    });
+    return n > 0 ? sum / n : null;
+  }
+
+  function hopDone(h) {
+    return h.probes.filter(Boolean).length >= runProbes;
+  }
+
+  function hopHasOutcome(h, outcome) {
+    return h.probes.some((p) => p && p.outcome === outcome);
+  }
+
+  function hopHostText(h) {
+    const addrs = hopAddresses(h);
+    if (addrs.length === 0) return hopDone(h) ? '*' : '…';
+    return addrs.map((a) => (names[a] ? `${names[a]} (${a})` : a)).join(', ');
+  }
+
+  function renderHop(h) {
+    if (!h.tr) return;
+    const addrs = hopAddresses(h);
+    let hostHtml = '';
+    if (addrs.length === 0) {
+      const anyError = hopHasOutcome(h, 'ERROR');
+      const label = !hopDone(h) ? '…' : (anyError ? 'Error' : 'No reply');
+      hostHtml = `<span class="trace-host-muted">${escapeHTML(label)}</span>`;
+    } else {
+      let cls = '';
+      if (hopHasOutcome(h, 'REPLY')) cls = ' trace-host-dest';
+      else if (hopHasOutcome(h, 'UNREACHABLE')) cls = ' trace-host-bad';
+      hostHtml = addrs.map((a) => {
+        if (names[a]) {
+          return `<span class="${cls.trim()}"><span class="trace-host-name">${escapeHTML(names[a])}</span><span class="trace-host-ip">${escapeHTML(a)}</span></span>`;
+        }
+        return `<span class="${cls.trim()}"><span class="trace-host-ip">${escapeHTML(a)}</span></span>`;
+      }).join('');
+    }
+    const avg = hopAvg(h);
+    const timeHtml = (avg !== null)
+      ? `<span class="trace-time">${escapeHTML(fmtMs(avg))} ms</span>`
+      : `<span class="trace-time none">${hopDone(h) ? '—' : '…'}</span>`;
+    const probesHtml = `<span class="trace-probes">${escapeHTML(hopTimes(h).join(' · '))}</span>`;
+    h.tr.innerHTML = `<td class="trace-hop">${escapeHTML(String(h.ttl))}</td><td>${hostHtml}</td><td>${timeHtml}${probesHtml}</td>`;
+  }
+
+  function getHop(ttl) {
+    let h = hops.find((x) => x.ttl === ttl);
+    if (h) return h;
+    h = { ttl: ttl, probes: [], tr: document.createElement('tr') };
+    hops.push(h);
+    hops.sort((a, b) => a.ttl - b.ttl);
+    const idx = hops.indexOf(h);
+    const nextHop = hops[idx + 1];
+    if (nextHop && nextHop.tr && nextHop.tr.parentNode === tbody) {
+      tbody.insertBefore(h.tr, nextHop.tr);
+    } else {
+      tbody.appendChild(h.tr);
+    }
+    return h;
+  }
+
+  function lastTtl() {
+    return hops.length > 0 ? hops[hops.length - 1].ttl : 0;
+  }
+
+  function buildText(summary) {
+    const target = `${runHost}${runResolved && runResolved !== runHost ? ` (${runResolved})` : ''}`;
+    let t = `Traceroute to ${target}, ${runMaxHops} hops max\n${summary}\n\n#\tHost\tTime (ms)\n`;
+    t += hops.map((h) => `${h.ttl}\t${hopHostText(h)}\t${hopTimes(h).join(' / ')}`).join('\n') + '\n';
+    return t;
+  }
+
+  function refreshText() {
+    if (!lastSummary) return;
+    lastTraceText = buildText(lastSummary);
+  }
+
+  function parseIntIn(el, lo, hi, label) {
+    const s = (el ? el.value : '').trim();
+    if (!/^\d{1,3}$/.test(s)) return { err: `${label} must be a whole number from ${lo} to ${hi}.` };
+    const n = parseInt(s, 10);
+    if (n < lo || n > hi) return { err: `${label} must be a whole number from ${lo} to ${hi}.` };
+    return { n: n };
+  }
+
+  async function runTrace() {
+    if (isRunning) {
+      traceLog('ui: stop tap');
+      if (P && typeof P.stop === 'function') {
+        try { await P.stop(); } catch (e) { /* ignore */ }
+      }
+      return;
+    }
+
+    hideError();
+
+    const rawVal = input.value;
+    let val = rawVal.trim().replace(/\.+$/, '');
+    if (!val) {
+      showError('Please enter a hostname or IPv4 address.');
+      return;
+    }
+    if (val.startsWith('-') || /\s/.test(val)) {
+      showError('Invalid hostname or IP address.');
+      return;
+    }
+
+    const wasUrl = val.startsWith('http://') || val.startsWith('https://');
+    const hadPath = val.includes('/');
+    try {
+      if (wasUrl) {
+        val = new URL(val).hostname;
+      } else if (hadPath) {
+        val = new URL('http://' + val).hostname;
+      } else {
+        try {
+          val = new URL('http://' + val).hostname;
+        } catch (e) {
+          val = val.toLowerCase();
+        }
+      }
+    } catch (e) {
+      val = val.toLowerCase();
+    }
+
+    val = val.replace(/^\[|\]$/g, '');
+    if (!val || val.startsWith('-') || /\s/.test(val)) {
+      showError('Invalid hostname or IP address.');
+      return;
+    }
+    if (val.indexOf(':') !== -1) {
+      showError("IPv6 traceroute isn't supported yet. Enter a hostname or an IPv4 address.");
+      return;
+    }
+
+    let hopsToSend = DEFAULT_HOPS;
+    let probesToSend = DEFAULT_PROBES;
+    let timeoutS = DEFAULT_TIMEOUT_S;
+    let resolveNames = false;
+    if (isProNow()) {
+      const h = parseIntIn(hopsInput, 1, MAX_HOPS, 'Max hops');
+      if (h.err) { showError(h.err); return; }
+      const p = parseIntIn(probesInput, 1, MAX_PROBES, 'Probes per hop');
+      if (p.err) { showError(p.err); return; }
+      const t = parseIntIn(timeoutInput, 1, MAX_TIMEOUT_S, 'Timeout');
+      if (t.err) { showError(t.err); return; }
+      hopsToSend = h.n;
+      probesToSend = p.n;
+      timeoutS = t.n;
+      resolveNames = resolveOn;
+    } else {
+      if (hopsInput) hopsInput.value = String(DEFAULT_HOPS);
+      if (probesInput) probesInput.value = String(DEFAULT_PROBES);
+      if (timeoutInput) timeoutInput.value = String(DEFAULT_TIMEOUT_S);
+    }
+
+    if (!P) {
+      P = findPlugin().plugin;
+    }
+    if (!P) {
+      showError("Traceroute isn't available on this device yet.");
+      return;
+    }
+
+    traceLog(`ui: start | online=${navigator.onLine} | inputLength=${rawVal.length}`);
+
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseCrashlytics) {
+      window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'tracerouteRun', type: 'string' }).catch(() => {});
+    }
+
+    try {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl === input || activeEl === hopsInput || activeEl === probesInput || activeEl === timeoutInput)) activeEl.blur();
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard && typeof window.Capacitor.Plugins.Keyboard.hide === 'function') {
+        Promise.resolve(window.Capacitor.Plugins.Keyboard.hide()).catch(() => {});
+      }
+    } catch (e) { /* ignore */ }
+
+    removeListeners();
+    hops = [];
+    names = {};
+    runHost = val;
+    runResolved = '';
+    runMaxHops = hopsToSend;
+    runProbes = probesToSend;
+    lastSummary = '';
+    lastTraceText = '';
+    lastTraceTitle = '';
+
+    isRunning = true;
+    updateTraceControls();
+    btnRun.textContent = 'Stop';
+    resultsCard.style.display = 'block';
+    statusLine.textContent = 'Resolving...';
+    tbody.innerHTML = '';
+
+    let outcome = 'ok';
+    traceLog(`ui: params | maxHops=${hopsToSend} | probes=${probesToSend} | timeoutS=${timeoutS} | resolveNames=${resolveNames} | pro=${isProNow()}`);
+
+    try {
+      if (typeof P.addListener === 'function') {
+        listeners.push(await P.addListener('resolved', (ev) => {
+          if (!ev || !ev.address) return;
+          runResolved = ev.address;
+          statusLine.textContent = `Tracing to ${ev.address}...`;
+        }));
+        listeners.push(await P.addListener('hop', (ev) => {
+          if (!ev || typeof ev.ttl !== 'number') return;
+          const h = getHop(ev.ttl);
+          const idx = (typeof ev.probe === 'number' && ev.probe >= 1) ? ev.probe - 1 : h.probes.length;
+          h.probes[idx] = { outcome: ev.outcome, address: ev.address || null, timeMs: (typeof ev.timeMs === 'number') ? ev.timeMs : null };
+          renderHop(h);
+          statusLine.textContent = `Tracing to ${runResolved || runHost} · hop ${ev.ttl}`;
+        }));
+        listeners.push(await P.addListener('hostname', (ev) => {
+          if (!ev || !ev.address || !ev.hostname) return;
+          names[ev.address] = ev.hostname;
+          hops.forEach((h) => {
+            if (hopAddresses(h).indexOf(ev.address) !== -1) renderHop(h);
+          });
+          refreshText();
+        }));
+      }
+
+      const res = await P.trace({ host: val, maxHops: hopsToSend, probes: probesToSend, timeoutMs: timeoutS * 1000, resolveNames: resolveNames });
+      outcome = res.cancelled ? 'cancelled' : 'ok';
+      if (res.resolvedAddress) runResolved = res.resolvedAddress;
+
+      const hopCount = (typeof res.hops === 'number' && res.hops > 0) ? res.hops : lastTtl();
+      const hopWord = hopCount === 1 ? 'hop' : 'hops';
+      let summary;
+      if (res.cancelled) {
+        summary = `Stopped at hop ${lastTtl()}`;
+      } else if (res.reached) {
+        summary = `Reached ${runResolved || runHost} in ${hopCount} ${hopWord}`;
+      } else if (res.unreachable) {
+        summary = `Destination unreachable at hop ${hopCount}`;
+      } else {
+        summary = `Destination not reached within ${runMaxHops} hops`;
+      }
+      statusLine.textContent = summary;
+      hops.forEach((h) => renderHop(h));
+
+      lastSummary = summary;
+      lastTraceText = buildText(summary);
+      lastTraceTitle = `Traceroute: ${val}`;
+      traceLog(`result: hops=${hopCount} | reached=${!!res.reached} | unreachable=${!!res.unreachable} | cancelled=${!!res.cancelled}`);
+    } catch (err) {
+      outcome = 'error';
+      removeListeners();
+      showError(err.message || 'Traceroute failed');
+    } finally {
+      isRunning = false;
+      btnRun.textContent = 'Trace';
+      updateTraceControls();
+      traceLog(`outcome: ${outcome}`);
+    }
+  }
+
+  btnRun.addEventListener('click', runTrace);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runTrace();
+  });
+
+  btnClear.addEventListener('click', async () => {
+    traceLog('ui: clear tap');
+    if (isRunning && P && typeof P.stop === 'function') {
+      try { await P.stop(); } catch (e) { /* ignore */ }
+    }
+    removeListeners();
+    input.value = '';
+    hideError();
+    resultsCard.style.display = 'none';
+    lastSummary = '';
+    lastTraceText = '';
+    lastTraceTitle = '';
+    tbody.innerHTML = '';
+    hops = [];
+    names = {};
+  });
+
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      traceLog('ui: copy tap');
+      if (lastTraceText && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(lastTraceText)
+          .then(() => {
+            traceLog('ui: copy success');
+            if (typeof showToast === 'function') showToast('Traceroute results copied!');
+          })
+          .catch(() => {
+            if (typeof showToast === 'function') showToast('Copy failed');
+          });
+      }
+    });
+  }
+
+  if (btnShare) {
+    btnShare.addEventListener('click', () => {
+      traceLog('ui: share tap');
+      if (lastTraceText && typeof shareText === 'function') {
+        shareText('Traceroute Results', lastTraceText);
+      }
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      traceLog('ui: save tap');
+      if (!lastTraceText || typeof addNote !== 'function') return;
+      addNote(lastTraceTitle || 'Traceroute', lastTraceText, 'Traceroute');
+      if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+      if (typeof switchToNotesTab === 'function') switchToNotesTab();
+    });
+  }
+
+  // Traceroute is short and has no foreground service, so a running trace is stopped when the app goes to the background.
+  function stopIfRunning(why) {
+    if (isRunning && P && typeof P.stop === 'function') {
+      traceLog(`stop: ${why}`);
+      try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') stopIfRunning('app hidden');
+  });
+
+  try {
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App && typeof window.Capacitor.Plugins.App.addListener === 'function') {
+      window.Capacitor.Plugins.App.addListener('appStateChange', (state) => {
+        try {
+          if (state && state.isActive === false) stopIfRunning('app inactive');
         } catch (e) { /* ignore */ }
       });
     }

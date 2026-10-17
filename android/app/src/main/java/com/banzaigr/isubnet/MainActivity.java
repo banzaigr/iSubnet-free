@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
         }
         
         registerPlugin(PingPlugin.class);
+        registerPlugin(TraceroutePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
