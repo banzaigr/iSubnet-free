@@ -2529,6 +2529,48 @@ body.dark-mode .whois-chip-warn {
   z-index: 1;
 }
 
+/* --- Ping results table column widths & wrapping --- */
+#ping-results-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#ping-results-table th,
+#ping-results-table td {
+  padding: 10px 6px;
+  vertical-align: top;
+}
+
+#ping-results-table th:nth-child(1),
+#ping-results-table td:nth-child(1) {
+  width: 38px;
+  white-space: nowrap;
+}
+
+#ping-results-table th:nth-child(2),
+#ping-results-table td:nth-child(2) {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+#ping-results-table th:nth-child(3),
+#ping-results-table td:nth-child(3) {
+  width: 62px;
+  white-space: nowrap;
+}
+
+#ping-results-table th:nth-child(4),
+#ping-results-table td:nth-child(4) {
+  width: 42px;
+  white-space: nowrap;
+}
+
+.ping-reply-addr {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 /* ===== TAB-BAR-HIDE EXPERIMENT: START ===== */
 .app-tab-bar.kbd-tabbar-anim {
   transition: transform 0.18s ease, opacity 0.18s ease;

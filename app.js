@@ -5278,10 +5278,14 @@ const HIDE_TAB_BAR_WHEN_KEYBOARD_OPEN = true;
 const TAB_BAR_GRACE_MS = 420;
 const TAB_BAR_VIEWPORT_FULL_MS = 500;
 const TAB_BAR_VIEWPORT_SHRINK_MS = 300;
+const TAB_BAR_SHOW_RECHECK_MS = 110;
+const TAB_BAR_SHOW_MAX_WAIT_MS = 1000;
 
 let isTabBarHiddenByExperiment = false;
 let tabBarShowDebounceTimer = null;
 let tabBarPendingShowReason = null;
+let tabBarShowRequestStartTs = 0;
+let tabBarViewportShrunkDeferLogged = false;
 let tabBarVisibilityTimer = null;
 let tabBarGraceTimer = null;
 let tabBarViewportFullTimer = null;
@@ -5351,6 +5355,15 @@ function updateMaxExperimentViewportHeight() {
   return vh;
 }
 
+function isViewportShrunkForKeyboard() {
+  const vh = updateMaxExperimentViewportHeight();
+  return vh > 0 && maxExperimentViewportHeight > 0 && (maxExperimentViewportHeight - vh) > 150;
+}
+
+function isKeyboardPossiblyUp() {
+  return Boolean(keyboardShownByEvents) || isViewportShrunkForKeyboard();
+}
+
 function isExperimentTextEntry(el) {
   if (!el || !el.tagName) return false;
   if (el.disabled || el.readOnly) return false;
@@ -5418,6 +5431,8 @@ function hideTabBarForKeyboard(reason) {
     tabBarShowDebounceTimer = null;
     tabBarPendingShowReason = null;
   }
+  tabBarShowRequestStartTs = 0;
+  tabBarViewportShrunkDeferLogged = false;
   cancelTabBarViewportFullTimer();
   cancelTabBarViewportShrinkTimer();
   if (!isTabBarHiddenByExperiment) {
@@ -5452,6 +5467,8 @@ function performShowTabBarForKeyboard(reason) {
     tabBarShowDebounceTimer = null;
     tabBarPendingShowReason = null;
   }
+  tabBarShowRequestStartTs = 0;
+  tabBarViewportShrunkDeferLogged = false;
   if (tabBarVisibilityTimer) {
     clearTimeout(tabBarVisibilityTimer);
     tabBarVisibilityTimer = null;
@@ -5505,8 +5522,22 @@ function scheduleShowTabBarForKeyboard(reason, immediate = false) {
   if (!isTabBarHiddenByExperiment && !tabBarShowDebounceTimer) return;
   if (immediate) {
     if (isExperimentTextEntry(document.activeElement)) return;
-    performShowTabBarForKeyboard(reason);
-    return;
+    if (reason !== 'resume' && isKeyboardPossiblyUp()) {
+      if (!tabBarViewportShrunkDeferLogged && isViewportShrunkForKeyboard()) {
+        tabBarViewportShrunkDeferLogged = true;
+        if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+          const logReason = tabBarPendingShowReason === 'focus-lost' ? 'focus-lost' : reason;
+          window.debugLog(`[KBD] tabbar: show deferred | reason=${logReason} | why=viewport-shrunk`);
+        }
+      }
+      immediate = false;
+    } else {
+      performShowTabBarForKeyboard(reason);
+      return;
+    }
+  }
+  if (!tabBarShowRequestStartTs) {
+    tabBarShowRequestStartTs = Date.now();
   }
   if (tabBarShowDebounceTimer) {
     clearTimeout(tabBarShowDebounceTimer);
@@ -5515,18 +5546,44 @@ function scheduleShowTabBarForKeyboard(reason, immediate = false) {
     tabBarPendingShowReason = reason;
   }
   const effectiveReason = tabBarPendingShowReason || reason;
-  tabBarShowDebounceTimer = setTimeout(() => {
+  const runDebouncedShowCheck = () => {
     tabBarShowDebounceTimer = null;
-    tabBarPendingShowReason = null;
-    if (!isTabBarHideExperimentActive() || !isTabBarHiddenByExperiment) return;
+    if (!isTabBarHideExperimentActive() || !isTabBarHiddenByExperiment) {
+      tabBarPendingShowReason = null;
+      tabBarShowRequestStartTs = 0;
+      tabBarViewportShrunkDeferLogged = false;
+      return;
+    }
     if (isExperimentTextEntry(document.activeElement)) {
+      tabBarPendingShowReason = null;
+      tabBarShowRequestStartTs = 0;
+      tabBarViewportShrunkDeferLogged = false;
       if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
         window.debugLog('[KBD] tabbar: show deferred | reason=field-still-focused');
       }
       return;
     }
-    performShowTabBarForKeyboard(effectiveReason);
-  }, 160);
+    const finalReason = tabBarPendingShowReason || effectiveReason;
+    if (isViewportShrunkForKeyboard()) {
+      const waitedMs = tabBarShowRequestStartTs ? (Date.now() - tabBarShowRequestStartTs) : 0;
+      if (waitedMs < TAB_BAR_SHOW_MAX_WAIT_MS) {
+        if (!tabBarViewportShrunkDeferLogged) {
+          tabBarViewportShrunkDeferLogged = true;
+          if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+            window.debugLog(`[KBD] tabbar: show deferred | reason=${finalReason} | why=viewport-shrunk`);
+          }
+        }
+        tabBarShowDebounceTimer = setTimeout(runDebouncedShowCheck, TAB_BAR_SHOW_RECHECK_MS);
+        return;
+      }
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog(`[KBD] tabbar: show forced | reason=${finalReason} | waited=${waitedMs}`);
+      }
+    }
+    tabBarPendingShowReason = null;
+    performShowTabBarForKeyboard(finalReason);
+  };
+  tabBarShowDebounceTimer = setTimeout(runDebouncedShowCheck, 160);
 }
 
 function onTabBarExperimentKeyboardShow() {
@@ -8905,10 +8962,14 @@ function updateUpgradeUI(planTier) {
           const replyColor = (probe.outcome === 'REPLY') ? 'var(--accent-success)' : 'var(--accent-danger)';
           const timeColor = (timeText !== '—') ? 'var(--accent-primary)' : 'var(--text-muted)';
 
+          const replyCellHtml = (probe.outcome === 'REPLY')
+            ? `Reply from <span class="ping-reply-addr">${escapeHTML(String(probe.resolvedAddress || val))}</span>`
+            : escapeHTML(replyText);
+
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${escapeHTML(String(probe.seq))}</td>
-            <td style="word-break: break-all; color: ${replyColor};">${escapeHTML(replyText)}</td>
+            <td style="color: ${replyColor};">${replyCellHtml}</td>
             <td style="color: ${timeColor};">${escapeHTML(timeText)}</td>
             <td style="color: var(--text-muted);">${escapeHTML(ttlText)}</td>
           `;
@@ -11719,8 +11780,12 @@ function updateUpgradeUI(planTier) {
     const calcTabBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
     if (calcTabBtn) calcTabBtn.click();
     const isV6 = parsed.kind === 'ipv6';
-    const subBtn = document.querySelector(`.calc-sub-tab-btn[data-sub-target="${isV6 ? 'calc-ipv6-panel' : 'calc-ipv4-panel'}"]`);
-    if (subBtn) subBtn.click();
+    const subBtn = document.querySelector(`.calc-sub-tab-btn[data-sub-target="${isV6 ? 'ipv6-panel' : 'ipv4-panel'}"]`);
+    if (subBtn) {
+      subBtn.click();
+    } else if (window.APP_DEBUG_ENABLED) {
+      whoisLog('ui: open-in subnet-calculator: sub-tab not found');
+    }
     const singleBtn = document.querySelector(`${isV6 ? '.calc-mode-btn-v6' : '.calc-mode-btn-v4'}[data-mode="single"]`);
     if (singleBtn) singleBtn.click();
 
