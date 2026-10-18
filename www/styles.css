@@ -2122,3 +2122,361 @@ body.dark-mode .bit-level-off {
   color: var(--accent-danger);
   border-color: rgba(239, 68, 68, 0.25);
 }
+
+/* --- Tools Picker SVG Icon --- */
+.tools-picker-icon svg {
+  display: block;
+  width: 32px;
+  height: 26px;
+}
+
+/* --- Traceroute Graph Details & Jump Hint --- */
+.ping-graph-legend .lg-dot.dest {
+  background: var(--accent-success);
+}
+
+.ping-graph-legend .lg-dot.warn {
+  background: #f59e0b;
+}
+
+.trace-graph-detail {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--accent-primary-rgb), 0.07);
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.trace-graph-detail-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.trace-graph-detail-meta {
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+
+.trace-graph-hint {
+  margin-top: 8px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* --- Whois Tool --- */
+.whois-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.whois-raw-btn {
+  padding: 5px 10px !important;
+  font-size: 12px !important;
+  flex: 0 0 auto !important;
+}
+
+.whois-raw-btn.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+}
+
+.whois-parent-note {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--accent-primary-rgb), 0.10);
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.30);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.whois-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.whois-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(var(--accent-primary-rgb), 0.12);
+  color: var(--accent-primary);
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.25);
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.whois-chip-good {
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--accent-success);
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+.whois-chip-warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+body.dark-mode .whois-chip-warn {
+  color: #fbbf24;
+}
+
+.whois-chip-bad {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-danger);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.whois-chip-muted {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.whois-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.whois-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+}
+
+.whois-section:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.whois-section-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.whois-kv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  font-size: 12.5px;
+}
+
+.whois-kv-row:last-child {
+  border-bottom: none;
+}
+
+.whois-kv-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  flex: 0 0 auto;
+  max-width: 44%;
+}
+
+.whois-kv-val {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.whois-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.whois-status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(var(--accent-primary-rgb), 0.05);
+  border: 1px solid var(--border-color);
+}
+
+.whois-status-code {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(var(--accent-primary-rgb), 0.14);
+  color: var(--accent-primary);
+  word-break: break-word;
+}
+
+.whois-status-desc {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.whois-ns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.whois-ns-item {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.whois-ns-item:last-child {
+  border-bottom: none;
+}
+
+.whois-ns-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.whois-ns-ips {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.whois-contact-card {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--accent-primary-rgb), 0.04);
+  border: 1px solid var(--border-color);
+  margin-top: 6px;
+}
+
+.whois-contact-role {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 4px;
+}
+
+.whois-contact-redacted {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.whois-remarks {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.whois-registrar-box {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.whois-teaser-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(var(--accent-primary-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-primary-rgb), 0.30);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.whois-source-line {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.whois-raw-pre {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  line-height: 1.4;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.whois-open-in {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.whois-open-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.whois-open-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.whois-open-btn {
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  flex: 0 1 auto !important;
+}
+

@@ -728,7 +728,8 @@ const PRO_FEATURE_INFO = {
   tools: { title: '🌐 DNS Lookup', text: 'Look up A, AAAA, MX, NS, TXT, CNAME, SOA and CAA records for any domain, or enter an IP address to find its hostname with a reverse DNS (PTR) lookup. Copy, share or save results to Notes.' },
   splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' },
   ping: { title: '📶 Ping options', text: 'Choose how many probes to send (up to 100), or turn on -t to ping continuously until you stop it, with the newest result at the top.' },
-  traceroute: { title: '🧭 Traceroute options', text: 'Set the maximum number of hops (up to 64), the probes per hop and the timeout, and turn on host name lookup to see a name for every hop.' }
+  traceroute: { title: '🧭 Traceroute options', text: 'Set the maximum number of hops (up to 64), the probes per hop and the timeout, and turn on host name lookup to see a name for every hop.' },
+  whois: { title: '🔎 Whois extras', text: 'Look up AS numbers, see the registrar’s own record with more contact detail, and view the raw registry data.' }
 };
 
 function showProModal(feature) {
@@ -899,6 +900,7 @@ function applyProState() {
   }
   if (typeof window.updatePingControls === 'function') window.updatePingControls();
   if (typeof window.updateTraceControls === 'function') window.updateTraceControls();
+  if (typeof window.updateWhoisControls === 'function') window.updateWhoisControls();
 }
 
 // --- Safe Storage Wrapper for Local file:// CORS constraints ---
@@ -5043,15 +5045,16 @@ function setupInputSanitizers() {
     { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ },
     { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
     { id: 'ping-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
-    { id: 'trace-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
+    { id: 'trace-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
+    { id: 'whois-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
   ];
   rules.forEach(({ id, allowed }) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', () => {
-      if (id === 'dns-input' || id === 'ping-input' || id === 'trace-input') normalizeDnsInput(el);
+      if (id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') normalizeDnsInput(el);
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') {
         collapseDuplicateDots(el);
         collapseDuplicateColons(el);
       }
@@ -5594,6 +5597,8 @@ function init() {
   if (pingSwitchChip) pingSwitchChip.addEventListener('click', openToolsPicker);
   const traceSwitchChip = document.getElementById('btn-trace-switch');
   if (traceSwitchChip) traceSwitchChip.addEventListener('click', openToolsPicker);
+  const whoisSwitchChip = document.getElementById('btn-whois-switch');
+  if (whoisSwitchChip) whoisSwitchChip.addEventListener('click', openToolsPicker);
   const toolsPickerModal = document.getElementById('tools-picker-modal');
   const toolsPickerClose = document.getElementById('btn-tools-picker-close');
   if (toolsPickerClose) toolsPickerClose.addEventListener('click', closeToolsPicker);
@@ -5607,7 +5612,8 @@ function init() {
 const TOOLS_LIST = [
   { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, MX, NS, TXT, reverse DNS and more', screen: 'tools-tab', feature: 'tools', pro: true },
   { id: 'ping', icon: '📶', title: 'Ping', desc: 'Test reachability and round-trip time', screen: 'ping-tab', pro: false },
-  { id: 'traceroute', icon: '🧭', title: 'Traceroute', desc: 'See the path your packets take, hop by hop', screen: 'traceroute-tab', feature: 'traceroute', pro: false }
+  { id: 'traceroute', icon: '🧭', title: 'Traceroute', desc: 'See the path your packets take, hop by hop', screen: 'traceroute-tab', feature: 'traceroute', pro: false },
+  { id: 'whois', icon: '🔎', title: 'Whois', desc: 'Who owns a domain, IP address or network', screen: 'whois-tab', feature: 'whois', pro: false }
 ];
 
 function openToolsPicker() {
@@ -5621,7 +5627,11 @@ function openToolsPicker() {
     row.setAttribute('data-tool', tool.id);
     const icon = document.createElement('div');
     icon.className = 'tools-picker-icon';
-    icon.textContent = tool.icon;
+    if (tool.id === 'ping') {
+      icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 34 28" width="32" height="26" aria-hidden="true" focusable="false"><rect x="0.5" y="0.5" width="33" height="27" rx="5" fill="#0f172a" stroke="#334155"/><g transform="translate(3.5,1.5) scale(.9)"><circle cx="3" cy="21" r="1.7" fill="#64748b"/><rect x="6.85" y="3" width="2.8" height="13" rx="1.4" fill="#34d399"/><circle cx="8.25" cy="21" r="1.7" fill="#34d399"/><rect x="12.1" y="3" width="2.8" height="13" rx="1.4" fill="#34d399"/><circle cx="13.5" cy="21" r="1.7" fill="#34d399"/><rect x="17.35" y="3" width="2.8" height="13" rx="1.4" fill="#34d399"/><circle cx="18.75" cy="21" r="1.7" fill="#34d399"/><rect x="22.6" y="3" width="2.8" height="13" rx="1.4" fill="#34d399"/><circle cx="24" cy="21" r="1.7" fill="#34d399"/></g></svg>';
+    } else {
+      icon.textContent = tool.icon;
+    }
     const text = document.createElement('div');
     text.className = 'tools-picker-text';
     const title = document.createElement('div');
@@ -7094,7 +7104,8 @@ function updateUpgradeUI(planTier) {
   }
 
   function pingLog(msg) {
-    if (typeof window.debugLog === 'function') window.debugLog(`[Ping] ${msg}`);
+    if (!window.APP_DEBUG_ENABLED || typeof window.debugLog !== 'function') return;
+    window.debugLog(`[Ping] ${msg}`);
   }
 
   const cap = window.Capacitor;
@@ -7115,7 +7126,9 @@ function updateUpgradeUI(planTier) {
     }
   }
 
-  pingLog(`init: platform=${platform} | isNative=${isNative} | pluginFound=${!!P} | path=${lookupPath}`);
+  if (window.APP_DEBUG_ENABLED) {
+    pingLog(`init: platform=${platform} | isNative=${isNative} | pluginFound=${!!P} | path=${lookupPath}`);
+  }
 
   if (!isNative) {
     btnRun.disabled = true;
@@ -7123,6 +7136,7 @@ function updateUpgradeUI(planTier) {
   }
 
   let isRunning = false;
+  let stopReason = null;
   let probeListener = null;
   let lastPingResultText = '';
   let lastPingNoteTitle = '';
@@ -7131,6 +7145,7 @@ function updateUpgradeUI(planTier) {
   let continuousOn = false;
   let liveSent = 0;
   let liveReceived = 0;
+  let liveTimeouts = 0;
   let liveSum = 0;
   let liveMin = null;
   let liveMax = null;
@@ -7398,6 +7413,9 @@ function updateUpgradeUI(planTier) {
       if (idx > n - 1) idx = n - 1;
       const seq = graphData[idx].seq;
       graphSelectedSeq = (graphSelectedSeq === seq) ? null : seq;
+      if (window.APP_DEBUG_ENABLED && graphSelectedSeq !== null) {
+        pingLog(`graph: select seq=${graphSelectedSeq}`);
+      }
       renderGraph();
     });
   }
@@ -7498,8 +7516,10 @@ function updateUpgradeUI(planTier) {
 
   async function sharePingGraph() {
     if (graphData.length === 0) return false;
+    const hasSharePlugins = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.Share);
     const isNativeShare = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-    if (!isNativeShare) return false;
+    if (!isNativeShare && !hasSharePlugins) return false;
+    if (window.APP_DEBUG_ENABLED) pingLog('graph: share start');
     try {
       const png = await svgToPngBase64(buildGraphShareSvg(), 1080, 720);
       const { Filesystem, Share } = window.Capacitor.Plugins;
@@ -7510,9 +7530,10 @@ function updateUpgradeUI(planTier) {
         // Same Android Share-plugin quirk as shareText(): the promise can reject even after a real share.
         console.error('Capacitor Share (graph) failed/rejected:', e);
       }
+      if (window.APP_DEBUG_ENABLED) pingLog('graph: share ok');
       return true;
     } catch (e) {
-      pingLog(`share graph failed: ${e && e.message ? e.message : e}`);
+      if (window.APP_DEBUG_ENABLED) pingLog(`share graph failed: ${e && e.message ? e.message : e}`);
       return false;
     }
   }
@@ -7588,7 +7609,8 @@ function updateUpgradeUI(planTier) {
 
   async function runPing() {
     if (isRunning) {
-      pingLog('ui: stop tap');
+      stopReason = 'user';
+      if (window.APP_DEBUG_ENABLED) pingLog('ui: stop tap');
       if (P && typeof P.stop === 'function') {
         try { await P.stop(); } catch (e) { /* ignore */ }
       }
@@ -7679,7 +7701,9 @@ function updateUpgradeUI(planTier) {
       return;
     }
 
-    pingLog(`ui: start | online=${navigator.onLine} | inputLength=${rawVal.length}`);
+    if (window.APP_DEBUG_ENABLED) {
+      pingLog(`ui: start | online=${navigator.onLine} | inputLength=${rawVal.length}`);
+    }
 
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseCrashlytics) {
       window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'pingRun', type: 'string' }).catch(() => {});
@@ -7695,6 +7719,9 @@ function updateUpgradeUI(planTier) {
     } catch (e) { /* ignore */ }
 
     isRunning = true;
+    stopReason = null;
+    const runStartMs = performance.now();
+    let prevProbeIsReply = null;
     updatePingControls();
     btnRun.textContent = 'Stop';
     resultsCard.style.display = 'block';
@@ -7705,6 +7732,7 @@ function updateUpgradeUI(planTier) {
     lastPingNoteTitle = '';
     liveSent = 0;
     liveReceived = 0;
+    liveTimeouts = 0;
     liveSum = 0;
     liveMin = null;
     liveMax = null;
@@ -7712,18 +7740,38 @@ function updateUpgradeUI(planTier) {
     resetPingGraph();
 
     let outcome = 'ok';
-    pingLog(`ui: params | count=${countToSend} | continuous=${runContinuous} | newestFirst=${newestFirst} | pro=${isProNow()}`);
+    if (window.APP_DEBUG_ENABLED) {
+      pingLog(`ui: params | count=${countToSend} | continuous=${runContinuous} | newestFirst=${newestFirst} | pro=${isProNow()}`);
+    }
 
     try {
       if (typeof P.addListener === 'function') {
         probeListener = await P.addListener('probe', (probe) => {
           liveSent++;
-          if (probe.outcome === 'REPLY' && typeof probe.timeMs === 'number') {
+          const isReply = (probe.outcome === 'REPLY' && typeof probe.timeMs === 'number');
+          if (isReply) {
             liveReceived++;
             liveSum += probe.timeMs;
             if (liveMin === null || probe.timeMs < liveMin) liveMin = probe.timeMs;
             if (liveMax === null || probe.timeMs > liveMax) liveMax = probe.timeMs;
+          } else {
+            liveTimeouts++;
           }
+
+          if (window.APP_DEBUG_ENABLED) {
+            const stateChanged = (prevProbeIsReply !== null && isReply !== prevProbeIsReply);
+            if (!runContinuous || liveSent <= 20 || stateChanged) {
+              const outVal = probe.outcome || 'ERROR';
+              const msVal = (probe.timeMs !== null && probe.timeMs !== undefined) ? probe.timeMs : '-';
+              const ttlVal = (probe.ttl !== null && probe.ttl !== undefined) ? probe.ttl : '-';
+              pingLog(`probe: seq=${probe.seq} | outcome=${outVal} | ms=${msVal} | ttl=${ttlVal}`);
+            }
+            if (runContinuous && liveSent > 20 && liveSent % 25 === 0) {
+              pingLog(`probes so far: ${liveSent} | replies=${liveReceived} | timeouts=${liveTimeouts}`);
+            }
+          }
+          prevProbeIsReply = isReply;
+
           const loss = Math.round(((liveSent - liveReceived) / liveSent) * 100);
           let liveText = `Pinging... · ${liveSent} sent · ${liveReceived} received · ${loss}% loss`;
           if (liveReceived > 0) {
@@ -7749,16 +7797,13 @@ function updateUpgradeUI(planTier) {
           const timeText = (probe.timeMs !== null && probe.timeMs !== undefined) ? `${probe.timeMs} ms` : '—';
           const ttlText = (probe.ttl !== null && probe.ttl !== undefined) ? String(probe.ttl) : '—';
 
-          graphData.push({ seq: probe.seq, ms: (probe.outcome === 'REPLY' && typeof probe.timeMs === 'number') ? probe.timeMs : null });
+          graphData.push({ seq: probe.seq, ms: isReply ? probe.timeMs : null });
           if (graphData.length > GRAPH_MAX_POINTS) graphData.shift();
           scheduleGraph();
 
           const rowObj = { seq: probe.seq, reply: replyText, time: timeText, ttl: ttlText };
-          if (newestFirst) {
-            rowsData.unshift(rowObj);
-          } else {
-            rowsData.push(rowObj);
-          }
+          // rowsData is always kept in probe order (probe 1 first); screen order in tbody is separate.
+          rowsData.push(rowObj);
 
           const replyColor = (probe.outcome === 'REPLY') ? 'var(--accent-success)' : 'var(--accent-danger)';
           const timeColor = (timeText !== '—') ? 'var(--accent-primary)' : 'var(--text-muted)';
@@ -7779,7 +7824,10 @@ function updateUpgradeUI(planTier) {
 
           if (runContinuous && tbody.children.length > 1500) {
             tbody.removeChild(tbody.lastChild);
-            rowsData.pop();
+            rowsData.shift();
+            if (droppedRows === 0 && window.APP_DEBUG_ENABLED) {
+              pingLog('rows: cap reached, dropping oldest');
+            }
             droppedRows++;
           }
         });
@@ -7801,7 +7849,7 @@ function updateUpgradeUI(planTier) {
       const hostHdr = `Ping ${val}${res.resolvedAddress ? ` (${res.resolvedAddress})` : ''}`;
       let extraHdr = '';
       if (newestFirst) {
-        extraHdr = runContinuous ? '\nContinuous (-t) · newest first' : '\nNewest first';
+        extraHdr = runContinuous ? '\nContinuous (-t)' : '';
       }
       if (droppedRows > 0) {
         extraHdr += `\nShowing the latest 1500 of ${liveSent} probes`;
@@ -7811,7 +7859,11 @@ function updateUpgradeUI(planTier) {
       lastPingHeader = hostHdr;
       lastPingSummary = summary;
 
-      pingLog(`result: sent=${sent} | received=${received} | loss=${loss}% | cancelled=${!!res.cancelled}`);
+      if (window.APP_DEBUG_ENABLED) {
+        const elapsedMs = Math.round(performance.now() - runStartMs);
+        const stoppedBy = stopReason || (res.cancelled ? 'user' : 'normal');
+        pingLog(`result: sent=${sent} | received=${received} | loss=${loss}% | cancelled=${!!res.cancelled} | stopped=${stoppedBy} | ms=${elapsedMs}`);
+      }
 
     } catch (err) {
       outcome = 'error';
@@ -7824,7 +7876,10 @@ function updateUpgradeUI(planTier) {
       isRunning = false;
       btnRun.textContent = 'Ping';
       updatePingControls();
-      pingLog(`outcome: ${outcome}`);
+      if (window.APP_DEBUG_ENABLED) {
+        const finalStoppedBy = stopReason || (outcome === 'cancelled' ? 'user' : (outcome === 'ok' ? 'normal' : 'error'));
+        pingLog(`outcome: ${outcome} | stopped=${finalStoppedBy} | ms=${Math.round(performance.now() - runStartMs)}`);
+      }
       if (viewMode === 'graph') renderGraph();
     }
   }
@@ -7835,8 +7890,9 @@ function updateUpgradeUI(planTier) {
   });
 
   btnClear.addEventListener('click', async () => {
-    pingLog('ui: clear tap');
+    if (window.APP_DEBUG_ENABLED) pingLog('ui: clear tap');
     if (isRunning && P && typeof P.stop === 'function') {
+      stopReason = 'user';
       try { await P.stop(); } catch (e) { /* ignore */ }
     }
     input.value = '';
@@ -7851,11 +7907,11 @@ function updateUpgradeUI(planTier) {
 
   if (btnCopy) {
     btnCopy.addEventListener('click', () => {
-      pingLog('ui: copy tap');
+      if (window.APP_DEBUG_ENABLED) pingLog('ui: copy tap');
       if (lastPingResultText && navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(lastPingResultText)
           .then(() => {
-            pingLog('ui: copy success');
+            if (window.APP_DEBUG_ENABLED) pingLog('ui: copy success');
             if (typeof showToast === 'function') showToast('Ping results copied!');
           })
           .catch(() => {
@@ -7867,7 +7923,7 @@ function updateUpgradeUI(planTier) {
 
   if (btnShare) {
     btnShare.addEventListener('click', async () => {
-      pingLog('ui: share tap');
+      if (window.APP_DEBUG_ENABLED) pingLog('ui: share tap');
       if (viewMode === 'graph' && graphData.length > 0) {
         const sharedGraph = await sharePingGraph();
         if (sharedGraph) return;
@@ -7880,7 +7936,7 @@ function updateUpgradeUI(planTier) {
 
   if (btnSave) {
     btnSave.addEventListener('click', () => {
-      pingLog('ui: save tap');
+      if (window.APP_DEBUG_ENABLED) pingLog('ui: save tap');
       if (!lastPingResultText || typeof addNote !== 'function') return;
       addNote(lastPingNoteTitle || 'Ping', lastPingResultText, 'Ping');
       if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
@@ -7890,13 +7946,13 @@ function updateUpgradeUI(planTier) {
 
   if (btnViewList) {
     btnViewList.addEventListener('click', () => {
-      pingLog('ui: view list');
+      if (window.APP_DEBUG_ENABLED) pingLog('ui: view list');
       setPingView('list');
     });
   }
   if (btnViewGraph) {
     btnViewGraph.addEventListener('click', () => {
-      pingLog('ui: view graph');
+      if (window.APP_DEBUG_ENABLED) pingLog('ui: view graph');
       setPingView('graph');
     });
   }
@@ -7910,7 +7966,8 @@ function updateUpgradeUI(planTier) {
 
   document.addEventListener('visibilitychange', () => {
     if (stopOnBackground && document.visibilityState === 'hidden' && isRunning && P && typeof P.stop === 'function') {
-      pingLog('stop: app hidden');
+      stopReason = 'background';
+      if (window.APP_DEBUG_ENABLED) pingLog('stop: app hidden');
       try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
     }
   });
@@ -7920,7 +7977,8 @@ function updateUpgradeUI(planTier) {
       window.Capacitor.Plugins.App.addListener('appStateChange', (state) => {
         try {
           if (stopOnBackground && state && state.isActive === false && isRunning && P && typeof P.stop === 'function') {
-            pingLog('stop: app hidden');
+            stopReason = 'background';
+            if (window.APP_DEBUG_ENABLED) pingLog('stop: app hidden');
             try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
           }
         } catch (e) { /* ignore */ }
@@ -7967,6 +8025,16 @@ function updateUpgradeUI(planTier) {
   const timeoutInput = document.getElementById('trace-timeout-input');
   const resolveBtn = document.getElementById('btn-trace-resolve');
   const proBadge = document.getElementById('trace-pro-badge');
+  const btnViewList = document.getElementById('btn-trace-view-list');
+  const btnViewGraph = document.getElementById('btn-trace-view-graph');
+  const graphWrap = document.getElementById('trace-graph-wrap');
+  const graphYAxis = document.getElementById('trace-graph-yaxis');
+  const graphScroll = document.getElementById('trace-graph-scroll');
+  const graphSvg = document.getElementById('trace-graph-svg');
+  const graphDetail = document.getElementById('trace-graph-detail');
+  const graphLegend = document.getElementById('trace-graph-legend');
+  const graphHint = document.getElementById('trace-graph-hint');
+  const tableContainer = resultsCard ? resultsCard.querySelector('.table-container') : null;
 
   if (!input || !btnRun || !btnClear || !resultsCard || !statusLine || !tbody || !errorMsg) {
     return;
@@ -7978,9 +8046,15 @@ function updateUpgradeUI(planTier) {
   const MAX_HOPS = 64;
   const MAX_PROBES = 5;
   const MAX_TIMEOUT_S = 5;
+  const GRAPH_H = 130;
+  const GRAPH_T = 14;
+  const GRAPH_B = 20;
+  const GRAPH_PADL = 16;
+  const GRAPH_PADR = 16;
+  const GRAPH_STEP_MIN = 28;
 
   function traceLog(msg) {
-    if (typeof window.debugLog === 'function') window.debugLog(`[Traceroute] ${msg}`);
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`[Traceroute] ${msg}`);
   }
 
   const cap = window.Capacitor;
@@ -8004,7 +8078,7 @@ function updateUpgradeUI(planTier) {
   {
     const found = findPlugin();
     P = found.plugin;
-    traceLog(`init: platform=${platform} | isNative=${isNative} | pluginFound=${!!P} | path=${found.path}`);
+    if (window.APP_DEBUG_ENABLED) traceLog(`init: platform=${platform} | isNative=${isNative} | pluginFound=${!!P} | path=${found.path}`);
   }
 
   if (!isNative) {
@@ -8025,6 +8099,12 @@ function updateUpgradeUI(planTier) {
   let lastTraceTitle = '';
   let resolveOn = false;
   let wasPro = false;
+  let newestFirst = false;
+  let runReached = false;
+  let viewMode = 'list';
+  let graphTimer = null;
+  let graphFollow = true;
+  let selectedTtl = null;
 
   function isProNow() {
     return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
@@ -8154,6 +8234,662 @@ function updateUpgradeUI(planTier) {
     return addrs.map((a) => (names[a] ? `${names[a]} (${a})` : a)).join(', ');
   }
 
+  function hopStats(h) {
+    const sent = h.probes.filter(Boolean).length;
+    const times = [];
+    h.probes.forEach((p) => {
+      if (p && typeof p.timeMs === 'number') times.push(p.timeMs);
+    });
+    const ok = times.length;
+    const lost = Math.max(0, sent - ok);
+    const min = ok > 0 ? Math.min.apply(null, times) : null;
+    const max = ok > 0 ? Math.max.apply(null, times) : null;
+    const avg = ok > 0 ? times.reduce((a, b) => a + b, 0) / ok : null;
+    const isDest = hopHasOutcome(h, 'REPLY') || (runReached && hops.length > 0 && h.ttl === hops[hops.length - 1].ttl && ok > 0);
+    const isBad = hopHasOutcome(h, 'UNREACHABLE');
+    return { sent: sent, ok: ok, lost: lost, min: min, max: max, avg: avg, isDest: isDest, isBad: isBad };
+  }
+
+  function traceGraphReplyColor() {
+    let c = '';
+    try { c = getComputedStyle(document.documentElement).getPropertyValue('--accent-primary').trim(); } catch (e) { c = ''; }
+    let r, g, b;
+    const hx = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(c);
+    if (hx) {
+      r = parseInt(hx[1], 16); g = parseInt(hx[2], 16); b = parseInt(hx[3], 16);
+    } else {
+      const q = /rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(c);
+      if (!q) return 'var(--accent-primary)';
+      r = +q[1]; g = +q[2]; b = +q[3];
+    }
+    const mx = Math.max(r, g, b);
+    const d = mx - Math.min(r, g, b);
+    if (d === 0 || mx === 0) return 'var(--accent-primary)';
+    let h;
+    if (mx === r) h = ((g - b) / d) % 6;
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+    const sat = d / mx;
+    const nearRed = (h <= 40 || h >= 330) && sat > 0.3 && mx > 90;
+    return nearRed ? 'var(--accent-success)' : 'var(--accent-primary)';
+  }
+
+  function traceGraphNiceMax(maxMs) {
+    const m = Math.max(1, maxMs || 1);
+    const steps = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+    for (let i = 0; i < steps.length; i++) {
+      if (m <= steps[i] * 0.92) return steps[i];
+    }
+    return Math.ceil(m / 1000) * 1000;
+  }
+
+  function computeTraceJumpHintInfo() {
+    if (isRunning) return null;
+    const answered = [];
+    for (let i = 0; i < hops.length; i++) {
+      const s = hopStats(hops[i]);
+      if (s.avg !== null) answered.push({ ttl: hops[i].ttl, avg: s.avg });
+    }
+    if (answered.length < 3) return null;
+    let best = null;
+    for (let k = 1; k < answered.length - 1; k++) {
+      const prev = answered[k - 1];
+      const curr = answered[k];
+      const jump = curr.avg - prev.avg;
+      if (jump < 30) continue;
+      const threshold = prev.avg + 0.7 * jump;
+      const later = answered.slice(k + 1);
+      if (later.length >= 1 && later.every((x) => x.avg >= threshold)) {
+        if (!best || jump > best.jump) {
+          best = { ttl: curr.ttl, jump: jump };
+        }
+      }
+    }
+    if (!best) return null;
+    const jumpMs = Math.max(30, Math.round(best.jump));
+    return {
+      ttl: best.ttl,
+      jumpMs: jumpMs,
+      text: `Latency jumps by about ${jumpMs} ms at hop ${best.ttl} and stays high on every later hop, so the extra delay starts there (a long link, tunnel or peering point).`
+    };
+  }
+
+  function computeTraceJumpHint() {
+    const info = computeTraceJumpHintInfo();
+    return info ? info.text : null;
+  }
+
+  function resetTraceGraph() {
+    if (graphTimer) {
+      clearTimeout(graphTimer);
+      graphTimer = null;
+    }
+    graphFollow = true;
+    selectedTtl = null;
+    if (graphYAxis) graphYAxis.innerHTML = '';
+    if (graphSvg) {
+      graphSvg.innerHTML = '';
+      graphSvg.removeAttribute('width');
+    }
+    if (graphDetail) {
+      graphDetail.textContent = '';
+      graphDetail.style.display = 'none';
+    }
+    if (graphLegend) graphLegend.textContent = '';
+    if (graphHint) {
+      graphHint.textContent = '';
+      graphHint.style.display = 'none';
+    }
+  }
+
+  function renderTraceHopDetail(h) {
+    if (!graphDetail) return;
+    graphDetail.textContent = '';
+    if (!h) {
+      graphDetail.style.display = 'none';
+      return;
+    }
+    const s = hopStats(h);
+    const totalProbes = Math.max(s.sent, hopDone(h) ? runProbes : s.sent, 1);
+    const lossPct = Math.round((s.lost / totalProbes) * 100);
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'trace-graph-detail-title';
+    const addrs = hopAddresses(h);
+    const hostStr = addrs.length === 0
+      ? (hopDone(h) ? '* (No reply)' : 'Probing…')
+      : addrs.map((a) => (names[a] ? `${names[a]} (${a})` : a)).join(', ');
+    titleEl.textContent = `Hop #${h.ttl} — ${hostStr}${s.isDest ? ' (Destination)' : ''}`;
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'trace-graph-detail-meta';
+    if (s.ok > 0) {
+      metaEl.textContent = `min ${fmtMs(s.min)} / avg ${fmtMs(s.avg)} / max ${fmtMs(s.max)} ms · ${lossPct}% loss (${s.lost}/${totalProbes} lost) · probes: ${hopTimes(h).join(' / ')}`;
+    } else {
+      metaEl.textContent = `${lossPct}% loss (${s.lost}/${totalProbes} lost) · no probes answered`;
+    }
+
+    graphDetail.appendChild(titleEl);
+    graphDetail.appendChild(metaEl);
+    graphDetail.style.display = 'block';
+  }
+
+  function renderTraceLegend(hasData, scrollable) {
+    if (!graphLegend) return;
+    graphLegend.textContent = '';
+    if (!hasData) return;
+
+    function addItem(dotClass, symbolText, symbolColor, labelText) {
+      const span = document.createElement('span');
+      if (dotClass) {
+        const dot = document.createElement('span');
+        dot.className = `lg-dot ${dotClass}`;
+        span.appendChild(dot);
+      } else if (symbolText) {
+        const sym = document.createElement('span');
+        sym.style.color = symbolColor || 'var(--accent-danger)';
+        sym.style.fontWeight = '700';
+        sym.style.marginRight = '4px';
+        sym.textContent = symbolText;
+        span.appendChild(sym);
+      }
+      span.appendChild(document.createTextNode(labelText));
+      graphLegend.appendChild(span);
+    }
+
+    addItem('ok', null, null, 'Hop avg (min–max)');
+    addItem('dest', null, null, 'Destination');
+    addItem(null, '•', 'var(--accent-danger)', 'Partial loss');
+    addItem(null, '✕', 'var(--accent-danger)', 'No reply');
+
+    const tip = document.createElement('span');
+    tip.textContent = scrollable ? 'Swipe sideways for more hops, tap a hop for details' : 'Tap a hop for details';
+    graphLegend.appendChild(tip);
+  }
+
+  function renderTraceGraph(isSelectUpdate) {
+    if (!graphSvg || !graphScroll || !graphYAxis) return;
+    const n = hops.length;
+    if (n === 0) {
+      resetTraceGraph();
+      return;
+    }
+
+    const wasAtEnd = graphScroll.scrollWidth - graphScroll.scrollLeft - graphScroll.clientWidth < 12;
+    const pts = hops.map((h) => ({ h: h, ttl: h.ttl, s: hopStats(h) }));
+    let maxMs = 0;
+    pts.forEach((p) => {
+      if (p.s.max !== null && p.s.max > maxMs) maxMs = p.s.max;
+    });
+    const maxY = traceGraphNiceMax(maxMs);
+    const plotH = GRAPH_H - GRAPH_T - GRAPH_B;
+    const f = (v) => (Math.round(v * 10) / 10).toString();
+    const okColor = traceGraphReplyColor();
+
+    const viewportW = Math.max(200, graphScroll.clientWidth || 260);
+    const innerW = Math.max(40, viewportW - GRAPH_PADL - GRAPH_PADR);
+    const slots = isRunning ? Math.max(n, 10) : n;
+    const step = slots > 1 ? Math.max(GRAPH_STEP_MIN, innerW / (slots - 1)) : 0;
+    const contentW = n > 1 || slots > 1 ? Math.max(viewportW, Math.round(GRAPH_PADL + step * (Math.max(n, 2) - 1) + GRAPH_PADR)) : viewportW;
+    const scrollable = contentW > viewportW + 1;
+    const xAt = (i) => (n <= 1 && slots <= 1 ? contentW / 2 : GRAPH_PADL + i * step);
+    const yAt = (ms) => GRAPH_T + plotH - (ms / maxY) * plotH;
+
+    let axis = '';
+    [0, 0.5, 1].forEach((frac) => {
+      const gy = GRAPH_T + plotH - frac * plotH;
+      axis += `<text x="32" y="${f(gy + 3)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${fmtMs(maxY * frac)}</text>`;
+    });
+    axis += `<text x="32" y="${GRAPH_T - 6}" text-anchor="end" font-size="8" fill="var(--text-muted)">ms</text>`;
+    graphYAxis.innerHTML = axis;
+
+    let svg = '';
+    [0, 0.5, 1].forEach((frac) => {
+      const gy = GRAPH_T + plotH - frac * plotH;
+      svg += `<line x1="0" y1="${f(gy)}" x2="${contentW}" y2="${f(gy)}" stroke="var(--border-color)" stroke-width="1"/>`;
+    });
+
+    let bandRun = [];
+    const flushBand = () => {
+      if (bandRun.length >= 2) {
+        const upper = bandRun.map((b) => `${f(b.x)},${f(b.yMax)}`);
+        const lower = bandRun.slice().reverse().map((b) => `${f(b.x)},${f(b.yMin)}`);
+        svg += `<polygon points="${upper.concat(lower).join(' ')}" fill="${okColor}" opacity="0.18"/>`;
+      }
+      bandRun = [];
+    };
+    pts.forEach((p, i) => {
+      if (p.s.avg === null) {
+        flushBand();
+      } else {
+        const x = xAt(i);
+        const yMin = yAt(p.s.min);
+        const yMax = yAt(p.s.max);
+        bandRun.push({ x: x, yMin: yMin, yMax: yMax });
+        if (p.s.max > p.s.min) {
+          svg += `<line x1="${f(x)}" y1="${f(yMax)}" x2="${f(x)}" y2="${f(yMin)}" stroke="${okColor}" stroke-width="5" stroke-linecap="round" opacity="0.22"/>`;
+        }
+      }
+    });
+    flushBand();
+
+    let prevAnsIdx = -1;
+    pts.forEach((p, i) => {
+      if (p.s.avg !== null) {
+        if (prevAnsIdx >= 0 && i > prevAnsIdx + 1) {
+          svg += `<line x1="${f(xAt(prevAnsIdx))}" y1="${f(yAt(pts[prevAnsIdx].s.avg))}" x2="${f(xAt(i))}" y2="${f(yAt(p.s.avg))}" stroke="${okColor}" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>`;
+        }
+        prevAnsIdx = i;
+      }
+    });
+
+    let seg = [];
+    const flushSeg = () => {
+      if (seg.length >= 2) {
+        svg += `<polyline points="${seg.join(' ')}" fill="none" stroke="${okColor}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      seg = [];
+    };
+    pts.forEach((p, i) => {
+      if (p.s.avg === null) {
+        flushSeg();
+      } else {
+        seg.push(`${f(xAt(i))},${f(yAt(p.s.avg))}`);
+      }
+    });
+    flushSeg();
+
+    pts.forEach((p, i) => {
+      const bx = xAt(i);
+      const x = f(bx);
+      if (p.s.avg === null) {
+        const by = GRAPH_T + plotH;
+        svg += `<line x1="${x}" y1="${GRAPH_T}" x2="${x}" y2="${by}" stroke="var(--accent-danger)" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.45"/>`;
+        svg += `<path d="M${f(bx - 3.5)} ${f(by - 3.5)}L${f(bx + 3.5)} ${f(by + 3.5)}M${f(bx + 3.5)} ${f(by - 3.5)}L${f(bx - 3.5)} ${f(by + 3.5)}" stroke="var(--accent-danger)" stroke-width="2" stroke-linecap="round" fill="none"/>`;
+      } else {
+        const cy = f(yAt(p.s.avg));
+        if (p.s.isBad) {
+          svg += `<circle cx="${x}" cy="${cy}" r="4" fill="var(--accent-danger)"/>`;
+        } else if (p.s.isDest) {
+          svg += `<circle cx="${x}" cy="${cy}" r="5.5" fill="none" stroke="var(--accent-success)" stroke-width="1.8"/>`;
+          svg += `<circle cx="${x}" cy="${cy}" r="3.2" fill="var(--accent-success)"/>`;
+        } else {
+          svg += `<circle cx="${x}" cy="${cy}" r="3" fill="${okColor}"/>`;
+        }
+        if (p.s.lost > 0) {
+          const lossY = Math.max(GRAPH_T + 3, yAt(p.s.max) - 6);
+          svg += `<circle cx="${x}" cy="${f(lossY)}" r="2.4" fill="var(--accent-danger)"/>`;
+        }
+      }
+    });
+
+    const labelSteps = [1, 2, 5, 10, 20];
+    let every = 20;
+    for (let k = 0; k < labelSteps.length; k++) {
+      if (labelSteps[k] * step >= 34) { every = labelSteps[k]; break; }
+    }
+    if (n === 1) every = 1;
+    pts.forEach((p, i) => {
+      if (p.ttl % every !== 0 && i !== 0 && i !== n - 1) return;
+      const x = xAt(i);
+      const anchor = x < 12 ? 'start' : (x > contentW - 12 ? 'end' : 'middle');
+      svg += `<text class="tg-xlbl" data-x="${f(x)}" x="${f(x)}" y="${GRAPH_H - 5}" text-anchor="${anchor}" font-size="9" fill="var(--text-muted)">#${p.ttl}</text>`;
+    });
+
+    let selIdx = -1;
+    if (selectedTtl !== null) selIdx = pts.findIndex((p) => p.ttl === selectedTtl);
+    if (selIdx >= 0) {
+      const sx = f(xAt(selIdx));
+      svg += `<line x1="${sx}" y1="${GRAPH_T}" x2="${sx}" y2="${GRAPH_T + plotH}" stroke="var(--text-secondary)" stroke-width="1" stroke-dasharray="2 2"/>`;
+      if (pts[selIdx].s.avg !== null) {
+        const ringColor = pts[selIdx].s.isBad ? 'var(--accent-danger)' : (pts[selIdx].s.isDest ? 'var(--accent-success)' : okColor);
+        svg += `<circle cx="${sx}" cy="${f(yAt(pts[selIdx].s.avg))}" r="6.5" fill="none" stroke="${ringColor}" stroke-width="2"/>`;
+      }
+    }
+
+    graphSvg.setAttribute('width', String(contentW));
+    graphSvg.innerHTML = svg;
+    const silentCount = pts.filter((p) => p.s.avg === null).length;
+    graphSvg.setAttribute('aria-label', `Traceroute latency graph, ${n} hops, ${silentCount} without reply`);
+
+    renderTraceHopDetail(selIdx >= 0 ? pts[selIdx].h : null);
+    renderTraceLegend(true, scrollable);
+
+    const hintInfo = computeTraceJumpHintInfo();
+    if (graphHint) {
+      if (hintInfo) {
+        graphHint.textContent = hintInfo.text;
+        graphHint.style.display = 'block';
+      } else {
+        graphHint.textContent = '';
+        graphHint.style.display = 'none';
+      }
+    }
+
+    if (!isRunning && !isSelectUpdate && window.APP_DEBUG_ENABLED) {
+      traceLog(`graph: render hops=${n}`);
+      if (hintInfo) {
+        traceLog(`graph: jump hint shown at hop ${hintInfo.ttl}`);
+      } else {
+        traceLog('graph: no jump hint');
+      }
+    }
+
+    if (graphFollow || wasAtEnd) {
+      graphScroll.scrollLeft = graphScroll.scrollWidth;
+    }
+    syncTraceXAxisLabels();
+  }
+
+  // Ensures x-axis hop labels near the left or right edge of the scroll viewport are never clipped.
+  function syncTraceXAxisLabels() {
+    if (!graphSvg || !graphScroll) return;
+    const labels = graphSvg.querySelectorAll('.tg-xlbl');
+    if (!labels || labels.length === 0) return;
+    const vw = graphScroll.clientWidth || 0;
+    const sw = graphScroll.scrollWidth || 0;
+    if (vw <= 0 || sw <= vw + 1) return;
+    const visLeft = graphScroll.scrollLeft;
+    const visRight = visLeft + vw;
+    const f = (v) => (Math.round(v * 10) / 10).toString();
+    for (let i = 0; i < labels.length; i++) {
+      const el = labels[i];
+      const origX = parseFloat(el.getAttribute('data-x'));
+      if (isNaN(origX)) continue;
+      if (origX < visLeft + 2 || origX > visRight - 2) {
+        el.style.display = 'none';
+      } else if (origX < visLeft + 14) {
+        el.style.display = '';
+        el.setAttribute('text-anchor', 'start');
+        el.setAttribute('x', f(Math.max(origX, visLeft + 2)));
+      } else if (origX > visRight - 14) {
+        el.style.display = '';
+        el.setAttribute('text-anchor', 'end');
+        el.setAttribute('x', f(Math.min(origX, visRight - 2)));
+      } else {
+        el.style.display = '';
+        el.setAttribute('text-anchor', 'middle');
+        el.setAttribute('x', f(origX));
+      }
+    }
+  }
+
+  function scheduleTraceGraph() {
+    if (viewMode !== 'graph' || graphTimer) return;
+    graphTimer = setTimeout(() => {
+      graphTimer = null;
+      renderTraceGraph();
+    }, 60);
+  }
+
+  function setTraceView(mode) {
+    viewMode = mode === 'graph' ? 'graph' : 'list';
+    const isGraph = viewMode === 'graph';
+    if (tableContainer) tableContainer.style.display = isGraph ? 'none' : '';
+    if (graphWrap) graphWrap.style.display = isGraph ? 'block' : 'none';
+    if (btnViewList) {
+      btnViewList.classList.toggle('active', !isGraph);
+      btnViewList.setAttribute('aria-pressed', isGraph ? 'false' : 'true');
+    }
+    if (btnViewGraph) {
+      btnViewGraph.classList.toggle('active', isGraph);
+      btnViewGraph.setAttribute('aria-pressed', isGraph ? 'true' : 'false');
+    }
+    if (isGraph) {
+      graphFollow = true;
+      renderTraceGraph();
+    }
+  }
+
+  if (graphScroll) {
+    graphScroll.addEventListener('scroll', () => {
+      graphFollow = graphScroll.scrollWidth - graphScroll.scrollLeft - graphScroll.clientWidth < 12;
+      syncTraceXAxisLabels();
+    });
+  }
+
+  if (graphSvg) {
+    graphSvg.addEventListener('click', (e) => {
+      const n = hops.length;
+      if (n === 0) return;
+      const rect = graphSvg.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const viewportW = Math.max(200, graphScroll.clientWidth || 260);
+      const innerW = Math.max(40, viewportW - GRAPH_PADL - GRAPH_PADR);
+      const slots = isRunning ? Math.max(n, 10) : n;
+      const step = slots > 1 ? Math.max(GRAPH_STEP_MIN, innerW / (slots - 1)) : 0;
+      let idx = step > 0 ? Math.round((x - GRAPH_PADL) / step) : 0;
+      if (idx < 0) idx = 0;
+      if (idx > n - 1) idx = n - 1;
+      const ttl = hops[idx].ttl;
+      selectedTtl = (selectedTtl === ttl) ? null : ttl;
+      if (window.APP_DEBUG_ENABLED) traceLog(`graph: select ttl=${selectedTtl !== null ? selectedTtl : 'none'}`);
+      renderTraceGraph(true);
+    });
+  }
+
+  if (btnViewList) {
+    btnViewList.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) traceLog('ui: view list');
+      setTraceView('list');
+    });
+  }
+  if (btnViewGraph) {
+    btnViewGraph.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) traceLog('ui: view graph');
+      setTraceView('graph');
+    });
+  }
+
+  function wrapShareHintLines(text, maxWidthPx, maxChars) {
+    if (!text) return [];
+    let ctx = null;
+    try {
+      const c = document.createElement('canvas');
+      ctx = c.getContext('2d');
+      if (ctx) ctx.font = '20px -apple-system, Roboto, Helvetica, Arial, sans-serif';
+    } catch (e) { ctx = null; }
+    const fits = (str) => {
+      if (str.length > maxChars) return false;
+      if (ctx) {
+        try { return ctx.measureText(str).width <= maxWidthPx; } catch (e) { /* ignore */ }
+      }
+      return true;
+    };
+    const words = String(text).trim().split(/\s+/);
+    const lines = [];
+    let cur = '';
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const next = cur ? `${cur} ${w}` : w;
+      if (cur && !fits(next)) {
+        lines.push(cur);
+        cur = w;
+      } else {
+        cur = next;
+      }
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  function buildTraceGraphShareSvg() {
+    const W = 1080, H = 720;
+    const padL = 80, padR = 40, top = 210;
+    const plotW = W - padL - padR;
+    const hintText = computeTraceJumpHint();
+    const hintLines = wrapShareHintLines(hintText, plotW - 20, 68);
+    const hasHint = hintLines.length > 0;
+    const isFree = !isProNow();
+    const bottom = hasHint ? (isFree ? 190 : 155) : (isFree ? 110 : 80);
+    const plotH = H - top - bottom;
+    const pts = hops.map((h) => ({ h: h, ttl: h.ttl, s: hopStats(h) }));
+    const n = pts.length;
+    let maxMs = 0;
+    pts.forEach((p) => {
+      if (p.s.max !== null && p.s.max > maxMs) maxMs = p.s.max;
+    });
+    const maxY = traceGraphNiceMax(maxMs);
+    const f = (v) => (Math.round(v * 10) / 10).toString();
+    const xAt = (i) => padL + (n <= 1 ? plotW / 2 : (i * plotW) / (n - 1));
+    const yAt = (ms) => top + plotH - (ms / maxY) * plotH;
+    const INK = '#1e293b', MUTED = '#64748b', GRID = '#e2e8f0', ACC = '#4f46e5', BAD = '#ef4444', DEST = '#10b981';
+
+    const targetStr = runHost || input.value.trim();
+    const resolvedPart = (runResolved && runResolved !== targetStr) ? ` (${runResolved})` : '';
+    let header = `Traceroute to ${targetStr}${resolvedPart}`;
+    if (header.length > 48) header = header.slice(0, 47) + '…';
+    const hopWord = n === 1 ? 'hop' : 'hops';
+    const line1 = lastSummary || `${n} ${hopWord}`;
+    const line2 = new Date().toLocaleString();
+
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system, Roboto, Helvetica, Arial, sans-serif">`;
+    s += `<rect width="${W}" height="${H}" fill="#ffffff"/>`;
+    s += `<text x="${W - padR}" y="40" text-anchor="end" font-size="30" font-weight="700" fill="${ACC}">iSubnet</text>`;
+    s += `<text x="${padL}" y="76" font-size="38" font-weight="700" fill="${INK}">${escapeHTML(header)}</text>`;
+    s += `<text x="${padL}" y="122" font-size="25" fill="${MUTED}">${escapeHTML(line1)}</text>`;
+    s += `<text x="${padL}" y="160" font-size="22" fill="${MUTED}">${escapeHTML(line2)}</text>`;
+
+    [0, 0.5, 1].forEach((frac) => {
+      const gy = top + plotH - frac * plotH;
+      s += `<line x1="${padL}" y1="${f(gy)}" x2="${W - padR}" y2="${f(gy)}" stroke="${GRID}" stroke-width="2"/>`;
+      s += `<text x="${padL - 10}" y="${f(gy + 8)}" text-anchor="end" font-size="22" fill="${MUTED}">${fmtMs(maxY * frac)}</text>`;
+    });
+    s += `<text x="${padL - 10}" y="${top - 18}" text-anchor="end" font-size="20" fill="${MUTED}">ms</text>`;
+
+    let bandRun = [];
+    const flushBand = () => {
+      if (bandRun.length >= 2) {
+        const upper = bandRun.map((b) => `${f(b.x)},${f(b.yMax)}`);
+        const lower = bandRun.slice().reverse().map((b) => `${f(b.x)},${f(b.yMin)}`);
+        s += `<polygon points="${upper.concat(lower).join(' ')}" fill="${ACC}" opacity="0.18"/>`;
+      }
+      bandRun = [];
+    };
+    pts.forEach((p, i) => {
+      if (p.s.avg === null) {
+        flushBand();
+      } else {
+        const x = xAt(i);
+        const yMin = yAt(p.s.min);
+        const yMax = yAt(p.s.max);
+        bandRun.push({ x: x, yMin: yMin, yMax: yMax });
+        if (p.s.max > p.s.min) {
+          s += `<line x1="${f(x)}" y1="${f(yMax)}" x2="${f(x)}" y2="${f(yMin)}" stroke="${ACC}" stroke-width="10" stroke-linecap="round" opacity="0.22"/>`;
+        }
+      }
+    });
+    flushBand();
+
+    let prevAnsIdx = -1;
+    pts.forEach((p, i) => {
+      if (p.s.avg !== null) {
+        if (prevAnsIdx >= 0 && i > prevAnsIdx + 1) {
+          s += `<line x1="${f(xAt(prevAnsIdx))}" y1="${f(yAt(pts[prevAnsIdx].s.avg))}" x2="${f(xAt(i))}" y2="${f(yAt(p.s.avg))}" stroke="${ACC}" stroke-width="3.5" stroke-dasharray="10 8" opacity="0.65"/>`;
+        }
+        prevAnsIdx = i;
+      }
+    });
+
+    let seg = [];
+    const flushSeg = () => {
+      if (seg.length >= 2) {
+        s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${ACC}" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      }
+      seg = [];
+    };
+    pts.forEach((p, i) => {
+      if (p.s.avg === null) flushSeg(); else seg.push(`${f(xAt(i))},${f(yAt(p.s.avg))}`);
+    });
+    flushSeg();
+
+    pts.forEach((p, i) => {
+      const bx = xAt(i);
+      const x = f(bx);
+      if (p.s.avg === null) {
+        const by = top + plotH;
+        s += `<line x1="${x}" y1="${top}" x2="${x}" y2="${by}" stroke="${BAD}" stroke-width="3" stroke-dasharray="8 6" opacity="0.35"/>`;
+        s += `<path d="M${f(bx - 7)} ${f(by - 7)}L${f(bx + 7)} ${f(by + 7)}M${f(bx + 7)} ${f(by - 7)}L${f(bx - 7)} ${f(by + 7)}" stroke="${BAD}" stroke-width="4" stroke-linecap="round" fill="none"/>`;
+      } else {
+        const cy = f(yAt(p.s.avg));
+        if (p.s.isDest) {
+          s += `<circle cx="${x}" cy="${cy}" r="12" fill="none" stroke="${DEST}" stroke-width="4"/>`;
+          s += `<circle cx="${x}" cy="${cy}" r="7" fill="${DEST}"/>`;
+        } else {
+          s += `<circle cx="${x}" cy="${cy}" r="7" fill="${ACC}"/>`;
+        }
+        if (p.s.lost > 0) {
+          const lossY = Math.max(top + 6, yAt(p.s.max) - 14);
+          s += `<circle cx="${x}" cy="${f(lossY)}" r="5" fill="${BAD}"/>`;
+        }
+      }
+    });
+
+    if (n > 0) {
+      s += `<text x="${padL}" y="${top + plotH + 38}" text-anchor="start" font-size="22" fill="${MUTED}">#${pts[0].ttl}</text>`;
+      if (n > 1) s += `<text x="${W - padR}" y="${top + plotH + 38}" text-anchor="end" font-size="22" fill="${MUTED}">#${pts[n - 1].ttl}</text>`;
+    }
+
+    if (hasHint) {
+      const baseHintY = top + plotH + 76;
+      hintLines.forEach((hl, idx) => {
+        s += `<text class="share-hint-line" x="${padL}" y="${baseHintY + idx * 26}" font-size="20" fill="${INK}">${escapeHTML(hl)}</text>`;
+      });
+    }
+    if (isFree) {
+      s += `<text class="share-watermark" x="${padL}" y="${H - 22}" font-size="22" fill="${MUTED}">Calculated with iSubnet</text>`;
+    }
+    s += '</svg>';
+    return s;
+  }
+
+  function traceSvgToPngBase64(svgStr, w, h) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/png').split(',')[1]);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error('traceroute graph image render failed'));
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+    });
+  }
+
+  async function shareTraceGraph() {
+    if (hops.length === 0) return false;
+    const hasSharePlugins = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem && window.Capacitor.Plugins.Share);
+    const isNativeShare = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    if (!isNativeShare && !hasSharePlugins) return false;
+    if (window.APP_DEBUG_ENABLED) traceLog('graph: share start');
+    try {
+      const svgStr = buildTraceGraphShareSvg();
+      const png = await traceSvgToPngBase64(svgStr, 1080, 720);
+      const { Filesystem, Share } = window.Capacitor.Plugins;
+      const written = await Filesystem.writeFile({ path: 'isubnet_traceroute_graph.png', data: png, directory: 'CACHE' });
+      try {
+        await Share.share({ title: 'Traceroute Graph', url: written.uri });
+      } catch (e) {
+        console.error('Capacitor Share (traceroute graph) failed/rejected:', e);
+      }
+      if (window.APP_DEBUG_ENABLED) traceLog('graph: share ok');
+      return true;
+    } catch (e) {
+      if (window.APP_DEBUG_ENABLED) traceLog(`share graph failed: ${e && e.message ? e.message : e}`);
+      return false;
+    }
+  }
+
   function renderHop(h) {
     if (!h.tr) return;
     const addrs = hopAddresses(h);
@@ -8188,7 +8924,7 @@ function updateUpgradeUI(planTier) {
     hops.push(h);
     hops.sort((a, b) => a.ttl - b.ttl);
     const idx = hops.indexOf(h);
-    const nextHop = hops[idx + 1];
+    const nextHop = newestFirst ? (idx > 0 ? hops[idx - 1] : null) : hops[idx + 1];
     if (nextHop && nextHop.tr && nextHop.tr.parentNode === tbody) {
       tbody.insertBefore(h.tr, nextHop.tr);
     } else {
@@ -8223,7 +8959,7 @@ function updateUpgradeUI(planTier) {
 
   async function runTrace() {
     if (isRunning) {
-      traceLog('ui: stop tap');
+      if (window.APP_DEBUG_ENABLED) traceLog('ui: stop tap');
       if (P && typeof P.stop === 'function') {
         try { await P.stop(); } catch (e) { /* ignore */ }
       }
@@ -8300,7 +9036,7 @@ function updateUpgradeUI(planTier) {
       return;
     }
 
-    traceLog(`ui: start | online=${navigator.onLine} | inputLength=${rawVal.length}`);
+    if (window.APP_DEBUG_ENABLED) traceLog(`ui: start | online=${navigator.onLine} | inputLength=${rawVal.length}`);
 
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseCrashlytics) {
       window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'tracerouteRun', type: 'string' }).catch(() => {});
@@ -8321,6 +9057,9 @@ function updateUpgradeUI(planTier) {
     runResolved = '';
     runMaxHops = hopsToSend;
     runProbes = probesToSend;
+    newestFirst = hopsToSend > 10;
+    runReached = false;
+    resetTraceGraph();
     lastSummary = '';
     lastTraceText = '';
     lastTraceTitle = '';
@@ -8333,7 +9072,15 @@ function updateUpgradeUI(planTier) {
     tbody.innerHTML = '';
 
     let outcome = 'ok';
-    traceLog(`ui: params | maxHops=${hopsToSend} | probes=${probesToSend} | timeoutS=${timeoutS} | resolveNames=${resolveNames} | pro=${isProNow()}`);
+    const runStartMs = performance.now();
+    let loggedResolved = false;
+    let loggedNamesStart = false;
+    const uniqueHopAddrs = new Set();
+    const addrToTtl = {};
+    if (window.APP_DEBUG_ENABLED) {
+      traceLog(`ui: params | maxHops=${hopsToSend} | probes=${probesToSend} | timeoutS=${timeoutS} | resolveNames=${resolveNames} | pro=${isProNow()}`);
+      traceLog(`order: ${newestFirst ? 'newest-first' : 'hop 1 first'}`);
+    }
 
     try {
       if (typeof P.addListener === 'function') {
@@ -8341,28 +9088,63 @@ function updateUpgradeUI(planTier) {
           if (!ev || !ev.address) return;
           runResolved = ev.address;
           statusLine.textContent = `Tracing to ${ev.address}...`;
+          if (!loggedResolved) {
+            loggedResolved = true;
+            if (window.APP_DEBUG_ENABLED) traceLog('resolved: ok');
+          }
         }));
         listeners.push(await P.addListener('hop', (ev) => {
           if (!ev || typeof ev.ttl !== 'number') return;
           const h = getHop(ev.ttl);
           const idx = (typeof ev.probe === 'number' && ev.probe >= 1) ? ev.probe - 1 : h.probes.length;
+          const probeNum = (typeof ev.probe === 'number' && ev.probe >= 1) ? ev.probe : idx + 1;
           h.probes[idx] = { outcome: ev.outcome, address: ev.address || null, timeMs: (typeof ev.timeMs === 'number') ? ev.timeMs : null };
+          if (ev.address) {
+            uniqueHopAddrs.add(ev.address);
+            if (addrToTtl[ev.address] === undefined) addrToTtl[ev.address] = ev.ttl;
+          }
+          if (window.APP_DEBUG_ENABLED) {
+            const msPart = (typeof ev.timeMs === 'number') ? fmtMs(ev.timeMs) : '-';
+            traceLog(`hop: ttl=${ev.ttl} | probe=${probeNum} | outcome=${ev.outcome || 'UNKNOWN'} | ms=${msPart}`);
+          }
           renderHop(h);
           statusLine.textContent = `Tracing to ${runResolved || runHost} · hop ${ev.ttl}`;
+          scheduleTraceGraph();
         }));
         listeners.push(await P.addListener('hostname', (ev) => {
           if (!ev || !ev.address || !ev.hostname) return;
+          if (resolveNames && !loggedNamesStart) {
+            loggedNamesStart = true;
+            if (window.APP_DEBUG_ENABLED) traceLog('names: lookup start');
+          }
           names[ev.address] = ev.hostname;
+          if (window.APP_DEBUG_ENABLED) {
+            const ansTtl = addrToTtl[ev.address] !== undefined ? addrToTtl[ev.address] : '-';
+            traceLog(`names: answered ttl=${ansTtl}`);
+          }
           hops.forEach((h) => {
             if (hopAddresses(h).indexOf(ev.address) !== -1) renderHop(h);
           });
           refreshText();
+          if (viewMode === 'graph') scheduleTraceGraph();
         }));
       }
 
       const res = await P.trace({ host: val, maxHops: hopsToSend, probes: probesToSend, timeoutMs: timeoutS * 1000, resolveNames: resolveNames });
       outcome = res.cancelled ? 'cancelled' : 'ok';
       if (res.resolvedAddress) runResolved = res.resolvedAddress;
+      runReached = !!res.reached;
+      if (runResolved && !loggedResolved) {
+        loggedResolved = true;
+        if (window.APP_DEBUG_ENABLED) traceLog('resolved: ok');
+      }
+      if (resolveNames && window.APP_DEBUG_ENABLED) {
+        if (!loggedNamesStart) {
+          loggedNamesStart = true;
+          traceLog('names: lookup start');
+        }
+        traceLog(`names: done ${Object.keys(names).length} of ${uniqueHopAddrs.size} answered`);
+      }
 
       const hopCount = (typeof res.hops === 'number' && res.hops > 0) ? res.hops : lastTtl();
       const hopWord = hopCount === 1 ? 'hop' : 'hops';
@@ -8382,16 +9164,23 @@ function updateUpgradeUI(planTier) {
       lastSummary = summary;
       lastTraceText = buildText(summary);
       lastTraceTitle = `Traceroute: ${val}`;
-      traceLog(`result: hops=${hopCount} | reached=${!!res.reached} | unreachable=${!!res.unreachable} | cancelled=${!!res.cancelled}`);
+      if (window.APP_DEBUG_ENABLED) traceLog(`result: hops=${hopCount} | reached=${!!res.reached} | unreachable=${!!res.unreachable} | cancelled=${!!res.cancelled}`);
     } catch (err) {
       outcome = 'error';
+      if (!loggedResolved && !runResolved && hops.length === 0) {
+        if (window.APP_DEBUG_ENABLED) traceLog('resolved: failed');
+      }
       removeListeners();
       showError(err.message || 'Traceroute failed');
     } finally {
       isRunning = false;
       btnRun.textContent = 'Trace';
       updateTraceControls();
-      traceLog(`outcome: ${outcome}`);
+      if (window.APP_DEBUG_ENABLED) {
+        const elapsedMs = Math.max(0, Math.round(performance.now() - runStartMs));
+        traceLog(`outcome: ${outcome} | ms=${elapsedMs}`);
+      }
+      if (viewMode === 'graph') renderTraceGraph();
     }
   }
 
@@ -8401,7 +9190,7 @@ function updateUpgradeUI(planTier) {
   });
 
   btnClear.addEventListener('click', async () => {
-    traceLog('ui: clear tap');
+    if (window.APP_DEBUG_ENABLED) traceLog('ui: clear tap');
     if (isRunning && P && typeof P.stop === 'function') {
       try { await P.stop(); } catch (e) { /* ignore */ }
     }
@@ -8415,15 +9204,17 @@ function updateUpgradeUI(planTier) {
     tbody.innerHTML = '';
     hops = [];
     names = {};
+    runReached = false;
+    resetTraceGraph();
   });
 
   if (btnCopy) {
     btnCopy.addEventListener('click', () => {
-      traceLog('ui: copy tap');
+      if (window.APP_DEBUG_ENABLED) traceLog('ui: copy tap');
       if (lastTraceText && navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(lastTraceText)
           .then(() => {
-            traceLog('ui: copy success');
+            if (window.APP_DEBUG_ENABLED) traceLog('ui: copy success');
             if (typeof showToast === 'function') showToast('Traceroute results copied!');
           })
           .catch(() => {
@@ -8434,8 +9225,12 @@ function updateUpgradeUI(planTier) {
   }
 
   if (btnShare) {
-    btnShare.addEventListener('click', () => {
-      traceLog('ui: share tap');
+    btnShare.addEventListener('click', async () => {
+      if (window.APP_DEBUG_ENABLED) traceLog('ui: share tap');
+      if (viewMode === 'graph' && hops.length > 0) {
+        const sharedGraph = await shareTraceGraph();
+        if (sharedGraph) return;
+      }
       if (lastTraceText && typeof shareText === 'function') {
         shareText('Traceroute Results', lastTraceText);
       }
@@ -8444,7 +9239,7 @@ function updateUpgradeUI(planTier) {
 
   if (btnSave) {
     btnSave.addEventListener('click', () => {
-      traceLog('ui: save tap');
+      if (window.APP_DEBUG_ENABLED) traceLog('ui: save tap');
       if (!lastTraceText || typeof addNote !== 'function') return;
       addNote(lastTraceTitle || 'Traceroute', lastTraceText, 'Traceroute');
       if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
@@ -8455,7 +9250,7 @@ function updateUpgradeUI(planTier) {
   // Traceroute is short and has no foreground service, so a running trace is stopped when the app goes to the background.
   function stopIfRunning(why) {
     if (isRunning && P && typeof P.stop === 'function') {
-      traceLog(`stop: ${why}`);
+      if (window.APP_DEBUG_ENABLED) traceLog(`stop: ${why}`);
       try { Promise.resolve(P.stop()).catch(() => {}); } catch (e) { /* ignore */ }
     }
   }
@@ -8473,6 +9268,2082 @@ function updateUpgradeUI(planTier) {
       });
     }
   } catch (e) { /* ignore */ }
+})();
+
+// --- WHOIS TOOL (RDAP) ---
+(function initWhoisTool() {
+  const input = document.getElementById('whois-input');
+  const btnLookup = document.getElementById('btn-whois-lookup');
+  const btnClear = document.getElementById('btn-whois-clear');
+  const errorMsg = document.getElementById('whois-error-msg');
+  const resultsCard = document.getElementById('whois-results-card');
+  const resultTitle = document.getElementById('whois-result-title');
+  const btnRaw = document.getElementById('btn-whois-raw');
+  const parentNote = document.getElementById('whois-parent-note');
+  const chipsRow = document.getElementById('whois-chips-row');
+  const bodyEl = document.getElementById('whois-body');
+  const registrarBox = document.getElementById('whois-registrar-box');
+  const sourceLine = document.getElementById('whois-source-line');
+  const rawPre = document.getElementById('whois-raw-pre');
+  const openInBox = document.getElementById('whois-open-in');
+  const btnCopy = document.getElementById('btn-whois-copy');
+  const btnSave = document.getElementById('btn-whois-save');
+  const btnShare = document.getElementById('btn-whois-share');
+
+  if (!input || !btnLookup || !btnClear || !errorMsg || !resultsCard || !bodyEl) {
+    return;
+  }
+
+  const BOOTSTRAP_URLS = {
+    dns: 'https://data.iana.org/rdap/dns.json',
+    ipv4: 'https://data.iana.org/rdap/ipv4.json',
+    ipv6: 'https://data.iana.org/rdap/ipv6.json',
+    asn: 'https://data.iana.org/rdap/asn.json'
+  };
+  const BOOTSTRAP_TTL_MS = 24 * 60 * 60 * 1000;
+  const RDAP_FALLBACK_BASE = 'https://rdap.org/';
+  const REQUEST_TIMEOUT_MS = 12000;
+
+  const EPP_STATUS_INFO = {
+    clienttransferprohibited: { code: 'clientTransferProhibited', desc: 'Registrar lock: the domain cannot be transferred away.' },
+    servertransferprohibited: { code: 'serverTransferProhibited', desc: 'Registry lock: the domain cannot be transferred between registrars.' },
+    clientupdateprohibited: { code: 'clientUpdateProhibited', desc: 'Registrar lock: the domain record cannot be modified without unlocking.' },
+    serverupdateprohibited: { code: 'serverUpdateProhibited', desc: 'Registry lock: the domain record cannot be modified.' },
+    clientdeleteprohibited: { code: 'clientDeleteProhibited', desc: 'Registrar lock: the domain cannot be deleted.' },
+    serverdeleteprohibited: { code: 'serverDeleteProhibited', desc: 'Registry lock: the domain cannot be deleted.' },
+    clienthold: { code: 'clientHold', desc: 'On hold by registrar: the domain is not published in DNS.' },
+    serverhold: { code: 'serverHold', desc: 'On hold by registry: the domain is not published in DNS.' },
+    clientrenewprohibited: { code: 'clientRenewProhibited', desc: 'Registrar lock: renewal is blocked by the registrar.' },
+    serverrenewprohibited: { code: 'serverRenewProhibited', desc: 'Registry lock: renewal is blocked by the registry.' },
+    active: { code: 'active', desc: 'Normal active status with no pending restrictions.' },
+    ok: { code: 'ok', desc: 'Normal active status with no pending operations or restrictions.' },
+    inactive: { code: 'inactive', desc: 'No name servers are delegated; the domain is not active in DNS.' },
+    autorenewperiod: { code: 'autoRenewPeriod', desc: 'Grace period after automatic renewal by the registry.' },
+    renewperiod: { code: 'renewPeriod', desc: 'Domain was recently renewed with the registry.' },
+    addperiod: { code: 'addPeriod', desc: 'Initial grace period right after domain registration.' },
+    transferperiod: { code: 'transferPeriod', desc: 'Domain was recently transferred to a new registrar.' },
+    redemptionperiod: { code: 'redemptionPeriod', desc: 'Expired and pending deletion; can still be restored by the registrar.' },
+    pendingdelete: { code: 'pendingDelete', desc: 'Scheduled for deletion and release by the registry.' },
+    pendingtransfer: { code: 'pendingTransfer', desc: 'Transfer between registrars is currently in progress.' },
+    pendingupdate: { code: 'pendingUpdate', desc: 'An update to the record is currently in progress.' },
+    pendingcreate: { code: 'pendingCreate', desc: 'Domain creation is currently being processed.' },
+    pendingrenew: { code: 'pendingRenew', desc: 'Domain renewal is currently being processed.' },
+    pendingrestore: { code: 'pendingRestore', desc: 'Domain restoration is currently being processed.' },
+    associated: { code: 'associated', desc: 'Record is associated with other objects in the registry.' },
+    locked: { code: 'locked', desc: 'Record is locked against changes or deletion.' },
+    validated: { code: 'validated', desc: 'Contact or registration details have been validated.' },
+    obscured: { code: 'obscured', desc: 'Some registration details are masked for privacy.' }
+  };
+
+  function whoisLog(msg) {
+    if (!window.APP_DEBUG_ENABLED || typeof window.debugLog !== 'function') return;
+    window.debugLog(`[Whois] ${msg}`);
+  }
+
+  function safeHostOf(url) {
+    try {
+      return new URL(url).hostname || 'unknown';
+    } catch (e) {
+      return 'unknown';
+    }
+  }
+
+  function isProNow() {
+    return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
+  }
+
+  let lookupSeq = 0;
+  let currentAbort = null;
+  let rawOpen = false;
+  let lastRawJson = null;
+  let lastRegistrarRawJson = null;
+  let lastPlainText = '';
+  let lastNoteTitle = '';
+  let lastRelatedUrl = null;
+  let lastRegistrarLoaded = false;
+  let _lastParsedQuery = null;
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+    resultsCard.style.display = 'none';
+  }
+
+  function hideError() {
+    errorMsg.style.display = 'none';
+  }
+
+  function updateRawButtonUI() {
+    if (!btnRaw) return;
+    if (!lastRawJson) {
+      btnRaw.style.display = 'none';
+      return;
+    }
+    btnRaw.style.display = '';
+    if (isProNow()) {
+      btnRaw.textContent = rawOpen ? 'Hide raw data' : 'Raw data';
+      btnRaw.classList.toggle('active', rawOpen);
+    } else {
+      btnRaw.textContent = 'Raw data 🔒';
+      btnRaw.classList.remove('active');
+      rawOpen = false;
+      if (rawPre) rawPre.style.display = 'none';
+    }
+  }
+
+  function updateWhoisControls() {
+    updateRawButtonUI();
+    if (isProNow() && lastRelatedUrl && !lastRegistrarLoaded && resultsCard.style.display !== 'none') {
+      loadRegistrarRecordForPro(lastRelatedUrl, lookupSeq);
+    } else if (!isProNow() && lastRelatedUrl && resultsCard.style.display !== 'none') {
+      lastRegistrarLoaded = false;
+      renderRegistrarTeaser();
+    }
+  }
+  window.updateWhoisControls = updateWhoisControls;
+
+  // --- RFC 3492 Punycode encode/decode for IDN domain labels ---
+  function punycodeEncode(ucs2) {
+    const BASE = 36, TMIN = 1, TMAX = 26, SKEW = 38, DAMP = 700, INITIAL_BIAS = 72, INITIAL_N = 128;
+    const cps = Array.from(ucs2).map((ch) => ch.codePointAt(0));
+    let n = INITIAL_N;
+    let delta = 0;
+    let bias = INITIAL_BIAS;
+    let out = '';
+    for (let i = 0; i < cps.length; i++) {
+      if (cps[i] < 0x80) out += String.fromCharCode(cps[i]);
+    }
+    const basicLen = out.length;
+    let h = basicLen;
+    if (basicLen > 0) out += '-';
+
+    function adapt(d, numPoints, firstTime) {
+      let k = 0;
+      d = firstTime ? Math.floor(d / DAMP) : (d >> 1);
+      d += Math.floor(d / numPoints);
+      while (d > (((BASE - TMIN) * TMAX) >> 1)) {
+        d = Math.floor(d / (BASE - TMIN));
+        k += BASE;
+      }
+      return Math.floor(k + (((BASE - TMIN + 1) * d) / (d + SKEW)));
+    }
+
+    function digitToChar(d) {
+      return String.fromCharCode(d + 22 + 75 * (d < 26 ? 1 : 0));
+    }
+
+    while (h < cps.length) {
+      let m = 0x10ffff + 1;
+      for (let i = 0; i < cps.length; i++) {
+        if (cps[i] >= n && cps[i] < m) m = cps[i];
+      }
+      delta += (m - n) * (h + 1);
+      n = m;
+      for (let i = 0; i < cps.length; i++) {
+        const c = cps[i];
+        if (c < n) delta++;
+        if (c === n) {
+          let q = delta;
+          for (let k = BASE; ; k += BASE) {
+            const t = k <= bias ? TMIN : (k >= bias + TMAX ? TMAX : k - bias);
+            if (q < t) break;
+            out += digitToChar(t + ((q - t) % (BASE - t)));
+            q = Math.floor((q - t) / (BASE - t));
+          }
+          out += digitToChar(q);
+          bias = adapt(delta, h + 1, h === basicLen);
+          delta = 0;
+          h++;
+        }
+      }
+      delta++;
+      n++;
+    }
+    return 'xn--' + out;
+  }
+
+  function punycodeDecode(inputStr) {
+    const BASE = 36, TMIN = 1, TMAX = 26, SKEW = 38, DAMP = 700, INITIAL_BIAS = 72, INITIAL_N = 128;
+    const str = inputStr.slice(4).toLowerCase();
+    let n = INITIAL_N;
+    let i = 0;
+    let bias = INITIAL_BIAS;
+    const output = [];
+    const delim = str.lastIndexOf('-');
+    const startIdx = delim > -1 ? delim + 1 : 0;
+    for (let j = 0; j < (delim > -1 ? delim : 0); j++) {
+      output.push(str.charCodeAt(j));
+    }
+
+    function adapt(d, numPoints, firstTime) {
+      let k = 0;
+      d = firstTime ? Math.floor(d / DAMP) : (d >> 1);
+      d += Math.floor(d / numPoints);
+      while (d > (((BASE - TMIN) * TMAX) >> 1)) {
+        d = Math.floor(d / (BASE - TMIN));
+        k += BASE;
+      }
+      return Math.floor(k + (((BASE - TMIN + 1) * d) / (d + SKEW)));
+    }
+
+    let pos = startIdx;
+    while (pos < str.length) {
+      const oldi = i;
+      let w = 1;
+      for (let k = BASE; ; k += BASE) {
+        if (pos >= str.length) return inputStr;
+        const cp = str.charCodeAt(pos++);
+        const digit = (cp - 48 < 10) ? cp - 22 : (cp - 65 < 26 ? cp - 65 : (cp - 97 < 26 ? cp - 97 : BASE));
+        if (digit >= BASE) return inputStr;
+        i += digit * w;
+        const t = k <= bias ? TMIN : (k >= bias + TMAX ? TMAX : k - bias);
+        if (digit < t) break;
+        w *= (BASE - t);
+      }
+      const outLen = output.length + 1;
+      bias = adapt(i - oldi, outLen, oldi === 0);
+      n += Math.floor(i / outLen);
+      i %= outLen;
+      output.splice(i++, 0, n);
+    }
+    try {
+      return String.fromCodePoint.apply(null, output);
+    } catch (e) {
+      return inputStr;
+    }
+  }
+
+  function labelToAscii(label) {
+    const clean = label.toLowerCase();
+    if (/^[\x00-\x7f]*$/.test(clean)) return clean;
+    try {
+      return punycodeEncode(clean);
+    } catch (e) {
+      return clean;
+    }
+  }
+
+  function labelToUnicode(label) {
+    const clean = label.toLowerCase();
+    if (clean.startsWith('xn--')) {
+      return punycodeDecode(clean);
+    }
+    return clean;
+  }
+
+  // --- Input Parsing & Validation ---
+  function parseWhoisQuery(raw) {
+    let s = (raw || '').trim();
+    if (!s) {
+      return { error: 'Please enter a domain name, IP address or CIDR block.' };
+    }
+
+    const hadScheme = /^[a-z][a-z0-9+.\-]*:\/\//i.test(s);
+    if (hadScheme) {
+      s = s.replace(/^[a-z][a-z0-9+.\-]*:\/\//i, '');
+    }
+    // Strip ?query and #fragment
+    s = s.replace(/[?#][\s\S]*$/, '');
+    // Strip user@ before first /
+    s = s.replace(/^[^/]*@/, '');
+
+    if (hadScheme && s.indexOf('/') !== -1) {
+      s = s.slice(0, s.indexOf('/'));
+    } else if (!hadScheme && s.indexOf('/') !== -1) {
+      const firstSlash = s.indexOf('/');
+      const beforeSlash = s.slice(0, firstSlash);
+      const looksLikeIp = beforeSlash.indexOf(':') !== -1 || /^\d+(\.\d+)*$/.test(beforeSlash);
+      if (!looksLikeIp) {
+        s = beforeSlash;
+      }
+    }
+
+    // Handle bracketed IPv6 with optional port: [2001:db8::1]:8080
+    const bracketMatch = s.match(/^\[([^\]]+)\](?::\d+)?(\/.*)?$/);
+    if (bracketMatch) {
+      s = bracketMatch[1] + (bracketMatch[2] || '');
+    } else {
+      // Strip :port when there is only a single colon (host:port or ipv4:port)
+      const colonCount = (s.match(/:/g) || []).length;
+      if (colonCount === 1 && /:\d+$/.test(s)) {
+        s = s.replace(/:\d+$/, '');
+      }
+    }
+
+    s = s.trim().replace(/\.+$/, '');
+    if (!s) {
+      return { error: 'Please enter a domain name, IP address or CIDR block.' };
+    }
+
+    // 1. AS Number check (AS15169, AS 15169, ASN15169, or bare 15169)
+    const asnMatch = s.match(/^(?:asn?\s*)?(\d+)$/i);
+    if (asnMatch) {
+      const num = Number(asnMatch[1]);
+      if (!Number.isInteger(num) || num < 1 || num > 4294967295) {
+        return { error: 'Enter a valid AS number from AS1 to AS4294967295 (for example AS15169).' };
+      }
+      return {
+        kind: 'asn',
+        asn: num,
+        query: String(num),
+        display: `AS${num}`,
+        normalizedInput: `AS${num}`
+      };
+    }
+    if (/\s/.test(s)) {
+      return { error: 'Invalid input: spaces are not allowed.' };
+    }
+    if (!s.includes('.') && !s.includes(':') && /^asn?[-0-9]*$/i.test(s)) {
+      return { error: 'Enter a valid AS number (for example AS15169).' };
+    }
+
+    // Separate optional CIDR /prefix
+    let addrPart = s;
+    let prefixPart = null;
+    if (s.indexOf('/') !== -1) {
+      const parts = s.split('/');
+      if (parts.length !== 2) {
+        return { error: 'Invalid CIDR notation. Use a single slash, for example 192.0.2.0/24.' };
+      }
+      addrPart = parts[0].trim().replace(/\.+$/, '');
+      prefixPart = parts[1].trim();
+    }
+
+    // 2. IPv6 or IPv6 CIDR
+    if (addrPart.indexOf(':') !== -1) {
+      const v6Big = parseIPv6(addrPart);
+      if (v6Big === null) {
+        return { error: 'Invalid IPv6 address. Enter valid hexadecimal blocks separated by colons.' };
+      }
+      const normIp = formatIPv6Compressed(v6Big);
+      let pLen = null;
+      if (prefixPart !== null) {
+        if (!/^\d{1,3}$/.test(prefixPart)) {
+          return { error: 'IPv6 prefix length must be a whole number from 0 to 128.' };
+        }
+        pLen = parseInt(prefixPart, 10);
+        if (pLen < 0 || pLen > 128) {
+          return { error: 'IPv6 prefix length must be from 0 to 128.' };
+        }
+      }
+      const fullStr = pLen !== null ? `${normIp}/${pLen}` : normIp;
+      return {
+        kind: 'ipv6',
+        ip: normIp,
+        bigInt: v6Big,
+        prefix: pLen,
+        query: fullStr,
+        display: fullStr,
+        normalizedInput: fullStr
+      };
+    }
+
+    // 3. IPv4 or IPv4 CIDR
+    const looksNumericDots = /^\d+(\.\d+)*$/.test(addrPart);
+    if (prefixPart !== null || looksNumericDots) {
+      if (!validateIPv4(addrPart)) {
+        return { error: 'Invalid IPv4 address. Enter four octets from 0 to 255 (for example 8.8.8.8).' };
+      }
+      let pLen = null;
+      if (prefixPart !== null) {
+        if (!/^\d{1,2}$/.test(prefixPart)) {
+          return { error: 'IPv4 prefix length must be a whole number from 0 to 32.' };
+        }
+        pLen = parseInt(prefixPart, 10);
+        if (pLen < 0 || pLen > 32) {
+          return { error: 'IPv4 prefix length must be from 0 to 32.' };
+        }
+      }
+      const fullStr = pLen !== null ? `${addrPart}/${pLen}` : addrPart;
+      return {
+        kind: 'ipv4',
+        ip: addrPart,
+        uint32: ipToUint32(addrPart),
+        prefix: pLen,
+        query: fullStr,
+        display: fullStr,
+        normalizedInput: fullStr
+      };
+    }
+
+    // 4. Domain name
+    if (!addrPart.includes('.')) {
+      return { error: 'Enter a full domain name, for example example.com.' };
+    }
+    if (addrPart.includes('_')) {
+      return { error: 'Invalid domain name: underscores (_) are not allowed in domain names.' };
+    }
+    const rawLabels = addrPart.toLowerCase().split('.');
+    if (rawLabels.some((l) => !l)) {
+      return { error: 'Invalid domain name.' };
+    }
+    const asciiLabels = [];
+    for (let i = 0; i < rawLabels.length; i++) {
+      const al = labelToAscii(rawLabels[i]);
+      if (al.length < 1 || al.length > 63 || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(al)) {
+        return { error: 'Invalid domain name: each label must be 1 to 63 letters, digits or hyphens, and cannot start or end with a hyphen.' };
+      }
+      asciiLabels.push(al);
+    }
+    const tld = asciiLabels[asciiLabels.length - 1];
+    if (/^\d+$/.test(tld) || tld.length < 2) {
+      return { error: 'Invalid domain name: the top-level domain cannot be all numbers.' };
+    }
+    const asciiDomain = asciiLabels.join('.');
+    if (asciiDomain.length > 253) {
+      return { error: 'Invalid domain name: domain exceeds 253 characters.' };
+    }
+    const unicodeDomain = asciiLabels.map(labelToUnicode).join('.');
+    return {
+      kind: 'domain',
+      ascii: asciiDomain,
+      unicode: unicodeDomain,
+      query: asciiDomain,
+      display: unicodeDomain !== asciiDomain ? `${unicodeDomain} (${asciiDomain})` : asciiDomain,
+      normalizedInput: unicodeDomain
+    };
+  }
+
+  // --- Reserved IPv4 / IPv6 Detection ---
+  const RESERVED_IPV4 = [
+    { cidr: '0.0.0.0/8', name: 'Current network ("This network")', rfc: 'RFC 1122' },
+    { cidr: '10.0.0.0/8', name: 'Private-Use network', rfc: 'RFC 1918' },
+    { cidr: '100.64.0.0/10', name: 'Shared Address Space (CGNAT)', rfc: 'RFC 6598' },
+    { cidr: '127.0.0.0/8', name: 'Loopback address block', rfc: 'RFC 1122' },
+    { cidr: '169.254.0.0/16', name: 'Link-Local address block (APIPA)', rfc: 'RFC 3927' },
+    { cidr: '172.16.0.0/12', name: 'Private-Use network', rfc: 'RFC 1918' },
+    { cidr: '192.0.0.0/24', name: 'IETF Protocol Assignments', rfc: 'RFC 6890' },
+    { cidr: '192.0.2.0/24', name: 'Documentation (TEST-NET-1)', rfc: 'RFC 5737' },
+    { cidr: '192.168.0.0/16', name: 'Private-Use network', rfc: 'RFC 1918' },
+    { cidr: '198.18.0.0/15', name: 'Network Benchmarking', rfc: 'RFC 2544' },
+    { cidr: '198.51.100.0/24', name: 'Documentation (TEST-NET-2)', rfc: 'RFC 5737' },
+    { cidr: '203.0.113.0/24', name: 'Documentation (TEST-NET-3)', rfc: 'RFC 5737' },
+    { cidr: '224.0.0.0/4', name: 'IPv4 Multicast', rfc: 'RFC 5771' },
+    { cidr: '240.0.0.0/4', name: 'Reserved for Future Use / Broadcast', rfc: 'RFC 1112' }
+  ];
+
+  const RESERVED_IPV6 = [
+    { cidr: '::/128', name: 'Unspecified Address', rfc: 'RFC 4291' },
+    { cidr: '::1/128', name: 'Loopback Address', rfc: 'RFC 4291' },
+    { cidr: '::ffff:0:0/96', name: 'IPv4-Mapped Address block', rfc: 'RFC 4291' },
+    { cidr: '64:ff9b::/96', name: 'IPv4-IPv6 Translation (NAT64)', rfc: 'RFC 6052' },
+    { cidr: '100::/64', name: 'Discard-Only Address Block', rfc: 'RFC 6666' },
+    { cidr: '2001:db8::/32', name: 'Documentation Address Block', rfc: 'RFC 3849' },
+    { cidr: 'fc00::/7', name: 'Unique Local Address (ULA)', rfc: 'RFC 4193' },
+    { cidr: 'fe80::/10', name: 'Link-Local Unicast', rfc: 'RFC 4291' },
+    { cidr: 'ff00::/8', name: 'IPv6 Multicast', rfc: 'RFC 4291' }
+  ];
+
+  function v4MatchesCidr(ipUint32, cidrStr) {
+    const [baseIp, pStr] = cidrStr.split('/');
+    const pLen = parseInt(pStr, 10);
+    if (pLen === 0) return { match: true, pLen: 0 };
+    const mask = (~0 << (32 - pLen)) >>> 0;
+    const baseUint = ipToUint32(baseIp);
+    return { match: ((ipUint32 & mask) >>> 0) === ((baseUint & mask) >>> 0), pLen: pLen };
+  }
+
+  function v6MatchesCidr(ipBig, cidrStr) {
+    const [baseIp, pStr] = cidrStr.split('/');
+    const pLen = parseInt(pStr, 10);
+    const baseBig = parseIPv6(baseIp);
+    if (baseBig === null) return { match: false, pLen: 0 };
+    if (pLen === 0) return { match: true, pLen: 0 };
+    const shift = window.BigInt(128 - pLen);
+    return { match: (ipBig >> shift) === (baseBig >> shift), pLen: pLen };
+  }
+
+  function checkReservedIp(parsed) {
+    if (parsed.kind === 'ipv4') {
+      for (let i = 0; i < RESERVED_IPV4.length; i++) {
+        const entry = RESERVED_IPV4[i];
+        const m = v4MatchesCidr(parsed.uint32, entry.cidr);
+        if (m.match && (parsed.prefix === null || parsed.prefix >= m.pLen)) {
+          return entry;
+        }
+      }
+    } else if (parsed.kind === 'ipv6') {
+      for (let i = 0; i < RESERVED_IPV6.length; i++) {
+        const entry = RESERVED_IPV6[i];
+        const m = v6MatchesCidr(parsed.bigInt, entry.cidr);
+        if (m.match && (parsed.prefix === null || parsed.prefix >= m.pLen)) {
+          return entry;
+        }
+      }
+    }
+    return null;
+  }
+
+  // --- Range to Minimal CIDR List ---
+  function rangeToCidrs(startBig, endBig, totalBits, fmtFn) {
+    const BI = window.BigInt;
+    const out = [];
+    let cur = startBig;
+    while (cur <= endBig && out.length < 64) {
+      let maxBits = 0;
+      while (maxBits < totalBits) {
+        const nextBits = maxBits + 1;
+        const blockSize = BI(1) << BI(nextBits);
+        if ((cur & (blockSize - BI(1))) !== BI(0)) break;
+        if (cur + blockSize - BI(1) > endBig) break;
+        maxBits = nextBits;
+      }
+      const prefixLen = totalBits - maxBits;
+      out.push(`${fmtFn(cur)}/${prefixLen}`);
+      cur += BI(1) << BI(maxBits);
+    }
+    return out;
+  }
+
+  function computeMinimalCidrs(startAddr, endAddr) {
+    if (!startAddr || !endAddr) return [];
+    const sTrim = String(startAddr).trim();
+    const eTrim = String(endAddr).trim();
+    const BI = window.BigInt;
+    if (validateIPv4(sTrim) && validateIPv4(eTrim)) {
+      const sBig = BI(ipToUint32(sTrim));
+      const eBig = BI(ipToUint32(eTrim));
+      if (sBig > eBig) return [];
+      return rangeToCidrs(sBig, eBig, 32, (b) => uint32ToIp(Number(b)));
+    }
+    if (sTrim.indexOf(':') !== -1 && eTrim.indexOf(':') !== -1) {
+      const sBig = parseIPv6(sTrim);
+      const eBig = parseIPv6(eTrim);
+      if (sBig === null || eBig === null || sBig > eBig) return [];
+      return rangeToCidrs(sBig, eBig, 128, (b) => formatIPv6Compressed(b));
+    }
+    return [];
+  }
+
+  // --- HTTP & IANA Bootstrap ---
+  async function httpGetJson(url, signal, logRequest) {
+    const reqStart = performance.now();
+    const logReqOutcome = (statusOrKind) => {
+      if (logRequest && window.APP_DEBUG_ENABLED) {
+        const ms = Math.max(0, Math.round(performance.now() - reqStart));
+        whoisLog(`request: host=${safeHostOf(url)} | status=${statusOrKind} | ms=${ms}`);
+      }
+    };
+
+    const hasCapHttp = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp && typeof window.Capacitor.Plugins.CapacitorHttp.get === 'function');
+    if (hasCapHttp) {
+      let timeoutId = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const err = new Error('Timeout');
+          err.kind = 'timeout';
+          reject(err);
+        }, REQUEST_TIMEOUT_MS);
+      });
+      try {
+        const res = await Promise.race([
+          window.Capacitor.Plugins.CapacitorHttp.get({
+            url: url,
+            headers: { Accept: 'application/rdap+json, application/json' },
+            responseType: 'text',
+            connectTimeout: REQUEST_TIMEOUT_MS,
+            readTimeout: REQUEST_TIMEOUT_MS
+          }),
+          timeoutPromise
+        ]);
+        if (timeoutId) clearTimeout(timeoutId);
+        const status = res && typeof res.status === 'number' ? res.status : 0;
+        if (status < 200 || status >= 300) {
+          const err = new Error(`HTTP ${status}`);
+          err.status = status;
+          throw err;
+        }
+        let body = res.data;
+        if (typeof body === 'string') {
+          try {
+            body = JSON.parse(body);
+          } catch (e) {
+            const jErr = new Error('Invalid JSON');
+            jErr.kind = 'json';
+            throw jErr;
+          }
+        }
+        if (!body || typeof body !== 'object') {
+          const jErr = new Error('Invalid JSON');
+          jErr.kind = 'json';
+          throw jErr;
+        }
+        logReqOutcome(status);
+        return body;
+      } catch (e) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (e && (e.kind === 'timeout' || /timeout|timed out/i.test(e.message || ''))) {
+          logReqOutcome('timeout');
+          const tErr = new Error('Timeout');
+          tErr.kind = 'timeout';
+          throw tErr;
+        }
+        const statusOrKind = (e && typeof e.status === 'number' && e.status > 0)
+          ? String(e.status)
+          : (e && e.kind ? e.kind : 'network');
+        logReqOutcome(statusOrKind);
+        throw e;
+      }
+    }
+
+    // Plain browser fetch with timeout
+    const ctrl = new window.AbortController();
+    const onAbort = () => ctrl.abort();
+    if (signal) {
+      if (signal.aborted) ctrl.abort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/rdap+json, application/json' },
+        signal: ctrl.signal
+      });
+      clearTimeout(timer);
+      if (!response.ok) {
+        const err = new Error(`HTTP ${response.status}`);
+        err.status = response.status;
+        throw err;
+      }
+      const text = await response.text();
+      let parsed = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch (e) {
+        const jErr = new Error('Invalid JSON');
+        jErr.kind = 'json';
+        throw jErr;
+      }
+      if (!parsed || typeof parsed !== 'object') {
+        const jErr = new Error('Invalid JSON');
+        jErr.kind = 'json';
+        throw jErr;
+      }
+      logReqOutcome(response.status);
+      return parsed;
+    } catch (e) {
+      clearTimeout(timer);
+      if (timedOut) {
+        logReqOutcome('timeout');
+        const tErr = new Error('Timeout');
+        tErr.kind = 'timeout';
+        throw tErr;
+      }
+      const statusOrKind = (e && typeof e.status === 'number' && e.status > 0)
+        ? String(e.status)
+        : (e && e.kind ? e.kind : (e && e.name === 'AbortError' ? 'aborted' : 'network'));
+      logReqOutcome(statusOrKind);
+      throw e;
+    } finally {
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }
+  }
+
+  function ensureTrailingSlash(url) {
+    if (!url) return RDAP_FALLBACK_BASE;
+    return url.endsWith('/') ? url : url + '/';
+  }
+
+  function pickBaseUrl(urls) {
+    if (!Array.isArray(urls) || urls.length === 0) return null;
+    const https = urls.find((u) => typeof u === 'string' && u.toLowerCase().startsWith('https://'));
+    return ensureTrailingSlash(https || urls[0]);
+  }
+
+  async function getBootstrapServices(kind, signal) {
+    const t0 = performance.now();
+    const cacheKey = `isubnet_rdap_boot_${kind}`;
+    let cacheState = 'miss';
+    try {
+      const rawCache = localStorage.getItem(cacheKey);
+      if (rawCache) {
+        const cached = JSON.parse(rawCache);
+        if (cached && typeof cached.ts === 'number' && Array.isArray(cached.services)) {
+          if ((Date.now() - cached.ts) < BOOTSTRAP_TTL_MS) {
+            if (window.APP_DEBUG_ENABLED) {
+              const ms = Math.max(0, Math.round(performance.now() - t0));
+              whoisLog(`bootstrap: kind=${kind} | cache=hit | ms=${ms}`);
+            }
+            return cached.services;
+          }
+          cacheState = 'expired';
+        }
+      }
+    } catch (e) { /* ignore localStorage errors */ }
+
+    const url = BOOTSTRAP_URLS[kind];
+    if (!url) return null;
+    try {
+      const data = await httpGetJson(url, signal, false);
+      if (window.APP_DEBUG_ENABLED) {
+        const ms = Math.max(0, Math.round(performance.now() - t0));
+        whoisLog(`bootstrap: kind=${kind} | cache=${cacheState} | ms=${ms}`);
+      }
+      if (data && Array.isArray(data.services)) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), services: data.services }));
+        } catch (e) { /* ignore localStorage quota/disabled */ }
+        return data.services;
+      }
+    } catch (e) {
+      if (window.APP_DEBUG_ENABLED) {
+        const ms = Math.max(0, Math.round(performance.now() - t0));
+        whoisLog(`bootstrap: kind=${kind} | cache=${cacheState} | ms=${ms}`);
+      }
+    }
+    return null;
+  }
+
+  async function resolveRdapBase(parsed, domainOverride, signal) {
+    if (parsed.kind === 'domain') {
+      const services = await getBootstrapServices('dns', signal);
+      if (!services) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      const dom = (domainOverride || parsed.ascii).toLowerCase();
+      let bestKeyLen = -1;
+      let bestUrl = null;
+      for (let i = 0; i < services.length; i++) {
+        const entry = services[i];
+        if (!Array.isArray(entry) || entry.length < 2) continue;
+        const keys = entry[0] || [];
+        const urls = entry[1] || [];
+        for (let j = 0; j < keys.length; j++) {
+          const k = String(keys[j]).toLowerCase().replace(/^\.+|\.+$/g, '');
+          if (!k) continue;
+          if (dom === k || dom.endsWith('.' + k)) {
+            if (k.length > bestKeyLen) {
+              bestKeyLen = k.length;
+              bestUrl = pickBaseUrl(urls);
+            }
+          }
+        }
+      }
+      if (!bestUrl) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      return bestUrl;
+    }
+
+    if (parsed.kind === 'ipv4') {
+      const services = await getBootstrapServices('ipv4', signal);
+      if (!services) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      let bestPLen = -1;
+      let bestUrl = null;
+      for (let i = 0; i < services.length; i++) {
+        const entry = services[i];
+        if (!Array.isArray(entry) || entry.length < 2) continue;
+        const keys = entry[0] || [];
+        const urls = entry[1] || [];
+        for (let j = 0; j < keys.length; j++) {
+          const m = v4MatchesCidr(parsed.uint32, String(keys[j]));
+          if (m.match && m.pLen > bestPLen) {
+            bestPLen = m.pLen;
+            bestUrl = pickBaseUrl(urls);
+          }
+        }
+      }
+      if (!bestUrl) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      return bestUrl;
+    }
+
+    if (parsed.kind === 'ipv6') {
+      const services = await getBootstrapServices('ipv6', signal);
+      if (!services) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      let bestPLen = -1;
+      let bestUrl = null;
+      for (let i = 0; i < services.length; i++) {
+        const entry = services[i];
+        if (!Array.isArray(entry) || entry.length < 2) continue;
+        const keys = entry[0] || [];
+        const urls = entry[1] || [];
+        for (let j = 0; j < keys.length; j++) {
+          const m = v6MatchesCidr(parsed.bigInt, String(keys[j]));
+          if (m.match && m.pLen > bestPLen) {
+            bestPLen = m.pLen;
+            bestUrl = pickBaseUrl(urls);
+          }
+        }
+      }
+      if (!bestUrl) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      return bestUrl;
+    }
+
+    if (parsed.kind === 'asn') {
+      const services = await getBootstrapServices('asn', signal);
+      if (!services) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      let bestSpan = Infinity;
+      let bestUrl = null;
+      for (let i = 0; i < services.length; i++) {
+        const entry = services[i];
+        if (!Array.isArray(entry) || entry.length < 2) continue;
+        const keys = entry[0] || [];
+        const urls = entry[1] || [];
+        for (let j = 0; j < keys.length; j++) {
+          const k = String(keys[j]).trim();
+          const rangeParts = k.split('-');
+          const lo = parseInt(rangeParts[0], 10);
+          const hi = rangeParts.length > 1 ? parseInt(rangeParts[1], 10) : lo;
+          if (!isNaN(lo) && !isNaN(hi) && parsed.asn >= lo && parsed.asn <= hi) {
+            const span = hi - lo;
+            if (span < bestSpan) {
+              bestSpan = span;
+              bestUrl = pickBaseUrl(urls);
+            }
+          }
+        }
+      }
+      if (!bestUrl) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('bootstrap: no match -> rdap.org');
+        return RDAP_FALLBACK_BASE;
+      }
+      return bestUrl;
+    }
+
+    return RDAP_FALLBACK_BASE;
+  }
+
+  // --- RDAP Data Extraction & Formatting Helpers ---
+  function formatIsoDate(isoStr) {
+    if (!isoStr || typeof isoStr !== 'string') return null;
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function describeAge(isoStr) {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return '';
+    const diffDays = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return '';
+    if (diffDays < 30) return `${diffDays} ${diffDays === 1 ? 'day' : 'days'} old`;
+    if (diffDays < 365) {
+      const m = Math.round(diffDays / 30.44);
+      return `${m} ${m === 1 ? 'month' : 'months'} old`;
+    }
+    const y = Math.floor(diffDays / 365.25);
+    return `${y} ${y === 1 ? 'year' : 'years'} old`;
+  }
+
+  function describeExpiry(isoStr) {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
+    const diffDays = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) {
+      const ago = Math.abs(diffDays);
+      return {
+        chipText: ago === 0 ? 'Expired today' : `Expired ${ago} ${ago === 1 ? 'day' : 'days'} ago`,
+        detailText: 'expired',
+        level: 'bad'
+      };
+    }
+    if (diffDays <= 30) {
+      return {
+        chipText: diffDays === 0 ? 'Expires today' : `Expires in ${diffDays} ${diffDays === 1 ? 'day' : 'days'}`,
+        detailText: `in ${diffDays} ${diffDays === 1 ? 'day' : 'days'}`,
+        level: 'warn'
+      };
+    }
+    if (diffDays < 60) {
+      return {
+        chipText: `Expires in ${diffDays} days`,
+        detailText: `in ${diffDays} days`,
+        level: 'good'
+      };
+    }
+    const months = Math.round(diffDays / 30.44);
+    return {
+      chipText: `Expires in ${months} months`,
+      detailText: `in ${months} months`,
+      level: 'good'
+    };
+  }
+
+  function extractEvents(eventsArr) {
+    const out = { registered: null, updated: null, expires: null };
+    if (!Array.isArray(eventsArr)) return out;
+    eventsArr.forEach((ev) => {
+      if (!ev || !ev.eventAction || !ev.eventDate) return;
+      const act = String(ev.eventAction).toLowerCase();
+      if (act === 'registration' && !out.registered) out.registered = ev.eventDate;
+      else if ((act === 'last changed' || act === 'last update of rdap database') && !out.updated) out.updated = ev.eventDate;
+      else if (act === 'expiration' && !out.expires) out.expires = ev.eventDate;
+    });
+    return out;
+  }
+
+  function isRedactedValue(str) {
+    if (!str) return false;
+    return /redacted|privacy|data protected|not disclosed|gdpr|withheld for privacy|statutory masking|select contact domain holder/i.test(String(str));
+  }
+
+  function parseVcard(vcardArray, remarksArr) {
+    const info = { fn: '', org: '', email: '', tel: '', adr: '', redacted: false };
+    if (Array.isArray(remarksArr)) {
+      remarksArr.forEach((r) => {
+        const title = r && r.title ? r.title : '';
+        const desc = r && Array.isArray(r.description) ? r.description.join(' ') : '';
+        if (isRedactedValue(title) || isRedactedValue(desc)) info.redacted = true;
+      });
+    }
+    if (!Array.isArray(vcardArray) || vcardArray.length < 2 || !Array.isArray(vcardArray[1])) {
+      return info;
+    }
+    const props = vcardArray[1];
+    props.forEach((prop) => {
+      if (!Array.isArray(prop) || prop.length < 4) return;
+      const name = String(prop[0] || '').toLowerCase();
+      const params = prop[1] && typeof prop[1] === 'object' ? prop[1] : {};
+      const val = prop[3];
+      if (name === 'fn' && typeof val === 'string' && val.trim()) {
+        if (isRedactedValue(val)) info.redacted = true;
+        else if (!info.fn) info.fn = val.trim();
+      } else if (name === 'org') {
+        const orgStr = Array.isArray(val) ? val.filter(Boolean).join(', ').trim() : (typeof val === 'string' ? val.trim() : '');
+        if (orgStr) {
+          if (isRedactedValue(orgStr)) info.redacted = true;
+          else if (!info.org) info.org = orgStr;
+        }
+      } else if (name === 'email' && typeof val === 'string' && val.trim()) {
+        const em = val.replace(/^mailto:/i, '').trim();
+        if (isRedactedValue(em)) info.redacted = true;
+        else if (!info.email) info.email = em;
+      } else if (name === 'tel' && typeof val === 'string' && val.trim()) {
+        const tel = val.replace(/^tel:/i, '').trim();
+        if (isRedactedValue(tel)) info.redacted = true;
+        else if (!info.tel) info.tel = tel;
+      } else if (name === 'adr') {
+        let adrStr = '';
+        if (typeof params.label === 'string' && params.label.trim()) {
+          adrStr = params.label.replace(/\r?\n/g, ', ').trim();
+        } else if (Array.isArray(val)) {
+          adrStr = val.map((x) => (Array.isArray(x) ? x.join(' ') : String(x || '')).trim()).filter(Boolean).join(', ');
+        } else if (typeof val === 'string') {
+          adrStr = val.trim();
+        }
+        if (adrStr) {
+          if (isRedactedValue(adrStr)) info.redacted = true;
+          else if (!info.adr) info.adr = adrStr;
+        }
+      }
+    });
+    return info;
+  }
+
+  function flattenEntities(entitiesArr, out) {
+    if (!Array.isArray(entitiesArr)) return out;
+    entitiesArr.forEach((ent) => {
+      if (!ent || typeof ent !== 'object') return;
+      out.push(ent);
+      if (Array.isArray(ent.entities)) {
+        flattenEntities(ent.entities, out);
+      }
+    });
+    return out;
+  }
+
+  function extractRegistrarInfo(data) {
+    const reg = { name: '', ianaId: '', abuseEmail: '', abusePhone: '' };
+    const all = flattenEntities(data && data.entities, []);
+    all.forEach((ent) => {
+      const roles = Array.isArray(ent.roles) ? ent.roles.map((r) => String(r).toLowerCase()) : [];
+      const vc = parseVcard(ent.vcardArray, ent.remarks);
+      if (roles.indexOf('registrar') !== -1) {
+        if (!reg.name) reg.name = vc.fn || vc.org || (typeof ent.handle === 'string' ? ent.handle : '');
+        if (Array.isArray(ent.publicIds)) {
+          ent.publicIds.forEach((pid) => {
+            if (pid && pid.identifier && !reg.ianaId) reg.ianaId = String(pid.identifier);
+          });
+        }
+        if (!reg.ianaId && typeof ent.handle === 'string' && /^\d+$/.test(ent.handle)) {
+          reg.ianaId = ent.handle;
+        }
+      }
+      if (roles.indexOf('abuse') !== -1) {
+        if (!reg.abuseEmail && vc.email) reg.abuseEmail = vc.email;
+        if (!reg.abusePhone && vc.tel) reg.abusePhone = vc.tel;
+      }
+    });
+    return reg;
+  }
+
+  function extractContacts(data, includeOrgAndAbuse) {
+    const all = flattenEntities(data && data.entities, []);
+    const wantedRoles = includeOrgAndAbuse
+      ? ['registrant', 'organization', 'administrative', 'technical', 'abuse', 'noc']
+      : ['registrant', 'administrative', 'technical'];
+    const roleLabels = {
+      registrant: 'Registrant',
+      organization: 'Organisation',
+      administrative: 'Administrative',
+      technical: 'Technical',
+      abuse: 'Abuse',
+      noc: 'NOC'
+    };
+    const contacts = [];
+    const seenRoleKey = {};
+
+    all.forEach((ent) => {
+      const roles = Array.isArray(ent.roles) ? ent.roles.map((r) => String(r).toLowerCase()) : [];
+      const vc = parseVcard(ent.vcardArray, ent.remarks);
+      const entRedacted = Array.isArray(ent.redacted) && ent.redacted.length > 0;
+      roles.forEach((r) => {
+        if (wantedRoles.indexOf(r) === -1) return;
+        const hasFields = !!(vc.fn || vc.org || vc.email || vc.tel || vc.adr);
+        const isRed = vc.redacted || entRedacted;
+        const dedupKey = `${r}|${vc.fn}|${vc.org}|${vc.email}|${vc.tel}|${isRed ? 'red' : ''}`;
+        if (seenRoleKey[dedupKey]) return;
+        seenRoleKey[dedupKey] = true;
+        if (!hasFields && !isRed && !(includeOrgAndAbuse && ent.handle)) return;
+        contacts.push({
+          role: roleLabels[r] || r,
+          fn: vc.fn,
+          org: vc.org,
+          email: vc.email,
+          tel: vc.tel,
+          adr: vc.adr,
+          handle: typeof ent.handle === 'string' ? ent.handle : '',
+          redacted: isRed && !hasFields
+        });
+      });
+    });
+
+    // Only synthesize a redacted Registrant card if the record explicitly has a non-empty RFC 9537 redacted array
+    if (!includeOrgAndAbuse && contacts.length === 0 && data && Array.isArray(data.redacted) && data.redacted.length > 0) {
+      contacts.push({
+        role: 'Registrant',
+        fn: '',
+        org: '',
+        email: '',
+        tel: '',
+        adr: '',
+        handle: '',
+        redacted: true
+      });
+    }
+    return contacts;
+  }
+
+  function detectRirName(data, sourceHost) {
+    const hay = `${data && data.port43 ? data.port43 : ''} ${sourceHost || ''}`.toLowerCase();
+    if (hay.indexOf('arin') !== -1) return 'ARIN';
+    if (hay.indexOf('ripe') !== -1) return 'RIPE NCC';
+    if (hay.indexOf('apnic') !== -1) return 'APNIC';
+    if (hay.indexOf('lacnic') !== -1) return 'LACNIC';
+    if (hay.indexOf('afrinic') !== -1) return 'AFRINIC';
+    return '';
+  }
+
+  function findRelatedRegistrarUrl(data, primaryUrl) {
+    if (!data || !Array.isArray(data.links)) return null;
+    let primaryHost = '';
+    try { primaryHost = new URL(primaryUrl).hostname.toLowerCase(); } catch (e) { /* ignore */ }
+    for (let i = 0; i < data.links.length; i++) {
+      const lnk = data.links[i];
+      if (!lnk || typeof lnk.href !== 'string') continue;
+      const rel = String(lnk.rel || '').toLowerCase();
+      if (rel !== 'related') continue;
+      const href = lnk.href.trim();
+      if (!/^https?:\/\//i.test(href)) continue;
+      try {
+        const u = new URL(href);
+        if (u.hostname.toLowerCase() === primaryHost) continue;
+        if (/\/domain\//i.test(u.pathname) || String(lnk.type || '').toLowerCase().indexOf('rdap') !== -1) {
+          return href;
+        }
+      } catch (e) { /* ignore */ }
+    }
+    return null;
+  }
+
+  // --- Safe DOM Builders (strictly textContent, never innerHTML) ---
+  function createSection(titleText) {
+    const sec = document.createElement('div');
+    sec.className = 'whois-section';
+    if (titleText) {
+      const h = document.createElement('div');
+      h.className = 'whois-section-title';
+      h.textContent = titleText;
+      sec.appendChild(h);
+    }
+    return sec;
+  }
+
+  function appendKvRow(parent, label, val, plainLines) {
+    if (val === null || val === undefined) return;
+    const str = String(val).trim();
+    if (!str || str === 'undefined' || str === 'null') return;
+    const row = document.createElement('div');
+    row.className = 'whois-kv-row';
+    const lEl = document.createElement('span');
+    lEl.className = 'whois-kv-label';
+    lEl.textContent = label;
+    const vEl = document.createElement('span');
+    vEl.className = 'whois-kv-val';
+    vEl.textContent = str;
+    row.appendChild(lEl);
+    row.appendChild(vEl);
+    parent.appendChild(row);
+    if (plainLines) plainLines.push(`${label}: ${str}`);
+  }
+
+  function addChip(text, levelClass) {
+    if (!chipsRow || !text) return;
+    const chip = document.createElement('span');
+    chip.className = `whois-chip${levelClass ? ' ' + levelClass : ''}`;
+    chip.textContent = text;
+    chipsRow.appendChild(chip);
+  }
+
+  function explainEppStatus(rawCode) {
+    const clean = String(rawCode || '').trim();
+    const key = clean.toLowerCase().replace(/[\s_\-]/g, '');
+    if (EPP_STATUS_INFO[key]) return EPP_STATUS_INFO[key];
+    return { code: clean, desc: 'Registry status flag.' };
+  }
+
+  function renderContactsSection(container, contacts, plainLines, sectionTitle) {
+    if (!contacts || contacts.length === 0) return;
+    const sec = createSection(sectionTitle || 'Contacts');
+    if (plainLines) plainLines.push(`\n[${sectionTitle || 'Contacts'}]`);
+    contacts.forEach((c) => {
+      const card = document.createElement('div');
+      card.className = 'whois-contact-card';
+      const roleEl = document.createElement('div');
+      roleEl.className = 'whois-contact-role';
+      roleEl.textContent = c.role;
+      card.appendChild(roleEl);
+
+      if (c.redacted) {
+        const red = document.createElement('div');
+        red.className = 'whois-contact-redacted';
+        red.textContent = 'Redacted for privacy';
+        card.appendChild(red);
+        if (plainLines) plainLines.push(`${c.role}: Redacted for privacy`);
+      } else {
+        if (plainLines) plainLines.push(`${c.role}:`);
+        if (c.fn) appendKvRow(card, 'Name', c.fn, plainLines);
+        if (c.org && c.org !== c.fn) appendKvRow(card, 'Organisation', c.org, plainLines);
+        if (c.handle && !c.fn && !c.org) appendKvRow(card, 'Handle', c.handle, plainLines);
+        if (c.email) appendKvRow(card, 'Email', c.email, plainLines);
+        if (c.tel) appendKvRow(card, 'Phone', c.tel, plainLines);
+        if (c.adr) appendKvRow(card, 'Address', c.adr, plainLines);
+      }
+      sec.appendChild(card);
+    });
+    container.appendChild(sec);
+  }
+
+  function renderRemarksSection(container, remarksArr, plainLines) {
+    if (!Array.isArray(remarksArr) || remarksArr.length === 0) return;
+    const texts = [];
+    remarksArr.forEach((r) => {
+      if (!r) return;
+      const title = typeof r.title === 'string' ? r.title.trim() : '';
+      const desc = Array.isArray(r.description) ? r.description.map((d) => String(d || '').trim()).filter(Boolean).join('\n') : '';
+      const combined = [title, desc].filter(Boolean).join(': ');
+      if (combined && texts.indexOf(combined) === -1) texts.push(combined);
+    });
+    if (texts.length === 0) return;
+    const sec = createSection('Remarks');
+    const p = document.createElement('div');
+    p.className = 'whois-remarks';
+    p.textContent = texts.slice(0, 4).join('\n\n');
+    sec.appendChild(p);
+    container.appendChild(sec);
+    if (plainLines) {
+      plainLines.push('\n[Remarks]');
+      plainLines.push(texts.slice(0, 4).join('\n'));
+    }
+  }
+
+  // --- Open In Buttons ---
+  function openInTool(toolId, targetVal) {
+    if (window.APP_DEBUG_ENABLED) whoisLog(`ui: open-in tap target=${toolId}`);
+    const tool = TOOLS_LIST.find((t) => t.id === toolId);
+    if (!tool) return;
+    const isLocked = tool.pro && !isProNow();
+    if (isLocked) {
+      showProModal(tool.feature || 'tools');
+      return;
+    }
+    openTool(tool);
+    if (toolId === 'dns') {
+      const el = document.getElementById('dns-input');
+      if (el) {
+        el.value = targetVal;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } else if (toolId === 'ping') {
+      const el = document.getElementById('ping-input');
+      if (el) {
+        el.value = targetVal;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } else if (toolId === 'traceroute') {
+      const el = document.getElementById('trace-input');
+      if (el) {
+        el.value = targetVal;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+  }
+
+  function openInSubnetCalculator(parsed, fallbackCidr) {
+    if (window.APP_DEBUG_ENABLED) whoisLog('ui: open-in tap target=subnet-calculator');
+    const calcTabBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
+    if (calcTabBtn) calcTabBtn.click();
+    const isV6 = parsed.kind === 'ipv6';
+    const subBtn = document.querySelector(`.calc-sub-tab-btn[data-sub-target="${isV6 ? 'calc-ipv6-panel' : 'calc-ipv4-panel'}"]`);
+    if (subBtn) subBtn.click();
+    const singleBtn = document.querySelector(`${isV6 ? '.calc-mode-btn-v6' : '.calc-mode-btn-v4'}[data-mode="single"]`);
+    if (singleBtn) singleBtn.click();
+
+    const valueToFill = fallbackCidr || parsed.query || parsed.ip;
+    if (isV6) {
+      const hostsEl = document.getElementById('ipv6-hosts');
+      if (hostsEl) hostsEl.value = '';
+      const addrEl = document.getElementById('ipv6-address');
+      if (addrEl) {
+        addrEl.value = valueToFill;
+        if (typeof calculateIPv6 === 'function') calculateIPv6();
+      }
+    } else {
+      const hostsEl = document.getElementById('ipv4-hosts');
+      if (hostsEl) hostsEl.value = '';
+      const addrEl = document.getElementById('ipv4-address');
+      if (addrEl) {
+        addrEl.value = valueToFill;
+        if (typeof calculateIPv4 === 'function') calculateIPv4();
+      }
+    }
+  }
+
+  function renderOpenInButtons(parsed, firstNetworkCidr) {
+    if (!openInBox) return;
+    openInBox.textContent = '';
+    if (!parsed || parsed.kind === 'asn') {
+      openInBox.style.display = 'none';
+      return;
+    }
+
+    const label = document.createElement('div');
+    label.className = 'whois-open-label';
+    label.textContent = 'Open in';
+    const row = document.createElement('div');
+    row.className = 'whois-open-btns';
+
+    const hostTarget = parsed.kind === 'domain' ? parsed.ascii : parsed.ip;
+
+    function addBtn(text, onClick) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-action whois-open-btn';
+      b.textContent = text;
+      b.addEventListener('click', onClick);
+      row.appendChild(b);
+    }
+
+    addBtn('DNS Lookup', () => openInTool('dns', hostTarget));
+    addBtn('Ping', () => openInTool('ping', hostTarget));
+    addBtn('Traceroute', () => openInTool('traceroute', hostTarget));
+
+    if (parsed.kind === 'ipv4' || parsed.kind === 'ipv6') {
+      const calcValue = parsed.prefix !== null ? parsed.query : (firstNetworkCidr || parsed.ip);
+      addBtn('Subnet Calculator', () => openInSubnetCalculator(parsed, calcValue));
+    }
+
+    openInBox.appendChild(label);
+    openInBox.appendChild(row);
+    openInBox.style.display = 'block';
+  }
+
+  // --- Registrar Related Record (Pro / Free Teaser) ---
+  function renderRegistrarTeaser() {
+    if (!registrarBox) return;
+    registrarBox.textContent = '';
+    if (!lastRelatedUrl) {
+      registrarBox.style.display = 'none';
+      return;
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'whois-teaser-btn';
+    const left = document.createElement('span');
+    left.textContent = 'See the registrar’s own record';
+    const badge = document.createElement('span');
+    badge.className = 'pro-badge';
+    badge.textContent = '🔒 Pro';
+    btn.appendChild(left);
+    btn.appendChild(badge);
+    btn.addEventListener('click', () => showProModal('whois'));
+    registrarBox.appendChild(btn);
+    registrarBox.style.display = 'block';
+  }
+
+  async function loadRegistrarRecordForPro(relUrl, seqAtStart) {
+    if (!registrarBox || !relUrl) return;
+    registrarBox.textContent = '';
+    registrarBox.style.display = 'block';
+    const loadingSec = createSection('Registrar record');
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'whois-source-line';
+    loadingMsg.textContent = 'Loading registrar record…';
+    loadingSec.appendChild(loadingMsg);
+    registrarBox.appendChild(loadingSec);
+
+    const t0 = Date.now();
+    const regHost = safeHostOf(relUrl);
+    try {
+      const regData = await httpGetJson(relUrl, currentAbort ? currentAbort.signal : null, true);
+      if (seqAtStart !== lookupSeq) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('lookup: stale response discarded');
+        return;
+      }
+      if (window.APP_DEBUG_ENABLED) {
+        whoisLog(`registrar record: fetched host=${regHost} status=200 ms=${Date.now() - t0}`);
+      }
+      lastRegistrarLoaded = true;
+      lastRegistrarRawJson = regData;
+      registrarBox.textContent = '';
+      const sec = createSection('Registrar record');
+      const plainExtra = [];
+      let hostLabel = relUrl;
+      try { hostLabel = new URL(relUrl).hostname; } catch (e) { /* ignore */ }
+      appendKvRow(sec, 'Registrar server', hostLabel, plainExtra);
+
+      const evs = extractEvents(regData.events);
+      if (evs.registered) appendKvRow(sec, 'Registered', formatIsoDate(evs.registered), plainExtra);
+      if (evs.updated) appendKvRow(sec, 'Updated', formatIsoDate(evs.updated), plainExtra);
+      if (evs.expires) appendKvRow(sec, 'Expires', formatIsoDate(evs.expires), plainExtra);
+
+      const regInfo = extractRegistrarInfo(regData);
+      if (regInfo.abuseEmail) appendKvRow(sec, 'Abuse email', regInfo.abuseEmail, plainExtra);
+      if (regInfo.abusePhone) appendKvRow(sec, 'Abuse phone', regInfo.abusePhone, plainExtra);
+
+      registrarBox.appendChild(sec);
+      const regContacts = extractContacts(regData, false);
+      renderContactsSection(registrarBox, regContacts, plainExtra, 'Registrar contacts');
+
+      if (plainExtra.length > 0 && lastPlainText) {
+        lastPlainText = lastPlainText.replace(/\nSource: /, `\n\n[Registrar record]\n${plainExtra.join('\n')}\n\nSource: `);
+      }
+      if (rawOpen && rawPre && lastRawJson) {
+        rawPre.textContent = formatRawJsonForDisplay();
+      }
+    } catch (e) {
+      if (seqAtStart !== lookupSeq) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('lookup: stale response discarded');
+        return;
+      }
+      if (window.APP_DEBUG_ENABLED) {
+        const st = e && typeof e.status === 'number' ? e.status : (e && e.kind ? e.kind : 'error');
+        whoisLog(`registrar record: fetched host=${regHost} status=${st} ms=${Date.now() - t0}`);
+      }
+      registrarBox.textContent = '';
+      registrarBox.style.display = 'none';
+    }
+  }
+
+  function formatRawJsonForDisplay() {
+    if (!lastRawJson) return '';
+    let out = '';
+    if (lastRegistrarRawJson) {
+      out = `// Registry record\n${JSON.stringify(lastRawJson, null, 2)}\n\n// Registrar record\n${JSON.stringify(lastRegistrarRawJson, null, 2)}`;
+    } else {
+      out = JSON.stringify(lastRawJson, null, 2);
+    }
+    if (out.length > 120000) {
+      out = out.slice(0, 120000) + '\n... (truncated)';
+    }
+    return out;
+  }
+
+  function logWhoisResultShape(data, contacts, cidrsCount) {
+    if (!window.APP_DEBUG_ENABLED) return;
+    const cCount = Array.isArray(contacts) ? contacts.length : 0;
+    const rCount = Array.isArray(contacts) ? contacts.filter((c) => c && c.redacted).length : 0;
+    const nsCount = Array.isArray(data && data.nameservers)
+      ? data.nameservers.filter((ns) => ns && (ns.ldhName || ns.unicodeName)).length
+      : 0;
+    const stCount = Array.isArray(data && data.status) ? data.status.filter(Boolean).length : 0;
+    const entCount = flattenEntities(data && data.entities, []).length;
+    whoisLog(`result: contacts=${cCount} redacted=${rCount} | nameservers=${nsCount} | status codes=${stCount} | entities=${entCount}`);
+    if (typeof cidrsCount === 'number') {
+      whoisLog(`result: cidrs=${cidrsCount}`);
+    }
+  }
+
+  // --- Result Renderers ---
+  function resetResultContainers() {
+    chipsRow.textContent = '';
+    bodyEl.textContent = '';
+    if (parentNote) {
+      parentNote.textContent = '';
+      parentNote.style.display = 'none';
+    }
+    if (registrarBox) {
+      registrarBox.textContent = '';
+      registrarBox.style.display = 'none';
+    }
+    if (rawPre) {
+      rawPre.textContent = '';
+      rawPre.style.display = 'none';
+    }
+    if (openInBox) {
+      openInBox.textContent = '';
+      openInBox.style.display = 'none';
+    }
+    rawOpen = false;
+    lastRawJson = null;
+    lastRegistrarRawJson = null;
+    lastRelatedUrl = null;
+    lastRegistrarLoaded = false;
+  }
+
+  function renderReservedResult(parsed, reservedEntry) {
+    resetResultContainers();
+    _lastParsedQuery = parsed;
+    const titleStr = `Whois: ${parsed.display}`;
+    if (resultTitle) resultTitle.textContent = titleStr;
+    updateRawButtonUI();
+
+    addChip('Reserved range', 'whois-chip-warn');
+    addChip(reservedEntry.rfc, 'whois-chip-muted');
+
+    const plainLines = [titleStr, ''];
+    const sec = createSection('Reserved Address Block');
+    appendKvRow(sec, 'Query', parsed.display, plainLines);
+    appendKvRow(sec, 'Reserved block', reservedEntry.cidr, plainLines);
+    appendKvRow(sec, 'Designation', `${reservedEntry.name} (${reservedEntry.rfc})`, plainLines);
+    appendKvRow(sec, 'Status', 'Reserved — not allocated in public Whois/RDAP registries', plainLines);
+
+    const noteEl = document.createElement('div');
+    noteEl.className = 'whois-remarks';
+    noteEl.style.marginTop = '6px';
+    noteEl.textContent = `This address belongs to ${reservedEntry.cidr} (${reservedEntry.name}, ${reservedEntry.rfc}). It is reserved for special or private use, so no public Whois record exists for it.`;
+    sec.appendChild(noteEl);
+    plainLines.push(`Note: ${noteEl.textContent}`);
+
+    bodyEl.appendChild(sec);
+
+    const srcText = 'Source: IANA Special-Purpose Address Registry (local)';
+    if (sourceLine) sourceLine.textContent = srcText;
+    plainLines.push('', srcText);
+
+    lastPlainText = plainLines.join('\n') + '\n';
+    lastNoteTitle = titleStr;
+    renderOpenInButtons(parsed, reservedEntry.cidr);
+    resultsCard.style.display = 'block';
+  }
+
+  function renderDomainResult(parsed, queriedDomain, steppedFrom, data, sourceUrl, seqAtStart) {
+    resetResultContainers();
+    _lastParsedQuery = parsed;
+    lastRawJson = data;
+
+    const ldh = (data.ldhName ? String(data.ldhName) : queriedDomain).toLowerCase();
+    const uni = data.unicodeName ? String(data.unicodeName).toLowerCase() : ldh.split('.').map(labelToUnicode).join('.');
+    const displayDomain = (uni && uni !== ldh) ? `${uni} (${ldh})` : ldh;
+
+    const titleStr = `Whois: ${displayDomain}`;
+    if (resultTitle) resultTitle.textContent = titleStr;
+    updateRawButtonUI();
+
+    const plainLines = [titleStr];
+
+    if (steppedFrom && steppedFrom !== ldh && parentNote) {
+      const noteMsg = `No separate Whois record for ${steppedFrom} — showing the registered parent domain ${ldh}.`;
+      parentNote.textContent = noteMsg;
+      parentNote.style.display = 'block';
+      plainLines.push(noteMsg);
+    }
+    plainLines.push('');
+
+    // Chips row: Registered, Expiry, DNSSEC
+    addChip('Registered', 'whois-chip-good');
+    const events = extractEvents(data.events);
+    if (events.expires) {
+      const exp = describeExpiry(events.expires);
+      if (exp) {
+        const cls = exp.level === 'bad' ? 'whois-chip-bad' : (exp.level === 'warn' ? 'whois-chip-warn' : 'whois-chip-good');
+        addChip(exp.chipText, cls);
+      }
+    }
+    if (data.secureDNS && typeof data.secureDNS.delegationSigned === 'boolean') {
+      if (data.secureDNS.delegationSigned) {
+        addChip('DNSSEC signed', 'whois-chip-good');
+      } else {
+        addChip('DNSSEC not signed', 'whois-chip-muted');
+      }
+    }
+
+    // Overview & Registrar section
+    const regSec = createSection('Registration');
+    appendKvRow(regSec, 'Domain', ldh, plainLines);
+    if (uni && uni !== ldh) {
+      appendKvRow(regSec, 'Unicode name', uni, plainLines);
+    }
+    if (data.handle) {
+      appendKvRow(regSec, 'Registry ID', String(data.handle), plainLines);
+    }
+    const regInfo = extractRegistrarInfo(data);
+    if (regInfo.name) appendKvRow(regSec, 'Registrar', regInfo.name, plainLines);
+    if (regInfo.ianaId) appendKvRow(regSec, 'IANA ID', regInfo.ianaId, plainLines);
+    if (regInfo.abuseEmail) appendKvRow(regSec, 'Abuse email', regInfo.abuseEmail, plainLines);
+    if (regInfo.abusePhone) appendKvRow(regSec, 'Abuse phone', regInfo.abusePhone, plainLines);
+
+    if (events.registered) {
+      const dStr = formatIsoDate(events.registered);
+      const age = describeAge(events.registered);
+      appendKvRow(regSec, 'Registered', age ? `${dStr} (${age})` : dStr, plainLines);
+    }
+    if (events.updated) {
+      appendKvRow(regSec, 'Updated', formatIsoDate(events.updated), plainLines);
+    }
+    if (events.expires) {
+      const dStr = formatIsoDate(events.expires);
+      const exp = describeExpiry(events.expires);
+      appendKvRow(regSec, 'Expires', exp && exp.detailText ? `${dStr} (${exp.detailText})` : dStr, plainLines);
+    }
+    if (data.secureDNS && typeof data.secureDNS.delegationSigned === 'boolean') {
+      appendKvRow(regSec, 'DNSSEC', data.secureDNS.delegationSigned ? 'Signed' : 'Not signed', plainLines);
+    }
+    bodyEl.appendChild(regSec);
+
+    // EPP Statuses
+    if (Array.isArray(data.status) && data.status.length > 0) {
+      const statusSec = createSection('Domain Status (EPP)');
+      const listEl = document.createElement('div');
+      listEl.className = 'whois-status-list';
+      plainLines.push('\n[Status]');
+      data.status.forEach((st) => {
+        if (!st) return;
+        const info = explainEppStatus(st);
+        const item = document.createElement('div');
+        item.className = 'whois-status-item';
+        const codeEl = document.createElement('span');
+        codeEl.className = 'whois-status-code';
+        codeEl.textContent = info.code;
+        const descEl = document.createElement('span');
+        descEl.className = 'whois-status-desc';
+        descEl.textContent = info.desc;
+        item.appendChild(codeEl);
+        item.appendChild(descEl);
+        listEl.appendChild(item);
+        plainLines.push(`${info.code} — ${info.desc}`);
+      });
+      statusSec.appendChild(listEl);
+      bodyEl.appendChild(statusSec);
+    }
+
+    // Name servers
+    if (Array.isArray(data.nameservers) && data.nameservers.length > 0) {
+      const nsSec = createSection('Name Servers');
+      const nsList = document.createElement('div');
+      nsList.className = 'whois-ns-list';
+      plainLines.push('\n[Name Servers]');
+      data.nameservers.forEach((ns) => {
+        if (!ns) return;
+        const name = (ns.ldhName || ns.unicodeName || '').toLowerCase();
+        if (!name) return;
+        const ips = [];
+        if (ns.ipAddresses) {
+          if (Array.isArray(ns.ipAddresses.v4)) ips.push.apply(ips, ns.ipAddresses.v4.filter(Boolean));
+          if (Array.isArray(ns.ipAddresses.v6)) ips.push.apply(ips, ns.ipAddresses.v6.filter(Boolean));
+        }
+        const item = document.createElement('div');
+        item.className = 'whois-ns-item';
+        const nSpan = document.createElement('span');
+        nSpan.className = 'whois-ns-name';
+        nSpan.textContent = name;
+        item.appendChild(nSpan);
+        if (ips.length > 0) {
+          const ipSpan = document.createElement('span');
+          ipSpan.className = 'whois-ns-ips';
+          ipSpan.textContent = ips.join(', ');
+          item.appendChild(ipSpan);
+        }
+        nsList.appendChild(item);
+        plainLines.push(ips.length > 0 ? `${name} (${ips.join(', ')})` : name);
+      });
+      nsSec.appendChild(nsList);
+      bodyEl.appendChild(nsSec);
+    }
+
+    // Contacts
+    const contacts = extractContacts(data, false);
+    if (contacts.length > 0) {
+      renderContactsSection(bodyEl, contacts, plainLines, 'Contacts');
+    } else {
+      const noContactMsg = 'The registry does not publish contact details for this domain.';
+      const sec = createSection('Contacts');
+      const noteEl = document.createElement('div');
+      noteEl.className = 'whois-remarks';
+      noteEl.textContent = noContactMsg;
+      sec.appendChild(noteEl);
+      bodyEl.appendChild(sec);
+      plainLines.push('\n[Contacts]');
+      plainLines.push(noContactMsg);
+    }
+
+    // Remarks
+    renderRemarksSection(bodyEl, data.remarks, plainLines);
+
+    logWhoisResultShape(data, contacts, null);
+
+    // Related registrar RDAP link
+    lastRelatedUrl = findRelatedRegistrarUrl(data, sourceUrl);
+    if (lastRelatedUrl) {
+      if (isProNow()) {
+        loadRegistrarRecordForPro(lastRelatedUrl, seqAtStart);
+      } else {
+        if (window.APP_DEBUG_ENABLED) whoisLog('registrar record: teaser shown (free)');
+        renderRegistrarTeaser();
+      }
+    } else if (window.APP_DEBUG_ENABLED) {
+      whoisLog('registrar record: none linked');
+    }
+
+    let serverHost = sourceUrl;
+    try { serverHost = new URL(sourceUrl).hostname; } catch (e) { /* ignore */ }
+    const srcText = `Source: ${serverHost}`;
+    if (sourceLine) sourceLine.textContent = srcText;
+    plainLines.push('', srcText);
+
+    lastPlainText = plainLines.join('\n') + '\n';
+    lastNoteTitle = `Whois: ${ldh}`;
+    renderOpenInButtons({ kind: 'domain', ascii: ldh }, null);
+    resultsCard.style.display = 'block';
+  }
+
+  function renderIpResult(parsed, data, sourceUrl) {
+    resetResultContainers();
+    _lastParsedQuery = parsed;
+    lastRawJson = data;
+
+    let serverHost = sourceUrl;
+    try { serverHost = new URL(sourceUrl).hostname; } catch (e) { /* ignore */ }
+    const rir = detectRirName(data, serverHost);
+
+    const titleStr = `Whois: ${parsed.display}`;
+    if (resultTitle) resultTitle.textContent = titleStr;
+    updateRawButtonUI();
+
+    if (rir) addChip(rir, 'whois-chip-good');
+    if (data.type) addChip(String(data.type), 'whois-chip-muted');
+    if (data.country) addChip(String(data.country).toUpperCase(), 'whois-chip-muted');
+
+    const plainLines = [titleStr, ''];
+    const netSec = createSection('Network Block');
+
+    if (data.name) appendKvRow(netSec, 'Network name', String(data.name), plainLines);
+    if (data.handle) appendKvRow(netSec, 'Handle', String(data.handle), plainLines);
+
+    const startAddr = data.startAddress ? String(data.startAddress).trim() : '';
+    const endAddr = data.endAddress ? String(data.endAddress).trim() : '';
+    if (startAddr && endAddr) {
+      appendKvRow(netSec, 'Address range', `${startAddr} – ${endAddr}`, plainLines);
+    } else if (startAddr) {
+      appendKvRow(netSec, 'Start address', startAddr, plainLines);
+    }
+
+    let cidrs = [];
+    if (Array.isArray(data.cidr0_cidrs) && data.cidr0_cidrs.length > 0) {
+      data.cidr0_cidrs.forEach((c) => {
+        if (!c || typeof c.length !== 'number') return;
+        const pfx = c.v4prefix || c.v6prefix;
+        if (pfx) cidrs.push(`${pfx}/${c.length}`);
+      });
+    }
+    if (cidrs.length === 0 && startAddr && endAddr) {
+      cidrs = computeMinimalCidrs(startAddr, endAddr);
+    }
+    if (cidrs.length > 0) {
+      appendKvRow(netSec, cidrs.length === 1 ? 'CIDR' : 'CIDRs', cidrs.join(', '), plainLines);
+    }
+
+    if (data.type) appendKvRow(netSec, 'Allocation type', String(data.type), plainLines);
+    if (data.country) appendKvRow(netSec, 'Country', String(data.country).toUpperCase(), plainLines);
+    if (data.parentHandle) appendKvRow(netSec, 'Parent handle', String(data.parentHandle), plainLines);
+    if (rir) appendKvRow(netSec, 'Registry', rir, plainLines);
+
+    const events = extractEvents(data.events);
+    if (events.registered) appendKvRow(netSec, 'Registered', formatIsoDate(events.registered), plainLines);
+    if (events.updated) appendKvRow(netSec, 'Updated', formatIsoDate(events.updated), plainLines);
+
+    bodyEl.appendChild(netSec);
+
+    const contacts = extractContacts(data, true);
+    renderContactsSection(bodyEl, contacts, plainLines, 'Organisation & Abuse Contacts');
+    renderRemarksSection(bodyEl, data.remarks, plainLines);
+
+    logWhoisResultShape(data, contacts, cidrs.length);
+
+    const srcText = `Source: ${rir ? rir + ' (' + serverHost + ')' : serverHost}`;
+    if (sourceLine) sourceLine.textContent = srcText;
+    plainLines.push('', srcText);
+
+    lastPlainText = plainLines.join('\n') + '\n';
+    lastNoteTitle = titleStr;
+    renderOpenInButtons(parsed, cidrs[0] || null);
+    resultsCard.style.display = 'block';
+  }
+
+  function renderAsnResult(parsed, data, sourceUrl) {
+    resetResultContainers();
+    _lastParsedQuery = parsed;
+    lastRawJson = data;
+
+    let serverHost = sourceUrl;
+    try { serverHost = new URL(sourceUrl).hostname; } catch (e) { /* ignore */ }
+    const rir = detectRirName(data, serverHost);
+
+    const titleStr = `Whois: ${parsed.display}`;
+    if (resultTitle) resultTitle.textContent = titleStr;
+    updateRawButtonUI();
+
+    addChip(parsed.display, 'whois-chip-good');
+    if (rir) addChip(rir, 'whois-chip-muted');
+    if (data.country) addChip(String(data.country).toUpperCase(), 'whois-chip-muted');
+
+    const plainLines = [titleStr, ''];
+    const asnSec = createSection('Autonomous System');
+    const sAut = typeof data.startAutnum === 'number' ? data.startAutnum : parsed.asn;
+    const eAut = typeof data.endAutnum === 'number' ? data.endAutnum : sAut;
+    appendKvRow(asnSec, 'AS Number', sAut === eAut ? `AS${sAut}` : `AS${sAut} – AS${eAut}`, plainLines);
+    if (data.name) appendKvRow(asnSec, 'AS Name', String(data.name), plainLines);
+    if (data.handle) appendKvRow(asnSec, 'Handle', String(data.handle), plainLines);
+    if (data.type) appendKvRow(asnSec, 'Type', String(data.type), plainLines);
+    if (data.country) appendKvRow(asnSec, 'Country', String(data.country).toUpperCase(), plainLines);
+    if (rir) appendKvRow(asnSec, 'Registry', rir, plainLines);
+
+    const events = extractEvents(data.events);
+    if (events.registered) appendKvRow(asnSec, 'Registered', formatIsoDate(events.registered), plainLines);
+    if (events.updated) appendKvRow(asnSec, 'Updated', formatIsoDate(events.updated), plainLines);
+
+    bodyEl.appendChild(asnSec);
+
+    const contacts = extractContacts(data, true);
+    renderContactsSection(bodyEl, contacts, plainLines, 'Organisation & Abuse Contacts');
+    renderRemarksSection(bodyEl, data.remarks, plainLines);
+
+    const asnCidrsCount = Array.isArray(data && data.cidr0_cidrs) ? data.cidr0_cidrs.length : 0;
+    logWhoisResultShape(data, contacts, asnCidrsCount);
+
+    const srcText = `Source: ${rir ? rir + ' (' + serverHost + ')' : serverHost}`;
+    if (sourceLine) sourceLine.textContent = srcText;
+    plainLines.push('', srcText);
+
+    lastPlainText = plainLines.join('\n') + '\n';
+    lastNoteTitle = titleStr;
+    renderOpenInButtons(parsed, null);
+    resultsCard.style.display = 'block';
+  }
+
+  function friendlyWhoisError(err, queryStr) {
+    if (!err) return 'Whois lookup failed. Please try again.';
+    const status = typeof err.status === 'number' ? err.status : 0;
+    if (status === 404) {
+      return `No Whois record was found for ${queryStr}.`;
+    }
+    if (status === 400) {
+      return 'The registry rejected this query format.';
+    }
+    if (status === 429) {
+      return 'The registry is limiting requests right now. Wait a minute and try again.';
+    }
+    if (status >= 500) {
+      return 'The registry server is temporarily unavailable. Please try again in a moment.';
+    }
+    if (err.kind === 'timeout' || /timeout|timed out/i.test(err.message || '')) {
+      return 'The registry took too long to respond. Please try again.';
+    }
+    if (err.kind === 'json') {
+      return 'The registry returned an unreadable response. Please try again later.';
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return 'Device is offline. Please check your internet connection.';
+    }
+    return 'Could not reach the Whois registry. Please check your connection and try again.';
+  }
+
+  // --- Main Lookup Flow ---
+  async function runWhoisLookup() {
+    if (btnLookup.disabled) return;
+    if (window.APP_DEBUG_ENABLED) {
+      const rawLen = (input.value || '').trim().length;
+      whoisLog(`ui: lookup tap | inputLength=${rawLen} | pro=${isProNow()}`);
+    }
+    hideError();
+
+    const parsed = parseWhoisQuery(input.value);
+    if (parsed.error) {
+      showError(parsed.error);
+      return;
+    }
+
+    const parseKind = (parsed.kind === 'ipv4' || parsed.kind === 'ipv6') && parsed.prefix !== null ? 'cidr' : parsed.kind;
+    if (window.APP_DEBUG_ENABLED) {
+      whoisLog(`parse: kind=${parseKind}`);
+    }
+
+    if (parsed.normalizedInput && input.value !== parsed.normalizedInput) {
+      input.value = parsed.normalizedInput;
+    }
+
+    // Pro gate for AS number lookups (no network request for Free)
+    if (parsed.kind === 'asn' && !isProNow()) {
+      if (window.APP_DEBUG_ENABLED) whoisLog('ui: asn gated for free user');
+      showProModal('whois');
+      return;
+    }
+
+    // Reserved IP / CIDR check (no network request)
+    if (parsed.kind === 'ipv4' || parsed.kind === 'ipv6') {
+      const reserved = checkReservedIp(parsed);
+      if (reserved) {
+        if (window.APP_DEBUG_ENABLED) whoisLog(`lookup: reserved ${parsed.kind} (${reserved.rfc})`);
+        renderReservedResult(parsed, reserved);
+        return;
+      }
+    }
+
+    // Close keyboard on mobile
+    try {
+      if (document.activeElement === input) input.blur();
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard && typeof window.Capacitor.Plugins.Keyboard.hide === 'function') {
+        Promise.resolve(window.Capacitor.Plugins.Keyboard.hide()).catch(() => {});
+      }
+    } catch (e) { /* ignore */ }
+
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.FirebaseCrashlytics) {
+      window.Capacitor.Plugins.FirebaseCrashlytics.setCustomKey({ key: 'last_calc_action', value: 'whoisLookup', type: 'string' }).catch(() => {});
+    }
+
+    if (currentAbort) {
+      try { currentAbort.abort(); } catch (e) { /* ignore */ }
+    }
+    currentAbort = new window.AbortController();
+    const mySeq = ++lookupSeq;
+    let staleLogged = false;
+    function isStaleAndLog() {
+      if (mySeq !== lookupSeq) {
+        if (!staleLogged && window.APP_DEBUG_ENABLED) {
+          staleLogged = true;
+          whoisLog('lookup: stale response discarded');
+        }
+        return true;
+      }
+      return false;
+    }
+
+    btnLookup.disabled = true;
+    btnLookup.textContent = 'Looking up...';
+    if (window.APP_DEBUG_ENABLED) whoisLog(`lookup: start kind=${parsed.kind}`);
+
+    try {
+      if (parsed.kind === 'domain') {
+        const labels = parsed.ascii.split('.');
+        const steppedFrom = parsed.ascii;
+        let curLabels = labels.slice();
+        let foundData = null;
+        let foundDomain = '';
+        let usedUrl = '';
+        let lastErr = null;
+        const maxParentSteps = Math.min(3, Math.max(0, labels.length - 2));
+        let parentSteps = 0;
+
+        let stepAttempts = 0;
+        while (curLabels.length >= 2 && stepAttempts < 4) {
+          stepAttempts++;
+          const candidate = curLabels.join('.');
+          const base = await resolveRdapBase(parsed, candidate, currentAbort.signal);
+          if (isStaleAndLog()) return;
+          const url = `${ensureTrailingSlash(base)}domain/${encodeURIComponent(candidate)}`;
+          try {
+            const data = await httpGetJson(url, currentAbort.signal, true);
+            if (isStaleAndLog()) return;
+            if (parentSteps > 0 && window.APP_DEBUG_ENABLED) {
+              whoisLog(`parent step: found after ${parentSteps} steps`);
+            }
+            foundData = data;
+            foundDomain = candidate;
+            usedUrl = url;
+            break;
+          } catch (err) {
+            if (isStaleAndLog()) return;
+            lastErr = err;
+            if (err && err.status === 404 && curLabels.length > 2 && stepAttempts < 4) {
+              curLabels.shift();
+              parentSteps++;
+              if (window.APP_DEBUG_ENABLED) {
+                whoisLog(`parent step: attempt ${parentSteps} of ${maxParentSteps}`);
+              }
+              continue;
+            }
+            if (parentSteps > 0 && window.APP_DEBUG_ENABLED) {
+              whoisLog('parent step: gave up');
+            }
+            throw err;
+          }
+        }
+
+        if (!foundData) {
+          if (parentSteps > 0 && window.APP_DEBUG_ENABLED) {
+            whoisLog('parent step: gave up');
+          }
+          throw lastErr || Object.assign(new Error('HTTP 404'), { status: 404 });
+        }
+
+        renderDomainResult(
+          parsed,
+          foundDomain,
+          foundDomain !== steppedFrom ? steppedFrom : null,
+          foundData,
+          usedUrl,
+          mySeq
+        );
+        if (window.APP_DEBUG_ENABLED) whoisLog('lookup: domain ok');
+      } else if (parsed.kind === 'ipv4' || parsed.kind === 'ipv6') {
+        const base = await resolveRdapBase(parsed, null, currentAbort.signal);
+        if (isStaleAndLog()) return;
+        const pathSuffix = parsed.prefix !== null ? `${parsed.ip}/${parsed.prefix}` : parsed.ip;
+        const url = `${ensureTrailingSlash(base)}ip/${pathSuffix}`;
+        const data = await httpGetJson(url, currentAbort.signal, true);
+        if (isStaleAndLog()) return;
+        renderIpResult(parsed, data, url);
+        if (window.APP_DEBUG_ENABLED) whoisLog(`lookup: ${parsed.kind} ok`);
+      } else if (parsed.kind === 'asn') {
+        const base = await resolveRdapBase(parsed, null, currentAbort.signal);
+        if (isStaleAndLog()) return;
+        const url = `${ensureTrailingSlash(base)}autnum/${parsed.asn}`;
+        const data = await httpGetJson(url, currentAbort.signal, true);
+        if (isStaleAndLog()) return;
+        renderAsnResult(parsed, data, url);
+        if (window.APP_DEBUG_ENABLED) whoisLog('lookup: asn ok');
+      }
+    } catch (err) {
+      if (isStaleAndLog()) return;
+      if (window.APP_DEBUG_ENABLED) {
+        whoisLog(`lookup: error (${err && err.status ? 'HTTP ' + err.status : (err && err.kind ? err.kind : 'err')})`);
+      }
+      showError(friendlyWhoisError(err, parsed.display));
+    } finally {
+      if (mySeq === lookupSeq) {
+        btnLookup.disabled = false;
+        btnLookup.textContent = 'Lookup';
+      }
+    }
+  }
+
+  btnLookup.addEventListener('click', runWhoisLookup);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runWhoisLookup();
+  });
+
+  const btnWhoisSwitch = document.getElementById('btn-whois-switch');
+  if (btnWhoisSwitch) {
+    btnWhoisSwitch.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) whoisLog('ui: tools chip tap');
+    });
+  }
+
+  btnClear.addEventListener('click', () => {
+    if (window.APP_DEBUG_ENABLED) whoisLog('ui: clear tap');
+    lookupSeq++;
+    if (currentAbort) {
+      try { currentAbort.abort(); } catch (e) { /* ignore */ }
+      currentAbort = null;
+    }
+    btnLookup.disabled = false;
+    btnLookup.textContent = 'Lookup';
+    input.value = '';
+    hideError();
+    resetResultContainers();
+    lastPlainText = '';
+    lastNoteTitle = '';
+    _lastParsedQuery = null;
+    resultsCard.style.display = 'none';
+  });
+
+  if (btnRaw) {
+    btnRaw.addEventListener('click', () => {
+      if (!isProNow()) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('ui: raw toggle on | gated=true');
+        showProModal('whois');
+        return;
+      }
+      if (!lastRawJson || !rawPre) return;
+      rawOpen = !rawOpen;
+      if (window.APP_DEBUG_ENABLED) whoisLog(`ui: raw toggle ${rawOpen ? 'on' : 'off'} | gated=false`);
+      if (rawOpen) {
+        rawPre.textContent = formatRawJsonForDisplay();
+        rawPre.style.display = 'block';
+      } else {
+        rawPre.style.display = 'none';
+      }
+      updateRawButtonUI();
+    });
+  }
+
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) whoisLog('ui: copy tap');
+      if (!lastPlainText || !navigator.clipboard || !navigator.clipboard.writeText) return;
+      navigator.clipboard.writeText(lastPlainText)
+        .then(() => {
+          if (typeof showToast === 'function') showToast('Whois results copied!');
+        })
+        .catch(() => {
+          if (typeof showToast === 'function') showToast('Copy failed');
+        });
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) whoisLog('ui: save tap');
+      if (!lastPlainText || typeof addNote !== 'function') return;
+      addNote(lastNoteTitle || 'Whois', lastPlainText, 'Whois');
+      if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+      if (typeof switchToNotesTab === 'function') switchToNotesTab();
+    });
+  }
+
+  if (btnShare) {
+    btnShare.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) whoisLog('ui: share tap');
+      if (lastPlainText && typeof shareText === 'function') {
+        shareText(lastNoteTitle || 'Whois Results', lastPlainText);
+      }
+    });
+  }
 })();
 
 // --- ANDROID BACK BUTTON ---
