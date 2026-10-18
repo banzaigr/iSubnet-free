@@ -64,7 +64,7 @@ public class PingPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        let rawCount = call.getInt("count") ?? 4
+        let rawCount = call.getInt("count") ?? 5
         let count = clampProbeCount(rawCount)
         let rawTimeout = call.getInt("timeoutMs") ?? 3000
         let timeoutMs = clampTimeoutMs(rawTimeout)

@@ -427,8 +427,9 @@ public class TraceroutePlugin extends Plugin {
             if (currentRunId.get() != expectedRunId) {
                 return;
             }
+            Future<String> future = null;
             try {
-                Future<String> future = dnsExecutor.submit(() -> {
+                future = dnsExecutor.submit(() -> {
                     String[] octets = ipAddress.split("\\.");
                     if (octets.length != 4) {
                         return null;
@@ -440,20 +441,47 @@ public class TraceroutePlugin extends Plugin {
                     return InetAddress.getByAddress(rawBytes).getCanonicalHostName();
                 });
                 String canonical = future.get(3, TimeUnit.SECONDS);
-                if (canonical == null) {
+                if (currentRunId.get() != expectedRunId) {
                     return;
                 }
-                canonical = canonical.trim();
-                while (canonical.endsWith(".")) {
-                    canonical = canonical.substring(0, canonical.length() - 1);
+                if (canonical != null) {
+                    canonical = canonical.trim();
+                    while (canonical.endsWith(".")) {
+                        canonical = canonical.substring(0, canonical.length() - 1);
+                    }
                 }
-                if (!canonical.isEmpty() && !canonical.equals(ipAddress) && currentRunId.get() == expectedRunId) {
+                JSObject ev = new JSObject();
+                ev.put("address", ipAddress);
+                if (canonical != null && !canonical.isEmpty() && !canonical.equals(ipAddress)) {
+                    ev.put("hostname", canonical);
+                } else {
+                    ev.put("hostname", JSObject.NULL);
+                    ev.put("reason", "none");
+                }
+                notifyListeners("hostname", ev);
+            } catch (TimeoutException te) {
+                if (future != null) {
+                    future.cancel(true);
+                }
+                if (currentRunId.get() == expectedRunId) {
                     JSObject ev = new JSObject();
                     ev.put("address", ipAddress);
-                    ev.put("hostname", canonical);
+                    ev.put("hostname", JSObject.NULL);
+                    ev.put("reason", "timeout");
                     notifyListeners("hostname", ev);
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                if (future != null) {
+                    future.cancel(true);
+                }
+                if (currentRunId.get() == expectedRunId) {
+                    JSObject ev = new JSObject();
+                    ev.put("address", ipAddress);
+                    ev.put("hostname", JSObject.NULL);
+                    ev.put("reason", "error");
+                    notifyListeners("hostname", ev);
+                }
+            }
         });
     }
 

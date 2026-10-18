@@ -158,7 +158,16 @@ public class TraceroutePlugin: CAPPlugin, CAPBridgedPlugin {
             memset(&sin, 0, MemoryLayout<sockaddr_in>.size)
             sin.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
             sin.sin_family = sa_family_t(AF_INET)
-            guard inet_pton(AF_INET, address, &sin.sin_addr) == 1 else { return }
+            guard inet_pton(AF_INET, address, &sin.sin_addr) == 1 else {
+                if self.isRunStillCurrent(runId) {
+                    self.notifyListeners("hostname", data: [
+                        "address": address,
+                        "hostname": NSNull(),
+                        "reason": "error"
+                    ])
+                }
+                return
+            }
 
             var hostBuffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             let gniStatus = withUnsafePointer(to: &sin) { ptr in
@@ -174,12 +183,35 @@ public class TraceroutePlugin: CAPPlugin, CAPBridgedPlugin {
                     )
                 }
             }
-            guard gniStatus == 0 else { return }
+            guard self.isRunStillCurrent(runId) else { return }
+            guard gniStatus == 0 else {
+                let reason: String
+                if gniStatus == EAI_NONAME {
+                    reason = "none"
+                } else if gniStatus == EAI_AGAIN {
+                    reason = "timeout"
+                } else {
+                    reason = "error"
+                }
+                self.notifyListeners("hostname", data: [
+                    "address": address,
+                    "hostname": NSNull(),
+                    "reason": reason
+                ])
+                return
+            }
             var name = String(cString: hostBuffer).trimmingCharacters(in: .whitespacesAndNewlines)
             while name.hasSuffix(".") {
                 name.removeLast()
             }
-            guard !name.isEmpty, name != address, self.isRunStillCurrent(runId) else { return }
+            guard !name.isEmpty, name != address else {
+                self.notifyListeners("hostname", data: [
+                    "address": address,
+                    "hostname": NSNull(),
+                    "reason": "none"
+                ])
+                return
+            }
             self.notifyListeners("hostname", data: [
                 "address": address,
                 "hostname": name

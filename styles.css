@@ -2480,3 +2480,79 @@ body.dark-mode .whois-chip-warn {
   flex: 0 1 auto !important;
 }
 
+.dns-type-label .pro-badge {
+  margin-left: 6px;
+  vertical-align: middle;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.pro-label-tap {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.pro-label-tap::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  top: -16px;
+  bottom: -9px;
+  min-height: 44px;
+}
+
+.pro-label-tap .pro-badge {
+  z-index: 1;
+}
+
+.pro-label-tap:active {
+  opacity: 0.65;
+  transform: scale(0.98);
+}
+
+.pro-label-tap:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.input-group input,
+.input-group select,
+.ping-count-input,
+.ping-continuous-btn {
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== TAB-BAR-HIDE EXPERIMENT: START ===== */
+.app-tab-bar.kbd-tabbar-anim {
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.app-tab-bar.kbd-tabbar-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(calc(100% + 500px)) !important;
+}
+
+.app-tab-bar.kbd-tabbar-invisible {
+  visibility: hidden !important;
+}
+
+.app-content.kbd-content-expanded {
+  padding-bottom: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-tab-bar.kbd-tabbar-anim {
+    transition: none !important;
+  }
+}
+/* ===== TAB-BAR-HIDE EXPERIMENT: END ===== */
+
+
