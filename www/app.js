@@ -71,8 +71,14 @@ function debugLog(message) {
   
   if (window._debugSaveTimeout) clearTimeout(window._debugSaveTimeout);
   window._debugSaveTimeout = setTimeout(() => {
+    window._debugSaveTimeout = null;
     try { if (typeof saveNotesToStorage === 'function') saveNotesToStorage(); } catch(e) {}
-    try { if (typeof saveNoteToFirebase === 'function') saveNoteToFirebase(currentNote); } catch(e) {}
+    try {
+      const noteToSave = (window.APP_DEBUG_CURRENT_NOTE_ID && Array.isArray(notes))
+        ? (notes.find(n => n && n.id === window.APP_DEBUG_CURRENT_NOTE_ID) || currentNote)
+        : currentNote;
+      if (typeof saveNoteToFirebase === 'function' && noteToSave) saveNoteToFirebase(noteToSave);
+    } catch(e) {}
   }, 1000);
 }
 
@@ -181,14 +187,24 @@ function syncNotesToFirebase() {
     });
     if (remoteNotes.length > 0) {
       const merged = [...remoteNotes];
+      let updatedDebugNote = null;
       notes.forEach(localNote => {
-        if (!merged.find(n => n.id === localNote.id)) {
+        const existingIdx = merged.findIndex(n => n.id === localNote.id);
+        if (existingIdx === -1) {
           merged.push(localNote); // keep local-only notes not yet synced
+        } else if (window.APP_DEBUG_CURRENT_NOTE_ID && localNote.id === window.APP_DEBUG_CURRENT_NOTE_ID &&
+                   typeof localNote.content === 'string' &&
+                   (!merged[existingIdx].content || localNote.content.length >= merged[existingIdx].content.length)) {
+          if (!merged[existingIdx].content || localNote.content.length > merged[existingIdx].content.length) {
+            updatedDebugNote = localNote;
+          }
+          merged[existingIdx] = localNote;
         }
       });
       merged.sort((a, b) => b.id.localeCompare(a.id));
       notes = merged;
       saveNotesToStorage();
+      if (updatedDebugNote) saveNoteToFirebase(updatedDebugNote);
       renderNotes();
     }
   }).catch(err => console.error("Error loading notes:", err));
@@ -335,6 +351,48 @@ function logConverterDebounced() {
 }
 
 let _cachedRevenueCatAppUserId = null;
+let _lastLoggedRcProState = null;
+let _lastLoggedRcOfferingsSig = null;
+
+function maskEmailForLog(email) {
+  if (email === null || email === undefined) return '(empty)';
+  const s = String(email).trim();
+  if (!s) return '(empty)';
+  const atIdx = s.indexOf('@');
+  if (atIdx <= 0 || atIdx === s.length - 1 || s.indexOf('@', atIdx + 1) !== -1) {
+    return '(invalid)';
+  }
+  const local = s.slice(0, atIdx);
+  const domain = s.slice(atIdx + 1);
+  if (local.length <= 2) {
+    return `${local.charAt(0)}***@${domain}`;
+  }
+  return `${local.charAt(0)}***${local.charAt(local.length - 1)}@${domain}`;
+}
+window.maskEmailForLog = maskEmailForLog;
+
+function maskUidForLog(uid) {
+  if (uid === null || uid === undefined || uid === '') return 'null';
+  const s = String(uid).trim();
+  if (!s || s === 'null') return 'null';
+  if (s.length <= 4) return `${s}...`;
+  return `${s.slice(0, 4)}...`;
+}
+window.maskUidForLog = maskUidForLog;
+
+function sanitizeErrorForLog(errOrMsg, knownEmail) {
+  let msg = (errOrMsg && typeof errOrMsg === 'object' && 'message' in errOrMsg)
+    ? String(errOrMsg.message)
+    : String(errOrMsg || '');
+  if (knownEmail && typeof knownEmail === 'string' && knownEmail.trim()) {
+    const trimmed = knownEmail.trim();
+    const masked = maskEmailForLog(trimmed);
+    msg = msg.split(trimmed).join(masked);
+  }
+  msg = msg.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (m) => maskEmailForLog(m));
+  return msg;
+}
+window.sanitizeErrorForLog = sanitizeErrorForLog;
 
 async function getRevenueCatAppUserId() {
   try {
@@ -344,7 +402,9 @@ async function getRevenueCatAppUserId() {
       return result && result.appUserID ? result.appUserID : null;
     }
   } catch (e) {
-    if (typeof window.debugLog === 'function') window.debugLog(`ERROR in getRevenueCatAppUserId: ${e.message}`);
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog(`ERROR in getRevenueCatAppUserId: ${sanitizeErrorForLog(e)}`);
+    }
   }
   return null;
 }
@@ -359,7 +419,9 @@ let _rcIdentityRetryTimer = null;
 let _rcIdentityRetryCount = 0;
 
 function rcIdentityLog(msg) {
-  if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat identity: ${msg}`);
+  if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+    window.debugLog(`RevenueCat identity: ${msg}`);
+  }
 }
 
 async function ensureRevenueCatIdentity(reason) {
@@ -378,15 +440,21 @@ async function ensureRevenueCatIdentity(reason) {
         _rcIdentityRetryCount = 0;
         return 'ok';
       }
-      rcIdentityLog(`signed in as ${user.uid} but RevenueCat user is ${current} (${reason}) - logging in`);
+      if (window.APP_DEBUG_ENABLED) {
+        rcIdentityLog(`signed in as ${maskUidForLog(user.uid)} but RevenueCat user is ${maskUidForLog(current)} (${reason}) - logging in`);
+      }
       await Purchases.logIn({ appUserID: user.uid });
       try { await Purchases.setEmail({ email: user.email }); } catch (e) { /* ignore */ }
       try { await Purchases.setDisplayName({ displayName: user.displayName || (user.email ? user.email.split('@')[0] : '') }); } catch (e) { /* ignore */ }
-      rcIdentityLog(`logIn succeeded (${reason})`);
+      if (window.APP_DEBUG_ENABLED) {
+        rcIdentityLog(`logIn succeeded (${reason})`);
+      }
       _rcIdentityRetryCount = 0;
       return 'loggedIn';
     } catch (e) {
-      rcIdentityLog(`logIn failed (${reason}): ${e && e.message ? e.message : e}`);
+      if (window.APP_DEBUG_ENABLED) {
+        rcIdentityLog(`logIn failed (${reason}): ${sanitizeErrorForLog(e, user && user.email)}`);
+      }
       scheduleRevenueCatIdentityRetry(reason);
       return 'failed';
     } finally {
@@ -401,7 +469,9 @@ function scheduleRevenueCatIdentityRetry(reason) {
   const delays = [15000, 60000, 180000];
   const delay = delays[_rcIdentityRetryCount];
   _rcIdentityRetryCount++;
-  rcIdentityLog(`retry ${_rcIdentityRetryCount} of 3 in ${delay / 1000}s (${reason})`);
+  if (window.APP_DEBUG_ENABLED) {
+    rcIdentityLog(`retry ${_rcIdentityRetryCount} of 3 in ${delay / 1000}s (${reason})`);
+  }
   _rcIdentityRetryTimer = setTimeout(() => {
     _rcIdentityRetryTimer = null;
     syncRevenueCatIdentity('retry');
@@ -434,8 +504,8 @@ async function refreshDebugUserIdDisplay() {
   const appUserId = await getRevenueCatAppUserId();
   _cachedRevenueCatAppUserId = appUserId;
   userIdStatus.textContent = appUserId ? 'Tap to copy' : 'Unavailable';
-  if (appUserId && typeof window.debugLog === 'function') {
-    window.debugLog(`RevenueCat App User ID: ${appUserId}`);
+  if (appUserId && window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+    window.debugLog(`RevenueCat App User ID: ${maskUidForLog(appUserId)}`);
   }
 }
 window.refreshDebugUserIdDisplay = refreshDebugUserIdDisplay;
@@ -525,6 +595,13 @@ async function fetchAndDisplayOfferings() {
     });
     
     const offerings = await Promise.race([Purchases.getOfferings(), timeoutPromise]);
+    const offeringsCount = (offerings && offerings.all) ? Object.keys(offerings.all).length : (offerings && offerings.current ? 1 : 0);
+    const packagesCount = (offerings && offerings.current && Array.isArray(offerings.current.availablePackages)) ? offerings.current.availablePackages.length : 0;
+    const offeringsSig = `${offeringsCount}:${packagesCount}`;
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function' && _lastLoggedRcOfferingsSig !== offeringsSig) {
+      _lastLoggedRcOfferingsSig = offeringsSig;
+      window.debugLog(`RevenueCat: getOfferings ok | offerings=${offeringsCount} | packages=${packagesCount}`);
+    }
     if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
       const packages = offerings.current.availablePackages;
       
@@ -548,6 +625,9 @@ async function fetchAndDisplayOfferings() {
     }
   } catch(err) {
     console.error("Failed to fetch offerings for UI:", err);
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog(`RevenueCat: getOfferings FAILED: ${sanitizeErrorForLog(err)}`);
+    }
     // If fetching fails, let's keep them disabled or show an error
     if (btnLifetime) { btnLifetime.textContent = 'Purchases Unavailable'; }
     if (btnYearly) { btnYearly.textContent = 'Offline'; }
@@ -561,27 +641,26 @@ function isProEntitlementActive(entitlements) {
 }
 
 async function updateRevenueCatSubscriptionState() {
-  if(typeof window.debugLog==='function') window.debugLog(`updateRevenueCatSubscriptionState() called`);
+  if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`updateRevenueCatSubscriptionState() called`);
   if (!useRevenueCat) return;
   try {
     const { Purchases } = window.Capacitor.Plugins;
-    if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: getCustomerInfo() called`);
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`RevenueCat: getCustomerInfo() called`);
     
     const customerInfoResult = await Purchases.getCustomerInfo();
-    
-    // LOG: Dump the ENTIRE raw getCustomerInfo() object
-    if (typeof window.debugLog === 'function') {
-       window.debugLog('RevenueCat: getCustomerInfo() RAW RESULT:\n' + JSON.stringify(customerInfoResult, null, 2).substring(0, 4000));
-    }
     
     // FIX: Capacitor SDK returns { customerInfo: { ... } }, so we must extract it properly
     const customerInfo = customerInfoResult.customerInfo || customerInfoResult;
     
     const activeEntitlements = customerInfo.entitlements ? customerInfo.entitlements.active : null;
+    const activeEntitlementCount = activeEntitlements ? Object.keys(activeEntitlements).length : 0;
+    const isProResult = isProEntitlementActive(activeEntitlements);
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function' && (_lastLoggedRcProState === null || _lastLoggedRcProState !== isProResult)) {
+      _lastLoggedRcProState = isProResult;
+      window.debugLog(`RevenueCat: getCustomerInfo ok | pro=${isProResult} | activeEntitlements=${activeEntitlementCount}`);
+    }
     
-
-    
-    if (isProEntitlementActive(activeEntitlements)) {
+    if (isProResult) {
       let activeProductId = '';
       // Strict check for the exact entitlement name verified in dashboard
       const ent = activeEntitlements['iSubnet Pro'] || activeEntitlements['pro_features'];
@@ -616,7 +695,9 @@ async function updateRevenueCatSubscriptionState() {
     }
   } catch(err) {
     console.error("RevenueCat Check Error:", err);
-    if (typeof window.debugLog === 'function') window.debugLog(`ERROR in updateRevenueCatSubscriptionState: ${err.message}\n${err.stack}`);
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog(`ERROR in updateRevenueCatSubscriptionState: ${sanitizeErrorForLog(err)}`);
+    }
     if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
       window.Capacitor.Plugins.FirebaseCrashlytics.recordException({ message: err.message, stacktrace: err.stack }).catch(()=>{});
     }
@@ -644,7 +725,7 @@ async function updateRevenueCatSubscriptionState() {
   }
 
 async function purchaseProductByPlan(planType) {
-  if (typeof window.debugLog === 'function') window.debugLog(`Button Tap: Plan selected - ${planType}`);
+  if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`Button Tap: Plan selected - ${planType}`);
 
   const isNative = window.Capacitor && window.Capacitor.getPlatform && (window.Capacitor.getPlatform() === 'ios' || window.Capacitor.getPlatform() === 'android');
   
@@ -686,10 +767,14 @@ async function purchaseProductByPlan(planType) {
         packageToBuy = packages[0];
       }
       
-      if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: purchasePackage() called for ${packageToBuy.identifier}`);
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`RevenueCat: purchasePackage() called`);
       const purchaseResult = await Purchases.purchasePackage({ aPackage: packageToBuy });
-      if (typeof window.debugLog === 'function') {
-        window.debugLog(`RevenueCat: purchasePackage() RAW RESULT for ${packageToBuy.identifier}:\n` + JSON.stringify(purchaseResult, null, 2).substring(0, 4000));
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        const pCustInfo = (purchaseResult && purchaseResult.customerInfo) ? purchaseResult.customerInfo : purchaseResult;
+        const pActiveEnts = (pCustInfo && pCustInfo.entitlements && pCustInfo.entitlements.active) ? pCustInfo.entitlements.active : null;
+        const pPro = isProEntitlementActive(pActiveEnts);
+        const pEntCount = pActiveEnts ? Object.keys(pActiveEnts).length : 0;
+        window.debugLog(`RevenueCat: purchasePackage ok | pro=${pPro} | activeEntitlements=${pEntCount}`);
       }
       
         if (isProEntitlementActive(purchaseResult.customerInfo.entitlements.active)) {
@@ -699,7 +784,9 @@ async function purchaseProductByPlan(planType) {
       showErrorDialog("Billing Error: No packages available in current offering.");
     }
   } catch(err) {
-    if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: purchasePackage() FAILED for ${packageToBuy ? packageToBuy.identifier : 'unknown'}: ${err.message} ${err.userCancelled ? '(user cancelled)' : ''}\n${JSON.stringify(err, null, 2)}`);
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog(`RevenueCat: purchasePackage() FAILED: ${sanitizeErrorForLog(err)}${err && err.userCancelled ? ' (user cancelled)' : ''}`);
+    }
     if (!err.userCancelled) {
       showErrorDialog("Purchase Error: " + err.message);
     }
@@ -725,7 +812,7 @@ const FREE_HISTORY_LIMIT = 4;
 let PRO_UNLOCKED = false; // will be set after SafeStorage is ready
 
 const PRO_FEATURE_INFO = {
-  tools: { title: '🌐 DNS Lookup', text: 'Look up A, AAAA, MX, NS, TXT, CNAME, SOA and CAA records for any domain, or enter an IP address to find its hostname with a reverse DNS (PTR) lookup. Copy, share or save results to Notes.' },
+  dns: { title: '🌐 All DNS record types', text: 'The free DNS Lookup shows A records. Pro unlocks AAAA, MX, NS, TXT, CNAME, SOA, CAA, ALL, and reverse DNS (PTR) lookups for IP addresses.' },
   splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' },
   ping: { title: '📶 Ping options', text: 'Choose how many probes to send (up to 100), or turn on -t to ping continuously until you stop it, with the newest result at the top.' },
   traceroute: { title: '🧭 Traceroute options', text: 'Set the maximum number of hops (up to 64), the probes per hop and the timeout, and turn on host name lookup to see a name for every hop.' },
@@ -777,6 +864,22 @@ if (typeof window !== 'undefined' && (!window.Capacitor || !window.Capacitor.isN
   };
 }
 
+function setProLabelInteractivity(containerEl, badgeEl, enabled) {
+  [containerEl, badgeEl].forEach((el) => {
+    if (!el) return;
+    if (enabled) {
+      el.classList.add('pro-label-tap');
+      el.setAttribute('role', 'button');
+      el.setAttribute('tabindex', '0');
+    } else {
+      el.classList.remove('pro-label-tap');
+      el.removeAttribute('role');
+      el.removeAttribute('tabindex');
+    }
+  });
+}
+window.setProLabelInteractivity = setProLabelInteractivity;
+
 let lastToolsLocked = null;
 function applyProState() {
   const badge = document.querySelector('.free-badge') || document.querySelector('.pro-badge');
@@ -787,7 +890,7 @@ function applyProState() {
   
   if (PRO_UNLOCKED) {
     if (lastToolsLocked !== false) {
-      if (typeof window.debugLog === 'function') window.debugLog('Tools tab: unlocked (PRO_UNLOCKED=true)');
+      if (typeof window.debugLog === 'function') window.debugLog('Pro state: unlocked (PRO_UNLOCKED=true)');
       lastToolsLocked = false;
     }
     // Swap FREE badge for PRO badge
@@ -811,12 +914,14 @@ function applyProState() {
       if (lockBadge) lockBadge.remove();
       // Specifically handle the base converter hex input visual state
       if (btn.id === 'base-hex-input') {
-        const label = document.querySelector('label[for="base-hex-input"]');
+        const label = document.querySelector('label[for="base-hex-input"], label[data-hex-label="true"]');
+        if (label) { label.setAttribute('for', 'base-hex-input'); setProLabelInteractivity(label, null, false); }
         if (label) {
           const labelBadge = label.querySelector('.pro-badge');
           if (labelBadge) labelBadge.remove();
         }
         btn.disabled = false;
+        btn.readOnly = false;
         if (btn.value === '🔒 Pro') {
           btn.value = ''; // Will be recomputed instantly
           if (typeof convertBase === 'function') {
@@ -830,7 +935,7 @@ function applyProState() {
     document.querySelectorAll('.pro-limit-banner').forEach(el => el.remove());
   } else {
     if (lastToolsLocked !== true) {
-      if (typeof window.debugLog === 'function') window.debugLog('Tools tab: locked (PRO_UNLOCKED=false)');
+      if (typeof window.debugLog === 'function') window.debugLog('Pro state: free (PRO_UNLOCKED=false)');
       lastToolsLocked = true;
     }
     // Lock FREE state back
@@ -857,7 +962,7 @@ function applyProState() {
     
     // Lock all generalized pro feature buttons
     allProBtns.forEach(btn => {
-      if (btn.id !== 'tab-btn-splitter' && btn.id !== 'tab-btn-tools' && !btn.querySelector('.pro-badge')) {
+      if (btn.id !== 'tab-btn-splitter' && !btn.querySelector('.pro-badge')) {
         // Create the pro badge
         const badgeEl = document.createElement('span');
         badgeEl.className = 'pro-badge';
@@ -866,16 +971,21 @@ function applyProState() {
         
         // If it's a label with a specific layout or input, handle it
         if (btn.id === 'base-hex-input') {
-          btn.disabled = true;
+          btn.disabled = false;
+          btn.readOnly = true;
           btn.value = '🔒 Pro';
           
           // Also add badge to the label for visibility
-          const label = document.querySelector('label[for="base-hex-input"]');
+          const label = document.querySelector('label[for="base-hex-input"], label[data-hex-label="true"]');
+          if (label) { label.setAttribute('data-hex-label', 'true'); }
           if (label && !label.querySelector('.pro-badge')) {
             const labelBadge = document.createElement('span');
             labelBadge.className = 'pro-badge';
             labelBadge.textContent = '🔒 Pro';
+            labelBadge.style.textTransform = 'none';
+            labelBadge.style.letterSpacing = '0';
             label.appendChild(labelBadge);
+            setProLabelInteractivity(label, labelBadge, true);
           }
         } else {
           btn.appendChild(badgeEl);
@@ -883,13 +993,9 @@ function applyProState() {
       }
     });
     
-    // Switch to another tab if currently on Splitter or Tools
+    // Switch to another tab if currently on Splitter
     const activeTab = document.querySelector('.tab-content.active');
-    if (activeTab && (activeTab.id === 'splitter-tab' || activeTab.id === 'tools-tab')) {
-      if (activeTab.id === 'tools-tab' && typeof window.debugLog === 'function') {
-        window.debugLog('Tools tab: active while locked, switching to Calculator');
-      }
-
+    if (activeTab && activeTab.id === 'splitter-tab') {
       const calcBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
       if (calcBtn) calcBtn.click();
     }
@@ -898,6 +1004,7 @@ function applyProState() {
     renderNotes();
     renderHistory();
   }
+  if (typeof window.updateDnsControls === 'function') window.updateDnsControls();
   if (typeof window.updatePingControls === 'function') window.updatePingControls();
   if (typeof window.updateTraceControls === 'function') window.updateTraceControls();
   if (typeof window.updateWhoisControls === 'function') window.updateWhoisControls();
@@ -1728,6 +1835,9 @@ function calculateIPv6() {
 let notes = [];
 
 function loadNotes() {
+  const activeDebugNote = (window.APP_DEBUG_ENABLED && window.APP_DEBUG_CURRENT_NOTE_ID && Array.isArray(notes))
+    ? notes.find(n => n && n.id === window.APP_DEBUG_CURRENT_NOTE_ID)
+    : null;
   const stored = SafeStorage.getItem('isubnet_notes_' + currentUserId);
   if (stored) {
     try {
@@ -1753,6 +1863,15 @@ function loadNotes() {
       }
     } else {
       notes = [];
+    }
+  }
+  if (activeDebugNote) {
+    const loadedIdx = notes.findIndex(n => n && n.id === activeDebugNote.id);
+    if (loadedIdx === -1) {
+      notes.unshift(activeDebugNote);
+    } else if (typeof activeDebugNote.content === 'string' &&
+               (!notes[loadedIdx].content || activeDebugNote.content.length >= notes[loadedIdx].content.length)) {
+      notes[loadedIdx] = activeDebugNote;
     }
   }
   renderNotes();
@@ -2237,11 +2356,30 @@ function showErrorDialog(message, options = {}) {
   const modal = document.getElementById('global-error-modal');
   if (!modal) return window.alert(message); // Fallback
   
-  document.getElementById('global-error-msg').textContent = message;
+  const iconEl = document.getElementById('global-error-icon');
+  const msgEl = document.getElementById('global-error-msg');
+  const isInfo = Boolean(options && options.variant === 'info');
+  if (iconEl) {
+    if (isInfo) {
+      iconEl.innerHTML = '<svg style="width: 34px; height: 34px; color: var(--accent-primary); display: inline-block; vertical-align: middle;" viewBox="0 0 24 24" aria-label="Info"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
+    } else {
+      iconEl.textContent = '⚠️';
+    }
+  }
+  if (msgEl) {
+    msgEl.style.textAlign = isInfo ? 'left' : '';
+    msgEl.style.whiteSpace = isInfo ? 'pre-line' : '';
+    msgEl.textContent = message;
+  }
   const btnOk = document.getElementById('global-error-ok');
   
   const cleanup = () => {
     modal.classList.add('hidden');
+    if (iconEl) iconEl.textContent = '⚠️';
+    if (msgEl) {
+      msgEl.style.textAlign = '';
+      msgEl.style.whiteSpace = '';
+    }
     btnOk.removeEventListener('click', onOk);
   };
   const onOk = () => { cleanup(); };
@@ -2368,7 +2506,27 @@ function switchToNotesTab() {
 
 // --- SHARING UTILITIES ---
 
-async function shareText(title, text) {
+const SHARE_DOUBLE_TAP_MS = 1500;
+const _lastShareTapByKey = Object.create(null);
+
+function isShareTapDuplicate(key) {
+  const k = String(key || 'default');
+  const now = Date.now();
+  const prev = _lastShareTapByKey[k] || 0;
+  if (prev > 0 && (now - prev) >= 0 && (now - prev) < SHARE_DOUBLE_TAP_MS) {
+    return true;
+  }
+  _lastShareTapByKey[k] = now;
+  return false;
+}
+
+async function shareText(title, text, skipDuplicateGuard = false) {
+  if (!skipDuplicateGuard && isShareTapDuplicate('shareText:' + String(title || 'default'))) {
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog('[Share] ui: share tap ignored | reason=double-tap');
+    }
+    return;
+  }
   if (!PRO_UNLOCKED) {
     text = text + "\n\n— Calculated with iSubnet";
   }
@@ -2967,7 +3125,23 @@ function setupBaseConverter() {
     if (!el) return;
     
     if (id === 'base-hex-input') {
+      el.addEventListener('pointerdown', (e) => { if (!PRO_UNLOCKED) { if (e.cancelable) e.preventDefault(); el.blur(); showProModal(); } });
       el.addEventListener('click', () => { if (!PRO_UNLOCKED) showProModal(); });
+      const hexLabel = document.querySelector('label[for="base-hex-input"], label[data-hex-label="true"]');
+      if (hexLabel) {
+        const onHexLabelActivate = (e) => {
+          if (PRO_UNLOCKED) return;
+          if (e && e.type === 'keydown') {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+          } else if (e && e.cancelable) {
+            e.preventDefault();
+          }
+          showProModal();
+        };
+        hexLabel.addEventListener('click', onHexLabelActivate);
+        hexLabel.addEventListener('keydown', onHexLabelActivate);
+      }
       el.addEventListener('focus', () => { if (!PRO_UNLOCKED) { el.blur(); showProModal(); } });
     }
     
@@ -4226,16 +4400,22 @@ function initSettings() {
   if (formSignup) {
     formSignup.addEventListener('submit', (e) => {
       e.preventDefault();
-      if (typeof window.debugLog === 'function') window.debugLog(`Button Tap: Account Submit`);
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`Button Tap: Account Submit`);
       const name = signupNameInput.value.trim();
       const email = document.getElementById('signup-email').value.trim();
       const password = document.getElementById('signup-password').value;
       
       if (isSignUpMode && !name) {
+        if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+          window.debugLog(`Firebase Auth: signUp attempt for ${maskEmailForLog(email)}`);
+        }
         signupError.textContent = 'Please fill out all fields.';
         return;
       }
       if (!email || !password) {
+        if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+          window.debugLog(`Firebase Auth: ${isSignUpMode ? 'signUp' : 'signIn'} attempt for ${maskEmailForLog(email)}`);
+        }
         signupError.textContent = 'Please fill out all fields.';
         return;
       }
@@ -4246,13 +4426,17 @@ function initSettings() {
         
         let promise;
         if (isSignUpMode) {
-          if(typeof window.debugLog==='function') window.debugLog(`Firebase Auth: signUp attempt for ${email}`);
+          if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+            window.debugLog(`Firebase Auth: signUp attempt for ${maskEmailForLog(email)}`);
+          }
           promise = firebase.auth().createUserWithEmailAndPassword(email, password)
             .then((userCredential) => {
               return userCredential.user.updateProfile({ displayName: name });
             });
         } else {
-          if(typeof window.debugLog==='function') window.debugLog(`Firebase Auth: signIn attempt for ${email}`);
+          if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+            window.debugLog(`Firebase Auth: signIn attempt for ${maskEmailForLog(email)}`);
+          }
           promise = firebase.auth().signInWithEmailAndPassword(email, password);
         }
         
@@ -4262,17 +4446,23 @@ function initSettings() {
             try {
               const user = firebase.auth().currentUser;
               if (user) {
-                if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: Awaiting logIn({ appUserID: ${user.uid} }) in modal flow`);
+                if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+                  window.debugLog(`RevenueCat: Awaiting logIn({ appUserID: ${maskUidForLog(user.uid)} }) in modal flow`);
+                }
                 const { Purchases } = window.Capacitor.Plugins;
                 const logInResult = await Purchases.logIn({ appUserID: user.uid });
-                if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() resolved in modal flow. Created: ${logInResult && logInResult.created ? 'true' : 'false'}`);
+                if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+                  window.debugLog(`RevenueCat: logIn() resolved in modal flow. Created: ${logInResult && logInResult.created ? 'true' : 'false'}`);
+                }
                 const displayName = user.displayName || user.email.split('@')[0];
                 try { await Purchases.setEmail({ email: user.email }); } catch(e) {}
                 try { await Purchases.setDisplayName({ displayName: displayName }); } catch(e) {}
                 updateRevenueCatSubscriptionState();
               }
             } catch (err) {
-              if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() error in modal flow: ${err.message}`);
+              if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+                window.debugLog(`RevenueCat: logIn() error in modal flow: ${sanitizeErrorForLog(err, email)}`);
+              }
               scheduleRevenueCatIdentityRetry('sign-in login failed');
             }
           }
@@ -4289,6 +4479,9 @@ function initSettings() {
             modalSettings.classList.remove('hidden');
           }
         }).catch((error) => {
+          if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+            window.debugLog(`Firebase Auth: ${isSignUpMode ? 'signUp' : 'signIn'} error: ${sanitizeErrorForLog(error, email)}`);
+          }
           btnAccountSubmit.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
           btnAccountSubmit.disabled = false;
           if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
@@ -4298,6 +4491,9 @@ function initSettings() {
           }
         });
       } else {
+        if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+          window.debugLog(`Firebase Auth: ${isSignUpMode ? 'signUp' : 'signIn'} attempt for ${maskEmailForLog(email)}`);
+        }
         signupError.textContent = '';
         const displayName = isSignUpMode ? name : email.split('@')[0];
         accountInfo.innerHTML = `Signed in as <strong>${escapeHTML(displayName)}</strong><br><span style="font-size:11px; opacity:0.7;">${escapeHTML(email)}</span>`;
@@ -4323,16 +4519,23 @@ function initSettings() {
   // Firebase Auth State Observer
   if (useRealFirebase) {
     firebase.auth().onAuthStateChanged((user) => {
-      if(typeof window.debugLog==='function') window.debugLog(`Firebase Auth: onAuthStateChanged fired. User UID: ${user ? user.uid : 'null'}`);
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog(`Firebase Auth: onAuthStateChanged fired. User UID: ${user ? maskUidForLog(user.uid) : 'null'}`);
+      }
       if (user) {
         if (window.Capacitor && window.Capacitor.Plugins.FirebaseCrashlytics) {
           try {
             window.Capacitor.Plugins.FirebaseCrashlytics.setUserId({ userId: user.uid }).catch(() => {});
-            if (typeof window.debugLog === 'function') window.debugLog(`Crashlytics: setUserId(${user.uid})`);
+            if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+              window.debugLog(`Crashlytics: setUserId(${maskUidForLog(user.uid)})`);
+            }
           } catch (e) {}
         }
         // Migrate local data to account
         if (currentUserId === 'local') {
+          if (window.APP_DEBUG_ENABLED && window.APP_DEBUG_CURRENT_NOTE_ID && typeof saveNotesToStorage === 'function') {
+            try { saveNotesToStorage(); } catch (e) {}
+          }
           const localNotesRaw = SafeStorage.getItem('isubnet_notes_local');
           const localHistoryRaw = SafeStorage.getItem('isubnet_history_local');
           
@@ -4375,19 +4578,25 @@ function initSettings() {
         if (useRevenueCat) {
           try {
             const { Purchases } = window.Capacitor.Plugins;
-            if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn({ appUserID: ${user.uid} }) called`);
+            if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+              window.debugLog(`RevenueCat: logIn({ appUserID: ${maskUidForLog(user.uid)} }) called`);
+            }
             Purchases.logIn({ appUserID: user.uid })
               .then(async (logInResult) => {
-                if (typeof window.debugLog === 'function') window.debugLog(`RevenueCat: logIn() resolved for UID: ${user.uid}. Created: ${logInResult && logInResult.created ? 'true' : 'false'}`);
+                if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+                  window.debugLog(`RevenueCat: logIn() resolved for UID: ${maskUidForLog(user.uid)}. Created: ${logInResult && logInResult.created ? 'true' : 'false'}`);
+                }
                 const displayName = user.displayName || user.email.split('@')[0];
-                try { await Purchases.setEmail({ email: user.email }); } catch(e) { if(typeof window.debugLog==='function') window.debugLog(`RevenueCat: setEmail failed (ignored) - ` + e.message); }
-                try { await Purchases.setDisplayName({ displayName: displayName }); } catch(e) { if(typeof window.debugLog==='function') window.debugLog(`RevenueCat: setDisplayName failed (ignored) - ` + e.message); }
+                try { await Purchases.setEmail({ email: user.email }); } catch(e) { if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`RevenueCat: setEmail failed (ignored) - ` + sanitizeErrorForLog(e, user.email)); }
+                try { await Purchases.setDisplayName({ displayName: displayName }); } catch(e) { if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog(`RevenueCat: setDisplayName failed (ignored) - ` + sanitizeErrorForLog(e, user.email)); }
                 updateRevenueCatSubscriptionState();
               })
               .catch(err => {
                 console.error("RevenueCat login error:", err);
                 scheduleRevenueCatIdentityRetry('auth state login failed');
-                if (typeof window.debugLog==="function") window.debugLog(`ERROR in logIn: ${err.message}\n${err.stack}`);
+                if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+                  window.debugLog(`ERROR in logIn: ${sanitizeErrorForLog(err, user.email)}`);
+                }
                 updateRevenueCatSubscriptionState();
               });
           } catch(e) {
@@ -4674,6 +4883,7 @@ function initQuickPaste() {
         inputEl.value = text.trim();
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         if (callback) callback();
+        inputEl.focus();
         return true;
       }
       return false;
@@ -5062,7 +5272,431 @@ function setupInputSanitizers() {
   });
 }
 
+// ===== TAB-BAR-HIDE EXPERIMENT: START =====
+// EXPERIMENT (build 113): hide the bottom tab bar while the keyboard is open. Set to false to get exactly the build 112 behaviour. To remove: delete everything between the two "TAB-BAR-HIDE EXPERIMENT" markers.
+const HIDE_TAB_BAR_WHEN_KEYBOARD_OPEN = true;
+const TAB_BAR_GRACE_MS = 420;
+const TAB_BAR_VIEWPORT_FULL_MS = 500;
+const TAB_BAR_VIEWPORT_SHRINK_MS = 300;
+
+let isTabBarHiddenByExperiment = false;
+let tabBarShowDebounceTimer = null;
+let tabBarPendingShowReason = null;
+let tabBarVisibilityTimer = null;
+let tabBarGraceTimer = null;
+let tabBarViewportFullTimer = null;
+let tabBarViewportShrinkTimer = null;
+let tabBarShrinkCandidateHeight = 0;
+let tabBarShrinkCandidateElement = null;
+let keyboardShownByEvents = false;
+let lastKeyboardWillShowTs = 0;
+let lastKeyboardHideTs = 0;
+let maxExperimentViewportHeight = 0;
+let lastExperimentViewportWidth = 0;
+let needsViewportBaselineResetAfterKbd = false;
+let viewportShrunkWhileHidden = false;
+let tabBarExperimentInitialized = false;
+
+function isTabBarHideExperimentActive() {
+  if (typeof window._HIDE_TAB_BAR_WHEN_KEYBOARD_OPEN_OVERRIDE === 'boolean') {
+    return window._HIDE_TAB_BAR_WHEN_KEYBOARD_OPEN_OVERRIDE;
+  }
+  return HIDE_TAB_BAR_WHEN_KEYBOARD_OPEN;
+}
+
+function getExperimentViewportHeight() {
+  const vv = window.visualViewport;
+  if (vv && typeof vv.height === 'number') {
+    return vv.height;
+  }
+  return window.innerHeight || 0;
+}
+
+function getExperimentViewportWidth() {
+  return window.innerWidth || (window.visualViewport && typeof window.visualViewport.width === 'number' ? window.visualViewport.width : 0) || 0;
+}
+
+function updateMaxExperimentViewportHeight() {
+  const vh = getExperimentViewportHeight();
+  const vw = getExperimentViewportWidth();
+  if (vw > 0) {
+    if (lastExperimentViewportWidth === 0) {
+      lastExperimentViewportWidth = vw;
+    } else if (Math.abs(vw - lastExperimentViewportWidth) > 50) {
+      lastExperimentViewportWidth = vw;
+      cancelTabBarViewportShrinkTimer();
+      cancelTabBarViewportFullTimer();
+      if (!keyboardShownByEvents) {
+        maxExperimentViewportHeight = vh > 0 ? vh : 0;
+        needsViewportBaselineResetAfterKbd = false;
+      } else {
+        maxExperimentViewportHeight = 0;
+        needsViewportBaselineResetAfterKbd = true;
+      }
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[KBD] tabbar: viewport baseline reset | reason=resize');
+      }
+      return vh;
+    }
+  }
+  if (needsViewportBaselineResetAfterKbd && !keyboardShownByEvents && vh > 0) {
+    maxExperimentViewportHeight = vh;
+    needsViewportBaselineResetAfterKbd = false;
+  }
+  if (!keyboardShownByEvents && vh > maxExperimentViewportHeight) {
+    maxExperimentViewportHeight = vh;
+  } else if (maxExperimentViewportHeight === 0 && !needsViewportBaselineResetAfterKbd && vh > 0) {
+    maxExperimentViewportHeight = vh;
+  }
+  return vh;
+}
+
+function isExperimentTextEntry(el) {
+  if (!el || !el.tagName) return false;
+  if (el.disabled || el.readOnly) return false;
+  const tag = el.tagName.toUpperCase();
+  if (tag === 'TEXTAREA') return true;
+  if (tag === 'INPUT') {
+    const type = (el.getAttribute('type') || 'text').toLowerCase();
+    return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(type);
+  }
+  return Boolean(el.isContentEditable);
+}
+
+function getEffectiveTabBarHeight(tabBarEl) {
+  const el = tabBarEl || document.querySelector('.app-tab-bar');
+  if (!el) return 0;
+  if (isTabBarHideExperimentActive() && (isTabBarHiddenByExperiment || el.classList.contains('kbd-tabbar-hidden'))) {
+    return 0;
+  }
+  return el.getBoundingClientRect().height || el.offsetHeight || 0;
+}
+
+function getEffectiveTabBarTop(tabBarEl) {
+  const el = tabBarEl || document.querySelector('.app-tab-bar');
+  if (getEffectiveTabBarHeight(el) === 0) {
+    const vv = window.visualViewport;
+    return (vv && vv.height > 0) ? (vv.offsetTop + vv.height) : window.innerHeight;
+  }
+  return el ? el.getBoundingClientRect().top : window.innerHeight;
+}
+
+function cancelTabBarGraceTimer(logCancelReason) {
+  if (tabBarGraceTimer) {
+    clearTimeout(tabBarGraceTimer);
+    tabBarGraceTimer = null;
+    if (logCancelReason && window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog(`[KBD] tabbar: grace timer cancelled | reason=${logCancelReason}`);
+    }
+  }
+}
+
+function cancelTabBarViewportFullTimer() {
+  if (tabBarViewportFullTimer) {
+    clearTimeout(tabBarViewportFullTimer);
+    tabBarViewportFullTimer = null;
+  }
+}
+
+function cancelTabBarViewportShrinkTimer() {
+  if (tabBarViewportShrinkTimer) {
+    clearTimeout(tabBarViewportShrinkTimer);
+    tabBarViewportShrinkTimer = null;
+  }
+  tabBarShrinkCandidateHeight = 0;
+  tabBarShrinkCandidateElement = null;
+}
+
+function hideTabBarForKeyboard(reason) {
+  if (!isTabBarHideExperimentActive()) return;
+  updateMaxExperimentViewportHeight();
+  const tabBar = document.querySelector('.app-tab-bar');
+  const content = document.querySelector('.app-content');
+  if (!tabBar) return;
+  if (tabBarShowDebounceTimer) {
+    clearTimeout(tabBarShowDebounceTimer);
+    tabBarShowDebounceTimer = null;
+    tabBarPendingShowReason = null;
+  }
+  cancelTabBarViewportFullTimer();
+  cancelTabBarViewportShrinkTimer();
+  if (!isTabBarHiddenByExperiment) {
+    if (tabBarVisibilityTimer) {
+      clearTimeout(tabBarVisibilityTimer);
+      tabBarVisibilityTimer = null;
+    }
+    isTabBarHiddenByExperiment = true;
+    viewportShrunkWhileHidden = (reason === 'viewport-shrink');
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog(`[KBD] tabbar: hide | reason=${reason}`);
+    }
+    tabBar.classList.add('kbd-tabbar-anim', 'kbd-tabbar-hidden');
+    if (content) content.classList.add('kbd-content-expanded');
+    const reducedMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (reducedMotion) {
+      tabBar.classList.add('kbd-tabbar-invisible');
+    } else {
+      tabBarVisibilityTimer = setTimeout(() => {
+        tabBarVisibilityTimer = null;
+        if (isTabBarHiddenByExperiment) {
+          tabBar.classList.add('kbd-tabbar-invisible');
+        }
+      }, 185);
+    }
+  }
+}
+
+function performShowTabBarForKeyboard(reason) {
+  if (tabBarShowDebounceTimer) {
+    clearTimeout(tabBarShowDebounceTimer);
+    tabBarShowDebounceTimer = null;
+    tabBarPendingShowReason = null;
+  }
+  if (tabBarVisibilityTimer) {
+    clearTimeout(tabBarVisibilityTimer);
+    tabBarVisibilityTimer = null;
+  }
+  cancelTabBarGraceTimer(null);
+  cancelTabBarViewportFullTimer();
+  cancelTabBarViewportShrinkTimer();
+  viewportShrunkWhileHidden = false;
+  if (!isTabBarHiddenByExperiment) return;
+  isTabBarHiddenByExperiment = false;
+  const tabBar = document.querySelector('.app-tab-bar');
+  const content = document.querySelector('.app-content');
+  if (tabBar) {
+    tabBar.classList.remove('kbd-tabbar-invisible', 'kbd-tabbar-hidden');
+    if (reason === 'keyboard-gone' || reason === 'viewport-full') {
+      tabBar.style.bottom = '';
+    }
+  }
+  if (content) {
+    content.classList.remove('kbd-content-expanded');
+    if (reason === 'keyboard-gone' || reason === 'viewport-full') {
+      content.style.paddingBottom = '';
+    }
+  }
+  if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+    window.debugLog(`[KBD] tabbar: show | reason=${reason}`);
+  }
+}
+
+function startTabBarGraceTimer() {
+  if (!isTabBarHideExperimentActive()) return;
+  if (!isTabBarHiddenByExperiment) return;
+  if (tabBarGraceTimer) {
+    clearTimeout(tabBarGraceTimer);
+    tabBarGraceTimer = null;
+  }
+  const willShowTsAtStart = lastKeyboardWillShowTs;
+  if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+    window.debugLog('[KBD] tabbar: grace timer start');
+  }
+  tabBarGraceTimer = setTimeout(() => {
+    tabBarGraceTimer = null;
+    if (!isTabBarHideExperimentActive() || !isTabBarHiddenByExperiment) return;
+    if (keyboardShownByEvents || lastKeyboardWillShowTs > willShowTsAtStart) return;
+    performShowTabBarForKeyboard('keyboard-gone');
+  }, TAB_BAR_GRACE_MS);
+}
+
+function scheduleShowTabBarForKeyboard(reason, immediate = false) {
+  if (!isTabBarHideExperimentActive()) return;
+  if (!isTabBarHiddenByExperiment && !tabBarShowDebounceTimer) return;
+  if (immediate) {
+    if (isExperimentTextEntry(document.activeElement)) return;
+    performShowTabBarForKeyboard(reason);
+    return;
+  }
+  if (tabBarShowDebounceTimer) {
+    clearTimeout(tabBarShowDebounceTimer);
+  }
+  if (tabBarPendingShowReason !== 'focus-lost' || reason === 'focus-lost') {
+    tabBarPendingShowReason = reason;
+  }
+  const effectiveReason = tabBarPendingShowReason || reason;
+  tabBarShowDebounceTimer = setTimeout(() => {
+    tabBarShowDebounceTimer = null;
+    tabBarPendingShowReason = null;
+    if (!isTabBarHideExperimentActive() || !isTabBarHiddenByExperiment) return;
+    if (isExperimentTextEntry(document.activeElement)) {
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[KBD] tabbar: show deferred | reason=field-still-focused');
+      }
+      return;
+    }
+    performShowTabBarForKeyboard(effectiveReason);
+  }, 160);
+}
+
+function onTabBarExperimentKeyboardShow() {
+  if (!isTabBarHideExperimentActive()) return;
+  keyboardShownByEvents = true;
+  lastKeyboardWillShowTs = Date.now();
+  cancelTabBarGraceTimer('keyboard-show');
+  cancelTabBarViewportFullTimer();
+  cancelTabBarViewportShrinkTimer();
+  hideTabBarForKeyboard('keyboard-show');
+}
+
+function onTabBarExperimentKeyboardDidShow() {
+  if (!isTabBarHideExperimentActive()) return;
+  keyboardShownByEvents = true;
+  cancelTabBarGraceTimer('keyboard-show');
+  cancelTabBarViewportFullTimer();
+  cancelTabBarViewportShrinkTimer();
+  if (!isTabBarHiddenByExperiment) {
+    hideTabBarForKeyboard('keyboard-show');
+  }
+}
+
+function onTabBarExperimentKeyboardHide() {
+  if (!isTabBarHideExperimentActive()) return;
+  keyboardShownByEvents = false;
+  lastKeyboardHideTs = Date.now();
+  cancelTabBarViewportShrinkTimer();
+  startTabBarGraceTimer();
+  scheduleShowTabBarForKeyboard('keyboard-hide', false);
+}
+
+function onTabBarExperimentViewportResize() {
+  if (!isTabBarHideExperimentActive()) return;
+  const vh = updateMaxExperimentViewportHeight();
+  if (!isTabBarHiddenByExperiment) {
+    cancelTabBarViewportFullTimer();
+    const activeEl = document.activeElement;
+    if (vh <= 0 || maxExperimentViewportHeight <= 0 || !isExperimentTextEntry(activeEl) || (maxExperimentViewportHeight - vh) <= 150) {
+      cancelTabBarViewportShrinkTimer();
+      return;
+    }
+    if (tabBarViewportShrinkTimer && tabBarShrinkCandidateElement === activeEl && Math.abs(vh - tabBarShrinkCandidateHeight) <= 3) {
+      return;
+    }
+    if (tabBarViewportShrinkTimer) {
+      clearTimeout(tabBarViewportShrinkTimer);
+      tabBarViewportShrinkTimer = null;
+    }
+    tabBarShrinkCandidateHeight = vh;
+    tabBarShrinkCandidateElement = activeEl;
+    const candidateVh = vh;
+    const candidateEl = activeEl;
+    const hideTsAtStart = lastKeyboardHideTs;
+    tabBarViewportShrinkTimer = setTimeout(() => {
+      tabBarViewportShrinkTimer = null;
+      if (!isTabBarHideExperimentActive() || isTabBarHiddenByExperiment) return;
+      if (lastKeyboardHideTs > hideTsAtStart) return;
+      const currentEl = document.activeElement;
+      if (!currentEl || currentEl !== candidateEl || !isExperimentTextEntry(currentEl)) return;
+      const currentVh = updateMaxExperimentViewportHeight();
+      if (currentVh <= 0 || maxExperimentViewportHeight <= 0) return;
+      if ((maxExperimentViewportHeight - currentVh) <= 150) return;
+      if (Math.abs(currentVh - candidateVh) > 3) return;
+      hideTabBarForKeyboard('viewport-shrink');
+    }, TAB_BAR_VIEWPORT_SHRINK_MS);
+    return;
+  }
+  cancelTabBarViewportShrinkTimer();
+  if (vh <= 0 || maxExperimentViewportHeight <= 0) {
+    cancelTabBarViewportFullTimer();
+    return;
+  }
+  const isAtFullHeight = (maxExperimentViewportHeight - vh) <= 2;
+  if (!isAtFullHeight) {
+    viewportShrunkWhileHidden = true;
+    cancelTabBarViewportFullTimer();
+    return;
+  }
+  // Viewport is back within 2px of full height while the bar is hidden.
+  if (!viewportShrunkWhileHidden && !keyboardShownByEvents) {
+    return;
+  }
+  if (tabBarViewportFullTimer) return;
+  const willShowTsAtResize = lastKeyboardWillShowTs;
+  tabBarViewportFullTimer = setTimeout(() => {
+    tabBarViewportFullTimer = null;
+    if (!isTabBarHideExperimentActive() || !isTabBarHiddenByExperiment) return;
+    if (lastKeyboardWillShowTs > willShowTsAtResize) return;
+    const currentVh = updateMaxExperimentViewportHeight();
+    if (currentVh <= 0 || (maxExperimentViewportHeight - currentVh) > 2) return;
+    keyboardShownByEvents = false;
+    performShowTabBarForKeyboard('viewport-full');
+  }, TAB_BAR_VIEWPORT_FULL_MS);
+}
+
+function setupTabBarHideExperiment() {
+  window.getEffectiveTabBarHeight = getEffectiveTabBarHeight;
+  window.getEffectiveTabBarTop = getEffectiveTabBarTop;
+  updateMaxExperimentViewportHeight();
+  if (tabBarExperimentInitialized) return;
+  tabBarExperimentInitialized = true;
+
+  document.addEventListener('focusin', (e) => {
+    if (!isTabBarHideExperimentActive()) return;
+    if (isExperimentTextEntry(e.target)) {
+      hideTabBarForKeyboard('focus');
+    }
+  });
+
+  document.addEventListener('focusout', (e) => {
+    if (!isTabBarHideExperimentActive()) return;
+    cancelTabBarViewportShrinkTimer();
+    if (isExperimentTextEntry(e.target)) {
+      scheduleShowTabBarForKeyboard('focus-lost', false);
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!isTabBarHideExperimentActive()) return;
+    if (document.visibilityState === 'visible' && isTabBarHiddenByExperiment && !isExperimentTextEntry(document.activeElement)) {
+      scheduleShowTabBarForKeyboard('resume', true);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    if (!isTabBarHideExperimentActive()) return;
+    if (isTabBarHiddenByExperiment && !isExperimentTextEntry(document.activeElement)) {
+      scheduleShowTabBarForKeyboard('safety', true);
+    }
+  });
+
+  window.addEventListener('blur', () => {
+    if (!isTabBarHideExperimentActive()) return;
+    if (isTabBarHiddenByExperiment && !isExperimentTextEntry(document.activeElement)) {
+      scheduleShowTabBarForKeyboard('safety', true);
+    }
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      onTabBarExperimentViewportResize();
+    });
+  }
+  window.addEventListener('resize', () => {
+    onTabBarExperimentViewportResize();
+  });
+  window.addEventListener('orientationchange', () => {
+    if (!isTabBarHideExperimentActive()) return;
+    cancelTabBarViewportShrinkTimer();
+    cancelTabBarViewportFullTimer();
+    onTabBarExperimentViewportResize();
+  });
+
+  if (typeof MutationObserver !== 'undefined') {
+    const modalObserver = new MutationObserver(() => {
+      if (!isTabBarHideExperimentActive()) return;
+      if (isTabBarHiddenByExperiment && !isExperimentTextEntry(document.activeElement)) {
+        scheduleShowTabBarForKeyboard('safety', true);
+      }
+    });
+    document.querySelectorAll('.pro-modal-overlay').forEach((el) => {
+      modalObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+    });
+  }
+}
+// ===== TAB-BAR-HIDE EXPERIMENT: END =====
+
 function setupKeyboardAvoidance() {
+  setupTabBarHideExperiment(); // TAB-BAR-HIDE EXPERIMENT hook
   const dlog = (msg) => { if (typeof window.debugLog === 'function') window.debugLog(`[KBD] ${msg}`); };
 
   if (!(window.Capacitor && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins.Keyboard)) {
@@ -5181,7 +5815,7 @@ function setupKeyboardAvoidance() {
       const neededOffset = Math.max(0, height - alreadyResizedBy);
       dlog(`  fullViewportHeight=${fullViewportHeight} innerHeight=${window.innerHeight} alreadyResizedBy=${alreadyResizedBy} -> neededOffset=${neededOffset} (raw height=${height})`);
       tabBar.style.bottom = `${neededOffset}px`;
-      content.style.paddingBottom = `${baseContentPaddingBottom + neededOffset}px`;
+      content.style.paddingBottom = `${(getEffectiveTabBarHeight(tabBar) === 0 ? 12 : baseContentPaddingBottom) + neededOffset}px`; // TAB-BAR-HIDE EXPERIMENT hook
     } else {
       tabBar.style.bottom = '';
       content.style.paddingBottom = '';
@@ -5195,7 +5829,7 @@ function setupKeyboardAvoidance() {
       dlog(`scrollFocusedIntoView() no focused input/textarea (activeElement=${active ? active.tagName : 'none'})`);
       return;
     }
-    const tabBarTop = tabBar.getBoundingClientRect().top;
+    const tabBarTop = getEffectiveTabBarTop(tabBar); // TAB-BAR-HIDE EXPERIMENT hook
     const margin = 12;
     const rect = active.getBoundingClientRect();
     dlog(`scrollFocusedIntoView() active=${active.tagName}#${active.id} rect.top=${rect.top} rect.bottom=${rect.bottom} tabBarTop=${tabBarTop} content.scrollTop(before)=${content.scrollTop}`);
@@ -5247,6 +5881,7 @@ function setupKeyboardAvoidance() {
 
   Keyboard.addListener('keyboardWillShow', (info) => {
     dlog(`EVENT keyboardWillShow fired, info=${JSON.stringify(info)}`);
+    onTabBarExperimentKeyboardShow(); // TAB-BAR-HIDE EXPERIMENT hook
     const height = (info && info.keyboardHeight) || 0;
     if (!isIOS) {
       applyKeyboardHeight(height);
@@ -5266,6 +5901,7 @@ function setupKeyboardAvoidance() {
   });
   Keyboard.addListener('keyboardDidShow', (info) => {
     dlog(`EVENT keyboardDidShow fired, info=${JSON.stringify(info)}`);
+    onTabBarExperimentKeyboardDidShow(); // TAB-BAR-HIDE EXPERIMENT hook
     if (!isIOS) {
       applyKeyboardHeight((info && info.keyboardHeight) || 0);
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -5289,11 +5925,13 @@ function setupKeyboardAvoidance() {
   });
   Keyboard.addListener('keyboardWillHide', () => {
     dlog(`EVENT keyboardWillHide fired`);
+    onTabBarExperimentKeyboardHide(); // TAB-BAR-HIDE EXPERIMENT hook
     clearKeyboardShowFallback();
     applyKeyboardHeight(0);
   });
   Keyboard.addListener('keyboardDidHide', () => {
     dlog(`EVENT keyboardDidHide fired`);
+    onTabBarExperimentKeyboardHide(); // TAB-BAR-HIDE EXPERIMENT hook
     if (isIOS) trackFullViewportHeight();
     snapshot('  after keyboardDidHide');
   });
@@ -5341,6 +5979,16 @@ function init() {
   let debugRevealTapTimer = null;
   const versionFooter = document.getElementById('settings-version-footer');
   const debugRow = document.getElementById('debug-logging-row');
+  const debugControls = document.getElementById('debug-logging-controls') || debugRow;
+  if (debugRow) debugRow.classList.remove('hidden');
+  const ensureDebugControlsIfLoggingOn = () => {
+    if (window.APP_DEBUG_ENABLED) {
+      if (chkDebugLog) chkDebugLog.checked = true;
+      if (debugControls) debugControls.classList.remove('hidden');
+    }
+  };
+  const btnSettingsOpen = document.getElementById('btn-settings');
+  if (btnSettingsOpen) btnSettingsOpen.addEventListener('click', ensureDebugControlsIfLoggingOn);
 
   // Show the real app version/build (iOS: marketing version + build number; Android: versionName + versionCode).
   if (versionFooter) {
@@ -5364,9 +6012,13 @@ function init() {
       if (debugRevealTapCount >= 7) {
         debugRevealTapCount = 0;
         clearTimeout(debugRevealTapTimer);
-        debugRow.classList.toggle('hidden');
+        if (window.APP_DEBUG_ENABLED) {
+          debugControls.classList.remove('hidden');
+        } else {
+          debugControls.classList.toggle('hidden');
+        }
         if (typeof window.debugLog === 'function') {
-          window.debugLog(debugRow.classList.contains('hidden') ? 'Debug Logging row hidden via gesture' : 'Debug Logging row revealed via gesture');
+          window.debugLog(debugControls.classList.contains('hidden') ? 'Debug Logging row hidden via gesture' : 'Debug Logging row revealed via gesture');
         }
       }
     });
@@ -5375,13 +6027,15 @@ function init() {
   if (chkDebugLog) {
     chkDebugLog.checked = window.APP_DEBUG_ENABLED;
     if (window.APP_DEBUG_ENABLED && debugRow) {
-      debugRow.classList.remove('hidden');
+      debugControls.classList.remove('hidden');
     }
     chkDebugLog.addEventListener('change', (e) => {
       window.APP_DEBUG_ENABLED = e.target.checked;
       SafeStorage.setItem('isubnet_debug', window.APP_DEBUG_ENABLED ? 'true' : 'false');
 
       if (window.APP_DEBUG_ENABLED) {
+        _lastLoggedRcProState = null;
+        _lastLoggedRcOfferingsSig = null;
         window.APP_DEBUG_START_TIME = Date.now();
         SafeStorage.setItem('isubnet_debug_start', window.APP_DEBUG_START_TIME.toString());
         window._debugReminderInterval = setInterval(window.checkDebugReminder, 60000);
@@ -5393,7 +6047,7 @@ function init() {
         debugLog("=== DEBUG LOGGING DISABLED ===");
         window.APP_DEBUG_CURRENT_NOTE_ID = null;
         SafeStorage.removeItem('isubnet_debug_note_id');
-        if (debugRow) debugRow.classList.add('hidden');
+        if (debugControls && !window.APP_DEBUG_ENABLED) debugControls.classList.add('hidden');
       }
       refreshDebugUserIdDisplay();
     });
@@ -5401,7 +6055,21 @@ function init() {
   
   if (btnDebugInfo) {
     btnDebugInfo.addEventListener('click', () => {
-      showErrorDialog("Turn this on if you're experiencing a problem and want to help us fix it. While enabled, the app records technical details about what you do and any errors that occur. This is automatically saved as a note in your Notes tab, which you can copy and send to support. Turn off when you're done.");
+      const liveFooterEl = document.getElementById('settings-version-footer');
+      const liveFooterText = liveFooterEl && typeof liveFooterEl.textContent === 'string'
+        ? liveFooterEl.textContent.replace(/\s+/g, ' ').trim()
+        : '';
+      const step2Target = liveFooterText
+        ? `the version line ("${liveFooterText}")`
+        : 'the version line at the bottom of this screen';
+      const infoMsg =
+        "Turn this on if you're having a problem and want to help us fix it. While it's on, the app records technical details about what you do and any errors, and saves them as a note in your Notes tab. You can copy that note and send it to support. Turn it off when you're done.\n\n" +
+        "To turn it on:\n" +
+        "1. Scroll to the bottom of this Settings screen.\n" +
+        `2. Tap ${step2Target} 7 times in a row.\n` +
+        "3. The Debug Logging switch appears. Switch it on.\n\n" +
+        "After you switch logging off, the switch is hidden again.";
+      showErrorDialog(infoMsg, { variant: 'info' });
     });
   }
   
@@ -5501,15 +6169,24 @@ function init() {
       const result = await Purchases.restorePurchases();
       const customerInfo = result.customerInfo || result;
       const activeEntitlements = customerInfo?.entitlements?.active || {};
-      
-      if (Object.keys(activeEntitlements).length > 0) {
-        if (typeof window.debugLog === 'function') window.debugLog('Purchases restored successfully.');
+      const rEntCount = Object.keys(activeEntitlements).length;
+      const rPro = rEntCount > 0;
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        if (_lastLoggedRcProState !== rPro) {
+          _lastLoggedRcProState = rPro;
+          window.debugLog(`RevenueCat: restorePurchases ok | pro=${rPro} | activeEntitlements=${rEntCount}`);
+        }
+      }
+      if (rPro) {
+        if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') window.debugLog('Purchases restored successfully.');
         await handlePurchaseSuccess('Your purchases have been successfully restored!');
       } else {
         showToast('No active purchases found to restore.');
       }
     } catch (err) {
-      if (typeof window.debugLog === 'function') window.debugLog(`Restore failed: ${err.message}`);
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog(`Restore failed: ${sanitizeErrorForLog(err && err.message ? err.message : err)}`);
+      }
       showErrorDialog('Failed to restore purchases. Please try again.');
     } finally {
       btnElement.textContent = originalText;
@@ -5610,7 +6287,7 @@ function init() {
 
 // --- Tools Picker ---
 const TOOLS_LIST = [
-  { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, MX, NS, TXT, reverse DNS and more', screen: 'tools-tab', feature: 'tools', pro: true },
+  { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, MX, NS, TXT, reverse DNS and more', freeDesc: 'A records free · more types with Pro', screen: 'tools-tab', feature: 'dns', pro: false },
   { id: 'ping', icon: '📶', title: 'Ping', desc: 'Test reachability and round-trip time', screen: 'ping-tab', pro: false },
   { id: 'traceroute', icon: '🧭', title: 'Traceroute', desc: 'See the path your packets take, hop by hop', screen: 'traceroute-tab', feature: 'traceroute', pro: false },
   { id: 'whois', icon: '🔎', title: 'Whois', desc: 'Who owns a domain, IP address or network', screen: 'whois-tab', feature: 'whois', pro: false }
@@ -5639,7 +6316,7 @@ function openToolsPicker() {
     title.textContent = tool.title;
     const desc = document.createElement('div');
     desc.className = 'tools-picker-desc';
-    desc.textContent = tool.desc;
+    desc.textContent = (!PRO_UNLOCKED && tool.freeDesc) ? tool.freeDesc : tool.desc;
     text.appendChild(title);
     text.appendChild(desc);
     const right = document.createElement('span');
@@ -5670,7 +6347,7 @@ function openTool(tool) {
   const isLocked = tool.pro && !PRO_UNLOCKED;
   if (typeof window.debugLog === 'function') window.debugLog(`Tools picker: selected ${tool.id} (locked=${isLocked})`);
   if (isLocked) {
-    showProModal(tool.feature || 'tools');
+    showProModal(tool.feature || 'dns');
     return;
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -5732,18 +6409,242 @@ if (document.readyState === 'loading') {
   init();
 }
 
-// Global outside-tap keyboard dismiss for iOS
-document.addEventListener('touchend', (e) => {
-  const active = document.activeElement;
-  if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT')) return;
-  if (e.target.closest('input, textarea, select, button, a, label')) return;
-  active.blur();
-  try {
-    if (window.Capacitor && window.Capacitor.Plugins.Keyboard) {
-      window.Capacitor.Plugins.Keyboard.hide().catch(() => {});
+// Global outside-tap keyboard dismiss (iOS & Android)
+(function setupTapOutsideKeyboardDismiss() {
+  const MOVE_THRESHOLD_PX = 10;
+  const LONG_PRESS_MS = 500;
+  let lastProgrammaticFocusTime = 0;
+  let lastTouchEventTime = 0;
+  let suppressLabelRefocusUntil = 0;
+
+  function isTapOutsideTextEntry(el) {
+    if (!el || !el.tagName) return false;
+    if (el.disabled || el.readOnly) return false;
+    const tag = el.tagName.toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    if (tag === 'INPUT') {
+      const type = (el.getAttribute('type') || 'text').toLowerCase();
+      return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(type);
     }
-  } catch(err) {}
-}, { passive: true });
+    return Boolean(el.isContentEditable);
+  }
+
+  try {
+    const origFocus = HTMLElement.prototype.focus;
+    if (typeof origFocus === 'function' && !origFocus._isubnetWrapped) {
+      const wrappedFocus = function (...args) {
+        if (isTapOutsideTextEntry(this)) {
+          lastProgrammaticFocusTime = performance.now();
+        }
+        return origFocus.apply(this, args);
+      };
+      wrappedFocus._isubnetWrapped = true;
+      HTMLElement.prototype.focus = wrappedFocus;
+    }
+  } catch (err) { /* ignore */ }
+
+  function dismissFocusedField(fieldEl) {
+    if (!fieldEl) return;
+    if (document.activeElement === fieldEl && typeof fieldEl.blur === 'function') {
+      fieldEl.blur();
+    }
+    try {
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Keyboard) {
+        window.Capacitor.Plugins.Keyboard.hide().catch(() => {});
+      }
+    } catch (err) { /* ignore */ }
+  }
+
+  document.addEventListener('mousedown', (e) => {
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('[data-keep-keyboard="true"], .btn-clear-field')) {
+      e.preventDefault();
+      return;
+    }
+    if (isTapOutsideTextEntry(document.activeElement) && t.closest('button, a, [role="button"]')) {
+      e.preventDefault();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (Date.now() < suppressLabelRefocusUntil) {
+      const t = e.target;
+      if (t && t.closest && t.closest('label') && !t.closest('.switch-container')) {
+        e.preventDefault();
+        if (isTapOutsideTextEntry(document.activeElement)) {
+          dismissFocusedField(document.activeElement);
+        }
+      }
+    }
+  }, true);
+
+  let gesture = null;
+
+  function startGesture(x, y, isMulti, source) {
+    gesture = {
+      startX: x,
+      startY: y,
+      startTime: Date.now(),
+      perfStartTime: performance.now(),
+      maxDist: 0,
+      multiTouch: Boolean(isMulti),
+      activeAtStart: document.activeElement,
+      source
+    };
+  }
+
+  function moveGesture(x, y, isMulti) {
+    if (!gesture) return;
+    if (isMulti) gesture.multiTouch = true;
+    const dist = Math.hypot(x - gesture.startX, y - gesture.startY);
+    if (dist > gesture.maxDist) gesture.maxDist = dist;
+  }
+
+  function endGesture(endX, endY, target, endTimeOverride) {
+    const g = gesture;
+    gesture = null;
+    const now = typeof endTimeOverride === 'number' ? endTimeOverride : Date.now();
+    const startX = g ? g.startX : endX;
+    const startY = g ? g.startY : endY;
+    const startTime = g ? g.startTime : now;
+    const perfStartTime = g ? g.perfStartTime : performance.now();
+    const endDist = (typeof endX === 'number' && typeof startX === 'number')
+      ? Math.hypot(endX - startX, endY - startY)
+      : 0;
+    const maxDist = Math.max(g ? g.maxDist : 0, endDist);
+    const multiTouch = Boolean(g && g.multiTouch);
+    const duration = Math.max(0, now - startTime);
+
+    const currentActive = document.activeElement;
+    const active = isTapOutsideTextEntry(currentActive)
+      ? currentActive
+      : (g && isTapOutsideTextEntry(g.activeAtStart) ? g.activeAtStart : null);
+
+    if (!active) {
+      return;
+    }
+
+    if (multiTouch || maxDist > MOVE_THRESHOLD_PX) {
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[KBD] tap-outside: ignored | reason=moved');
+      }
+      return;
+    }
+
+    if (duration >= LONG_PRESS_MS) {
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[KBD] tap-outside: ignored | reason=long-press');
+      }
+      return;
+    }
+
+    if (target && target.closest && target.closest('[data-keep-keyboard="true"], .btn-clear-field')) {
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[KBD] tap-outside: ignored | reason=keep-keyboard');
+      }
+      return;
+    }
+
+    if (target === active || (active.contains && active.contains(target))) {
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[KBD] tap-outside: ignored | reason=focused-field');
+      }
+      return;
+    }
+
+    const otherField = (target && target.closest) ? target.closest('input, textarea, [contenteditable="true"]') : null;
+    if (otherField && isTapOutsideTextEntry(otherField) && otherField !== active) {
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[KBD] tap-outside: ignored | reason=other-field');
+      }
+      return;
+    }
+
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      const tag = (target && target.tagName) ? String(target.tagName).toUpperCase() : 'UNKNOWN';
+      window.debugLog(`[KBD] tap-outside: dismissed | target=${tag}`);
+    }
+
+    const isLabelTap = Boolean(target && target.closest && target.closest('label') && !target.closest('.switch-container, [role="button"]'));
+    if (isLabelTap) {
+      suppressLabelRefocusUntil = Date.now() + 300;
+      dismissFocusedField(active);
+      return;
+    }
+
+    const isInteractiveControl = Boolean(
+      target && target.closest && target.closest('button, a, select, [role="button"], .switch-container, input[type="checkbox"], input[type="radio"], input[type="range"]')
+    );
+
+    if (isInteractiveControl) {
+      let finished = false;
+      const runDeferredDismiss = () => {
+        if (finished) return;
+        finished = true;
+        window.removeEventListener('click', onControlClick, false);
+        if (lastProgrammaticFocusTime >= perfStartTime && isTapOutsideTextEntry(document.activeElement)) {
+          return;
+        }
+        if (document.activeElement && document.activeElement !== active && isTapOutsideTextEntry(document.activeElement)) {
+          return;
+        }
+        dismissFocusedField(active);
+      };
+      const onControlClick = () => {
+        setTimeout(runDeferredDismiss, 0);
+      };
+      window.addEventListener('click', onControlClick, false);
+      setTimeout(runDeferredDismiss, 80);
+    } else {
+      dismissFocusedField(active);
+    }
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    lastTouchEventTime = Date.now();
+    const t = e.touches && e.touches[0];
+    const x = t ? t.clientX : 0;
+    const y = t ? t.clientY : 0;
+    startGesture(x, y, Boolean(e.touches && e.touches.length > 1), 'touch');
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    lastTouchEventTime = Date.now();
+    const t = e.touches && e.touches[0];
+    const x = t ? t.clientX : 0;
+    const y = t ? t.clientY : 0;
+    moveGesture(x, y, Boolean(e.touches && e.touches.length > 1));
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    lastTouchEventTime = Date.now();
+    const t = e.changedTouches && e.changedTouches[0];
+    const x = t ? t.clientX : (gesture ? gesture.startX : 0);
+    const y = t ? t.clientY : (gesture ? gesture.startY : 0);
+    const endTime = (typeof e._mockTouchDurationMs === 'number' && gesture)
+      ? (gesture.startTime + e._mockTouchDurationMs)
+      : Date.now();
+    endGesture(x, y, e.target, endTime);
+  }, { passive: true });
+
+  document.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'touch' || Date.now() - lastTouchEventTime < 500) return;
+    startGesture(e.clientX, e.clientY, false, 'pointer');
+  }, { passive: true });
+
+  document.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch' || Date.now() - lastTouchEventTime < 500) return;
+    if (!gesture || gesture.source !== 'pointer') return;
+    moveGesture(e.clientX, e.clientY, false);
+  }, { passive: true });
+
+  document.addEventListener('pointerup', (e) => {
+    if (e.pointerType === 'touch' || Date.now() - lastTouchEventTime < 500) return;
+    if (!gesture || gesture.source !== 'pointer') return;
+    endGesture(e.clientX, e.clientY, e.target, Date.now());
+  }, { passive: true });
+})();
 
 // --- BULK CALCULATOR ENGINE ---
 function initBulkCalculator() {
@@ -6187,6 +7088,12 @@ function setupExporterListeners() {
       showProModal();
       return;
     }
+    if (isShareTapDuplicate('report:' + String(type || 'default'))) {
+      if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+        window.debugLog('[Share] ui: share tap ignored | reason=double-tap');
+      }
+      return;
+    }
 
     const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
     if (isNative) {
@@ -6328,6 +7235,12 @@ function setupExporterListeners() {
 }
 
 async function downloadCSV(filename, content) {
+  if (isShareTapDuplicate('csv:' + String(filename || 'default'))) {
+    if (window.APP_DEBUG_ENABLED && typeof window.debugLog === 'function') {
+      window.debugLog('[Share] ui: share tap ignored | reason=double-tap');
+    }
+    return;
+  }
   const isNative = window.Capacitor && window.Capacitor.isNativePlatform();
   if (isNative) {
     const { Filesystem, Share } = window.Capacitor.Plugins;
@@ -6489,6 +7402,35 @@ function updateUpgradeUI(planTier) {
   const btnCopy = document.getElementById('btn-dns-copy');
   const btnShare = document.getElementById('btn-dns-share');
   const typeHint = document.getElementById('dns-type-hint');
+  const typeLabel = document.getElementById('dns-type-label');
+  const proBadge = document.getElementById('dns-pro-badge');
+
+  // Gate for Free DNS lookups: only 'A' is free; all other record types and reverse DNS (PTR) require Pro.
+  // To make reverse DNS (PTR) or another record type free later, update this single gate.
+  const FREE_DNS_RECORD_TYPES = ['A'];
+  const FREE_DNS_ALLOW_REVERSE_PTR = false;
+
+  function isDnsProNow() {
+    return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
+  }
+
+  function isFreeDnsAllowed(effectiveType, isReverseIp) {
+    if (isReverseIp) return FREE_DNS_ALLOW_REVERSE_PTR;
+    return FREE_DNS_RECORD_TYPES.indexOf(effectiveType) !== -1;
+  }
+
+  const DNS_TYPE_OPTIONS = [
+    { value: 'A', proLabel: 'A', freeLabel: 'A' },
+    { value: 'AAAA', proLabel: 'AAAA', freeLabel: 'AAAA 🔒 Pro' },
+    { value: 'MX', proLabel: 'MX', freeLabel: 'MX 🔒 Pro' },
+    { value: 'NS', proLabel: 'NS', freeLabel: 'NS 🔒 Pro' },
+    { value: 'TXT', proLabel: 'TXT', freeLabel: 'TXT 🔒 Pro' },
+    { value: 'CNAME', proLabel: 'CNAME', freeLabel: 'CNAME 🔒 Pro' },
+    { value: 'SOA', proLabel: 'SOA', freeLabel: 'SOA 🔒 Pro' },
+    { value: 'PTR', proLabel: 'PTR', freeLabel: 'PTR 🔒 Pro' },
+    { value: 'CAA', proLabel: 'CAA', freeLabel: 'CAA 🔒 Pro' },
+    { value: 'ALL', proLabel: 'ALL (A, AAAA, MX, NS, TXT, CNAME)', freeLabel: 'ALL 🔒 Pro' }
+  ];
 
   let currentDnsCount = 0;
   let dnsLookupCount = 0;
@@ -6496,6 +7438,7 @@ function updateUpgradeUI(planTier) {
   let currentReverseName = '';
   
   function dnsLog(msg) {
+    if (!window.APP_DEBUG_ENABLED) return;
     if (typeof window.debugLog === 'function') {
       try {
         const prefix = msg.startsWith('init:') || msg.startsWith('ui:') ? 'DNS ' : `DNS #${currentDnsCount}: `;
@@ -6635,10 +7578,49 @@ function updateUpgradeUI(planTier) {
     }
 
     const selectedType = typeSelect.value;
+    if (!isDnsProNow()) {
+      if (isIp && !isFreeDnsAllowed('PTR', true)) {
+        typeHint.textContent = 'Reverse DNS (PTR) lookups for IP addresses are a Pro feature.';
+        typeHint.style.color = 'var(--accent-primary)';
+        typeHint.style.whiteSpace = '';
+        return;
+      }
+      const baseText = DNS_TYPE_HINTS[selectedType] || '';
+      const freeExtra = 'Free: A records. Pro unlocks AAAA, MX, NS, TXT, CNAME, SOA, CAA, ALL and reverse DNS.';
+      typeHint.textContent = baseText ? `${baseText}\n${freeExtra}` : freeExtra;
+      typeHint.style.color = '';
+      typeHint.style.whiteSpace = 'pre-line';
+      return;
+    }
+    typeHint.style.whiteSpace = '';
     const text = isIp ? DNS_TYPE_HINTS.IP : (DNS_TYPE_HINTS[selectedType] || '');
     typeHint.textContent = text;
     typeHint.style.color = isIp ? 'var(--accent-primary)' : '';
   }
+
+  function updateDnsControls() {
+    const isPro = isDnsProNow();
+    if (proBadge) {
+      proBadge.style.display = isPro ? 'none' : 'inline-block';
+    }
+    if (typeof setProLabelInteractivity === 'function') {
+      setProLabelInteractivity(typeLabel, proBadge, !isPro);
+    }
+    if (typeSelect) {
+      const prevVal = typeSelect.value || 'A';
+      Array.from(typeSelect.options).forEach((opt) => {
+        const def = DNS_TYPE_OPTIONS.find((d) => d.value === opt.value);
+        if (!def) return;
+        const unlocked = isPro || isFreeDnsAllowed(def.value, false);
+        opt.textContent = unlocked ? def.proLabel : def.freeLabel;
+      });
+      if (!isPro && !isFreeDnsAllowed(prevVal, false)) {
+        typeSelect.value = 'A';
+      }
+    }
+    updateDnsHint();
+  }
+  window.updateDnsControls = updateDnsControls;
 
   const RECORD_TYPES = {
     1: 'A', 2: 'NS', 5: 'CNAME', 6: 'SOA', 12: 'PTR', 15: 'MX', 16: 'TXT', 28: 'AAAA', 33: 'SRV', 257: 'CAA'
@@ -6793,6 +7775,13 @@ function updateUpgradeUI(planTier) {
     let rawVal = input.value;
     let val = rawVal.trim().replace(/\.+$/, '');
     if (!val) {
+      if (!isDnsProNow() && !isFreeDnsAllowed(typeSelect.value, false)) {
+        dnsLog('ui: lookup gated (free) | reason=type');
+        typeSelect.value = 'A';
+        updateDnsHint();
+        showProModal('dns');
+        return;
+      }
       dnsLog('rejected: empty input');
       showError('Please enter a hostname or IP address.');
       return;
@@ -6854,6 +7843,19 @@ function updateUpgradeUI(planTier) {
       }
     }
     
+    if (!isDnsProNow() && !isFreeDnsAllowed(effectiveType, reverse)) {
+      const reason = reverse ? 'reverse' : 'type';
+      dnsLog(`ui: lookup gated (free) | reason=${reason}`);
+      currentLookupName = '';
+      currentReverseName = '';
+      if (!reverse && typeSelect && !isFreeDnsAllowed(typeSelect.value, false)) {
+        typeSelect.value = 'A';
+        updateDnsHint();
+      }
+      showProModal('dns');
+      return;
+    }
+
     dnsLog(`start | selectedType=${type} | server=${serverId} | inputLength=${rawVal.length} | online=${navigator.onLine}`);
     dnsLog(`input | wasUrl=${wasUrl} | hadPath=${hadPath} | changed=${changed} | urlParseFailed=${urlParseFailed} | kind=${kind} | effectiveType=${effectiveType} | reverse=${reverse}`);
 
@@ -7025,7 +8027,34 @@ function updateUpgradeUI(planTier) {
     if (e.key === 'Enter') runLookup();
   });
   input.addEventListener('input', updateDnsHint);
-  typeSelect.addEventListener('change', updateDnsHint);
+  typeSelect.addEventListener('change', () => {
+    const chosen = typeSelect.value;
+    if (!isDnsProNow() && !isFreeDnsAllowed(chosen, false)) {
+      dnsLog(`ui: record type locked tap | type=${chosen}`);
+      typeSelect.value = 'A';
+      if (typeof typeSelect.blur === 'function') typeSelect.blur();
+      updateDnsHint();
+      showProModal('dns');
+      return;
+    }
+    updateDnsHint();
+  });
+
+  if (typeLabel) {
+    const onDnsProLabelActivate = (e) => {
+      if (isDnsProNow()) return;
+      if (e && e.type === 'keydown') {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+      } else if (e && e.cancelable) {
+        e.preventDefault();
+      }
+      dnsLog('ui: pro label tap');
+      showProModal('dns');
+    };
+    typeLabel.addEventListener('click', onDnsProLabelActivate);
+    typeLabel.addEventListener('keydown', onDnsProLabelActivate);
+  }
   
   btnClear.addEventListener('click', () => {
     dnsLog('ui: cleared');
@@ -7054,10 +8083,14 @@ function updateUpgradeUI(planTier) {
   });
 
   btnShare.addEventListener('click', () => {
+    if (isShareTapDuplicate('dns')) {
+      dnsLog('ui: share tap ignored | reason=double-tap');
+      return;
+    }
     const hasText = !!lastLookupResultText;
     dnsLog(`ui: share tap | hasText=${hasText} | len=${lastLookupResultText.length}`);
     if (hasText && typeof shareText === 'function') {
-      shareText('DNS Lookup Results', lastLookupResultText);
+      shareText('DNS Lookup Results', lastLookupResultText, true);
     }
   });
 
@@ -7070,7 +8103,7 @@ function updateUpgradeUI(planTier) {
     if (typeof switchToNotesTab === 'function') switchToNotesTab();
   });
 
-  updateDnsHint();
+  updateDnsControls();
 })();
 
 
@@ -7229,19 +8262,23 @@ function updateUpgradeUI(planTier) {
     return nearRed ? 'var(--accent-success)' : 'var(--accent-primary)';
   }
 
+  let lastLoggedPingGraphKey = '';
+
   function resetPingGraph() {
     graphData = [];
     graphSelectedSeq = null;
     graphFollow = true;
     lastPingHeader = '';
     lastPingSummary = '';
+    lastLoggedPingGraphKey = '';
     renderGraph();
   }
 
-  function renderGraph() {
+  function renderGraph(isSelectUpdate) {
     if (!graphSvg || !graphLegend || !graphScroll || !graphYAxis) return;
     if (viewMode !== 'graph') return;
     const plotH = GRAPH_H - GRAPH_T - GRAPH_B;
+    const baseY = GRAPH_T + plotH;
     const pts = graphData;
     const n = pts.length;
     const viewportW = graphScroll.clientWidth || 250;
@@ -7259,6 +8296,15 @@ function updateUpgradeUI(planTier) {
 
     const wasAtEnd = graphScroll.scrollWidth - graphScroll.scrollLeft - graphScroll.clientWidth < 12;
     const stats = graphStats(pts);
+    if (!isRunning && !isSelectUpdate) {
+      const renderKey = `${viewMode}:${n}:${stats.lost}`;
+      if (renderKey !== lastLoggedPingGraphKey) {
+        lastLoggedPingGraphKey = renderKey;
+        if (window.APP_DEBUG_ENABLED && stats.lost > 0) {
+          pingLog(`ping: graph lost=${stats.lost} of ${n}`);
+        }
+      }
+    }
     const maxY = graphNiceMax(stats.maxMs);
     const innerW = viewportW - GRAPH_PADL - GRAPH_PADR;
     const step = n > 1 ? Math.max(GRAPH_STEP_MIN, innerW / (n - 1)) : 0;
@@ -7266,6 +8312,7 @@ function updateUpgradeUI(planTier) {
     const scrollable = contentW > viewportW + 1;
     const xAt = (i) => (n <= 1 ? contentW / 2 : GRAPH_PADL + i * step);
     const yAt = (ms) => GRAPH_T + plotH - (ms / maxY) * plotH;
+    const ptY = (p) => (p.ms === null ? baseY : yAt(p.ms));
 
     let axis = '';
     [0, 0.5, 1].forEach((frac) => {
@@ -7285,40 +8332,46 @@ function updateUpgradeUI(planTier) {
       svg += `<line x1="0" y1="${f(yAt(stats.avg))}" x2="${contentW}" y2="${f(yAt(stats.avg))}" stroke="var(--accent-cyan)" stroke-width="1" stroke-dasharray="3 3" opacity="0.8"/>`;
     }
 
-    pts.forEach((p, i) => {
-      if (p.ms === null) {
-        const x = f(xAt(i));
-        const bx = xAt(i);
-        const by = GRAPH_T + plotH;
-        svg += `<line x1="${x}" y1="${GRAPH_T}" x2="${x}" y2="${by}" stroke="var(--accent-danger)" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.55"/>`;
-        svg += `<path d="M${f(bx - 3.5)} ${f(by - 3.5)}L${f(bx + 3.5)} ${f(by + 3.5)}M${f(bx + 3.5)} ${f(by - 3.5)}L${f(bx - 3.5)} ${f(by + 3.5)}" stroke="var(--accent-danger)" stroke-width="2" stroke-linecap="round" fill="none"/>`;
-      }
-    });
-
-    let seg = [];
-    const flush = () => {
-      if (seg.length >= 2) {
-        svg += `<polyline points="${seg.join(' ')}" fill="none" stroke="${okColor}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
-      }
-      seg = [];
-    };
-    pts.forEach((p, i) => {
-      if (p.ms === null) {
-        flush();
+    let okPath = '';
+    let badPath = '';
+    for (let i = 0; i < n - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const segCmd = `M${f(xAt(i))} ${f(ptY(p1))}L${f(xAt(i + 1))} ${f(ptY(p2))}`;
+      if (p1.ms === null || p2.ms === null) {
+        badPath += segCmd;
       } else {
-        seg.push(`${f(xAt(i))},${f(yAt(p.ms))}`);
+        okPath += segCmd;
       }
-    });
-    flush();
+    }
+    if (okPath) {
+      svg += `<path class="ping-seg-ok" d="${okPath}" fill="none" stroke="${okColor}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+    if (badPath) {
+      svg += `<path class="ping-seg-bad" d="${badPath}" fill="none" stroke="var(--accent-danger)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
 
     pts.forEach((p, i) => {
-      if (p.ms === null) return;
-      const prevOk = i > 0 && pts[i - 1].ms !== null;
-      const nextOk = i < n - 1 && pts[i + 1].ms !== null;
-      if (n <= 40 || (!prevOk && !nextOk)) {
-        svg += `<circle cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="2.5" fill="${okColor}"/>`;
+      if (p.ms === null) {
+        const prevBad = i > 0 && pts[i - 1].ms === null;
+        const nextBad = i < n - 1 && pts[i + 1].ms === null;
+        if (n <= 40 || (!prevBad && !nextBad)) {
+          svg += `<circle class="ping-dot-bad" cx="${f(xAt(i))}" cy="${f(baseY)}" r="2.5" fill="var(--accent-danger)"/>`;
+        }
+      } else {
+        const prevOk = i > 0 && pts[i - 1].ms !== null;
+        const nextOk = i < n - 1 && pts[i + 1].ms !== null;
+        if (n <= 40 || (!prevOk && !nextOk)) {
+          svg += `<circle class="ping-dot-ok" cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="2.5" fill="${okColor}"/>`;
+        }
       }
     });
+
+    if (stats.lost > 0) {
+      const lastNearBase = n > 0 && ptY(pts[n - 1]) > baseY - 20;
+      const lblX = lastNearBase ? Math.min(contentW - GRAPH_PADR - 6, xAt(n - 1) - 8) : contentW - GRAPH_PADR - 2;
+      svg += `<text class="ping-no-reply-label" x="${f(lblX)}" y="${f(baseY - 6)}" text-anchor="end" font-size="9" font-weight="600" fill="var(--accent-danger)">no reply</text>`;
+    }
 
     const labelSteps = [1, 2, 5, 10, 20, 50, 100, 200, 500];
     let every = 500;
@@ -7342,17 +8395,17 @@ function updateUpgradeUI(planTier) {
     if (graphSelectedSeq !== null) selIdx = pts.findIndex((p) => p.seq === graphSelectedSeq);
     if (selIdx >= 0) {
       const sx = f(xAt(selIdx));
+      const sy = f(ptY(pts[selIdx]));
+      const sColor = pts[selIdx].ms !== null ? okColor : 'var(--accent-danger)';
       svg += `<line x1="${sx}" y1="${GRAPH_T}" x2="${sx}" y2="${GRAPH_T + plotH}" stroke="var(--text-secondary)" stroke-width="1" stroke-dasharray="2 2"/>`;
-      if (pts[selIdx].ms !== null) {
-        svg += `<circle cx="${sx}" cy="${f(yAt(pts[selIdx].ms))}" r="4.5" fill="none" stroke="${okColor}" stroke-width="2"/>`;
-      }
+      svg += `<circle class="ping-sel-highlight" cx="${sx}" cy="${sy}" r="4.5" fill="none" stroke="${sColor}" stroke-width="2"/>`;
     }
 
     graphSvg.setAttribute('width', String(contentW));
     graphSvg.innerHTML = svg;
     graphSvg.setAttribute('aria-label', `Ping latency graph, ${n} probes, ${stats.lost} without reply`);
 
-    let legend = `<span><span class="lg-dot" style="background:${okColor}"></span>Reply</span><span><span style="color:var(--accent-danger);font-weight:700;margin-right:4px">&#10005;</span>No reply</span>`;
+    let legend = `<span><span class="lg-dot" style="background:${okColor}"></span>Reply</span><span><span class="lg-dot" style="background:var(--accent-danger)"></span>Red = no reply</span>`;
     if (stats.avg !== null) legend += `<span>Avg ${graphFmt(stats.avg)} ms</span>`;
     if (selIdx >= 0) {
       legend += `<span class="rd">#${pts[selIdx].seq} · ${pts[selIdx].ms !== null ? graphFmt(pts[selIdx].ms) + ' ms' : 'no reply'}</span>`;
@@ -7392,6 +8445,8 @@ function updateUpgradeUI(planTier) {
     if (isGraph) {
       graphFollow = true;
       renderGraph();
+    } else {
+      lastLoggedPingGraphKey = 'list';
     }
   }
 
@@ -7416,7 +8471,7 @@ function updateUpgradeUI(planTier) {
       if (window.APP_DEBUG_ENABLED && graphSelectedSeq !== null) {
         pingLog(`graph: select seq=${graphSelectedSeq}`);
       }
-      renderGraph();
+      renderGraph(true);
     });
   }
 
@@ -7426,6 +8481,7 @@ function updateUpgradeUI(planTier) {
     const padL = 80, padR = 40, top = 220, bottom = 100;
     const plotW = W - padL - padR;
     const plotH = H - top - bottom;
+    const baseY = top + plotH;
     const pts = graphData;
     const n = pts.length;
     const stats = graphStats(pts);
@@ -7433,6 +8489,7 @@ function updateUpgradeUI(planTier) {
     const f = (v) => (Math.round(v * 10) / 10).toString();
     const xAt = (i) => padL + (n <= 1 ? plotW / 2 : (i * plotW) / (n - 1));
     const yAt = (ms) => top + plotH - (ms / maxY) * plotH;
+    const ptY = (p) => (p.ms === null ? baseY : yAt(p.ms));
     const INK = '#1e293b', MUTED = '#64748b', GRID = '#e2e8f0', ACC = '#4f46e5', BAD = '#ef4444', AVG = '#0ea5e9';
 
     let header = lastPingHeader || `Ping ${input.value.trim()}`.trim();
@@ -7459,32 +8516,49 @@ function updateUpgradeUI(planTier) {
     if (stats.avg !== null && stats.okCount > 1) {
       s += `<line x1="${padL}" y1="${f(yAt(stats.avg))}" x2="${W - padR}" y2="${f(yAt(stats.avg))}" stroke="${AVG}" stroke-width="2.5" stroke-dasharray="10 8"/>`;
     }
+
+    const strokeW = n > 200 ? 2.5 : 4.5;
+    let okPath = '';
+    let badPath = '';
+    for (let i = 0; i < n - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const segCmd = `M${f(xAt(i))} ${f(ptY(p1))}L${f(xAt(i + 1))} ${f(ptY(p2))}`;
+      if (p1.ms === null || p2.ms === null) {
+        badPath += segCmd;
+      } else {
+        okPath += segCmd;
+      }
+    }
+    if (okPath) {
+      s += `<path class="ping-seg-ok" d="${okPath}" fill="none" stroke="${ACC}" stroke-width="${strokeW}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+    if (badPath) {
+      s += `<path class="ping-seg-bad" d="${badPath}" fill="none" stroke="${BAD}" stroke-width="${strokeW}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }
+
     pts.forEach((p, i) => {
       if (p.ms === null) {
-        const x = f(xAt(i));
-        s += `<line x1="${x}" y1="${top}" x2="${x}" y2="${top + plotH}" stroke="${BAD}" stroke-width="${n > 200 ? 2 : 5}" opacity="0.3"/>`;
-        s += `<circle cx="${x}" cy="${top + plotH}" r="${n > 200 ? 3 : 8}" fill="${BAD}"/>`;
+        const prevBad = i > 0 && pts[i - 1].ms === null;
+        const nextBad = i < n - 1 && pts[i + 1].ms === null;
+        if (n <= 40 || (!prevBad && !nextBad && n <= 300)) {
+          s += `<circle class="ping-dot-bad" cx="${f(xAt(i))}" cy="${f(baseY)}" r="7" fill="${BAD}"/>`;
+        }
+      } else {
+        const prevOk = i > 0 && pts[i - 1].ms !== null;
+        const nextOk = i < n - 1 && pts[i + 1].ms !== null;
+        if (n <= 40 || (!prevOk && !nextOk && n <= 300)) {
+          s += `<circle class="ping-dot-ok" cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="7" fill="${ACC}"/>`;
+        }
       }
     });
-    let seg = [];
-    const flush = () => {
-      if (seg.length >= 2) {
-        s += `<polyline points="${seg.join(' ')}" fill="none" stroke="${ACC}" stroke-width="${n > 200 ? 2.5 : 4.5}" stroke-linejoin="round" stroke-linecap="round"/>`;
-      }
-      seg = [];
-    };
-    pts.forEach((p, i) => {
-      if (p.ms === null) flush(); else seg.push(`${f(xAt(i))},${f(yAt(p.ms))}`);
-    });
-    flush();
-    pts.forEach((p, i) => {
-      if (p.ms === null) return;
-      const prevOk = i > 0 && pts[i - 1].ms !== null;
-      const nextOk = i < n - 1 && pts[i + 1].ms !== null;
-      if (n <= 40 || (!prevOk && !nextOk && n <= 300)) {
-        s += `<circle cx="${f(xAt(i))}" cy="${f(yAt(p.ms))}" r="7" fill="${ACC}"/>`;
-      }
-    });
+
+    if (stats.lost > 0) {
+      const lastNearBase = n > 0 && ptY(pts[n - 1]) > baseY - 40;
+      const lblX = lastNearBase ? Math.min(W - padR - 14, xAt(n - 1) - 18) : W - padR - 4;
+      s += `<text class="ping-no-reply-label" x="${f(lblX)}" y="${f(baseY - 14)}" text-anchor="end" font-size="22" font-weight="600" fill="${BAD}">no reply</text>`;
+    }
+
     s += `<text x="${padL}" y="${top + plotH + 44}" text-anchor="start" font-size="22" fill="${MUTED}">#${pts[0].seq}</text>`;
     if (n > 1) s += `<text x="${W - padR}" y="${top + plotH + 44}" text-anchor="end" font-size="22" fill="${MUTED}">#${pts[n - 1].seq}</text>`;
     if (!isProNow()) s += `<text x="${padL}" y="${H - 22}" font-size="22" fill="${MUTED}">Calculated with iSubnet</text>`;
@@ -7542,14 +8616,25 @@ function updateUpgradeUI(planTier) {
     return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
   }
 
+  const optionsLabel = proBadge ? proBadge.closest('.ping-options-label') : document.querySelector('.ping-options-label');
+
   function updatePingControls() {
     const isPro = isProNow();
+    const showBadge = !isPro && isNative;
     if (proBadge) {
-      proBadge.style.display = isPro ? 'none' : 'inline-block';
+      proBadge.style.display = showBadge ? 'inline-block' : 'none';
     }
+    if (optionsLabel) {
+      if (isPro) {
+        optionsLabel.setAttribute('for', 'ping-count-input');
+      } else {
+        optionsLabel.removeAttribute('for');
+      }
+    }
+    setProLabelInteractivity(optionsLabel, proBadge, showBadge);
     if (!isPro) {
       if (countInput) {
-        countInput.value = '4';
+        countInput.value = '5';
         countInput.readOnly = true;
       }
       continuousOn = false;
@@ -7569,6 +8654,18 @@ function updateUpgradeUI(planTier) {
   }
   window.updatePingControls = updatePingControls;
   updatePingControls();
+
+  if (optionsLabel) {
+    const onPingProLabelActivate = (e) => {
+      if (isProNow() || !isNative) return;
+      if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.cancelable) e.preventDefault();
+      if (window.APP_DEBUG_ENABLED) pingLog('ui: pro label tap');
+      showProModal('ping');
+    };
+    optionsLabel.addEventListener('click', onPingProLabelActivate);
+    optionsLabel.addEventListener('keydown', onPingProLabelActivate);
+  }
 
   if (countInput) {
     const onCountInteract = (e) => {
@@ -7658,7 +8755,7 @@ function updateUpgradeUI(planTier) {
       return;
     }
 
-    let countToSend = 4;
+    let countToSend = 5;
     if (isProNow() && continuousOn) {
       runContinuous = true;
       countToSend = 4;
@@ -7677,8 +8774,8 @@ function updateUpgradeUI(planTier) {
       countToSend = num;
     } else {
       runContinuous = false;
-      countToSend = 4;
-      if (countInput) countInput.value = '4';
+      countToSend = 5;
+      if (countInput) countInput.value = '5';
     }
     newestFirst = runContinuous || countToSend > 10;
 
@@ -7923,13 +9020,17 @@ function updateUpgradeUI(planTier) {
 
   if (btnShare) {
     btnShare.addEventListener('click', async () => {
+      if (isShareTapDuplicate('ping')) {
+        if (window.APP_DEBUG_ENABLED) pingLog('ui: share tap ignored | reason=double-tap');
+        return;
+      }
       if (window.APP_DEBUG_ENABLED) pingLog('ui: share tap');
       if (viewMode === 'graph' && graphData.length > 0) {
         const sharedGraph = await sharePingGraph();
         if (sharedGraph) return;
       }
       if (lastPingResultText && typeof shareText === 'function') {
-        shareText('Ping Results', lastPingResultText);
+        shareText('Ping Results', lastPingResultText, true);
       }
     });
   }
@@ -8105,6 +9206,8 @@ function updateUpgradeUI(planTier) {
   let graphTimer = null;
   let graphFollow = true;
   let selectedTtl = null;
+  let lastLoggedTraceGraphKey = '';
+  let dnsTimers = [];
 
   function isProNow() {
     return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
@@ -8112,7 +9215,10 @@ function updateUpgradeUI(planTier) {
 
   function updateTraceControls() {
     const isPro = isProNow();
-    if (proBadge) proBadge.style.display = isPro ? 'none' : 'inline-block';
+    const optionsHead = proBadge ? proBadge.closest('.trace-options-head') : document.querySelector('.trace-options-head');
+    const showBadge = !isPro && isNative;
+    if (proBadge) proBadge.style.display = showBadge ? 'inline-block' : 'none';
+    setProLabelInteractivity(optionsHead, proBadge, showBadge);
     if (!isPro) {
       if (hopsInput) { hopsInput.value = String(DEFAULT_HOPS); hopsInput.readOnly = true; }
       if (probesInput) { probesInput.value = String(DEFAULT_PROBES); probesInput.readOnly = true; }
@@ -8137,6 +9243,19 @@ function updateUpgradeUI(planTier) {
   }
   window.updateTraceControls = updateTraceControls;
   updateTraceControls();
+
+  const traceOptionsHead = proBadge ? proBadge.closest('.trace-options-head') : document.querySelector('.trace-options-head');
+  if (traceOptionsHead) {
+    const onTraceProLabelActivate = (e) => {
+      if (isProNow() || !isNative) return;
+      if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.cancelable) e.preventDefault();
+      if (window.APP_DEBUG_ENABLED) traceLog('ui: pro label tap');
+      showProModal('traceroute');
+    };
+    traceOptionsHead.addEventListener('click', onTraceProLabelActivate);
+    traceOptionsHead.addEventListener('keydown', onTraceProLabelActivate);
+  }
 
   function onOptionInteract(e) {
     if (!isProNow() && isNative) {
@@ -8186,6 +9305,9 @@ function updateUpgradeUI(planTier) {
   function removeListeners() {
     const old = listeners;
     listeners = [];
+    const oldTimers = dnsTimers;
+    dnsTimers = [];
+    oldTimers.forEach((t) => clearTimeout(t));
     old.forEach((h) => {
       try {
         if (h && typeof h.remove === 'function') Promise.resolve(h.remove()).catch(() => {});
@@ -8327,6 +9449,7 @@ function updateUpgradeUI(planTier) {
     }
     graphFollow = true;
     selectedTtl = null;
+    lastLoggedTraceGraphKey = '';
     if (graphYAxis) graphYAxis.innerHTML = '';
     if (graphSvg) {
       graphSvg.innerHTML = '';
@@ -8568,11 +9691,15 @@ function updateUpgradeUI(planTier) {
     }
 
     if (!isRunning && !isSelectUpdate && window.APP_DEBUG_ENABLED) {
-      traceLog(`graph: render hops=${n}`);
-      if (hintInfo) {
-        traceLog(`graph: jump hint shown at hop ${hintInfo.ttl}`);
-      } else {
-        traceLog('graph: no jump hint');
+      const renderKey = `${viewMode}:${n}`;
+      if (renderKey !== lastLoggedTraceGraphKey) {
+        lastLoggedTraceGraphKey = renderKey;
+        traceLog(`graph: render hops=${n}`);
+        if (hintInfo) {
+          traceLog(`graph: jump hint shown at hop ${hintInfo.ttl}`);
+        } else {
+          traceLog('graph: no jump hint');
+        }
       }
     }
 
@@ -8639,6 +9766,8 @@ function updateUpgradeUI(planTier) {
     if (isGraph) {
       graphFollow = true;
       renderTraceGraph();
+    } else {
+      lastLoggedTraceGraphKey = 'list';
     }
   }
 
@@ -9075,8 +10204,57 @@ function updateUpgradeUI(planTier) {
     const runStartMs = performance.now();
     let loggedResolved = false;
     let loggedNamesStart = false;
+    let loggedNamesDone = false;
+    let traceRunFinished = false;
     const uniqueHopAddrs = new Set();
+    const pendingNameAddrs = new Set();
+    const settledNameAddrs = new Set();
     const addrToTtl = {};
+    const addrTimerMap = {};
+    let hostnameListenerHandle = null;
+
+    function checkNamesAllSettled() {
+      if (!resolveNames || !traceRunFinished || loggedNamesDone) return;
+      if (pendingNameAddrs.size === 0) {
+        loggedNamesDone = true;
+        if (window.APP_DEBUG_ENABLED) {
+          traceLog(`names: done ${Object.keys(names).length} of ${uniqueHopAddrs.size} answered`);
+        }
+        if (hostnameListenerHandle) {
+          const h = hostnameListenerHandle;
+          hostnameListenerHandle = null;
+          const idx = listeners.indexOf(h);
+          if (idx !== -1) listeners.splice(idx, 1);
+          try { if (typeof h.remove === 'function') Promise.resolve(h.remove()).catch(() => {}); } catch (e) { /* ignore */ }
+        }
+      }
+    }
+
+    function settleNameLookup(addr, hostStr, failReason) {
+      if (!addr || settledNameAddrs.has(addr)) return;
+      settledNameAddrs.add(addr);
+      pendingNameAddrs.delete(addr);
+      if (addrTimerMap[addr]) {
+        clearTimeout(addrTimerMap[addr]);
+        delete addrTimerMap[addr];
+      }
+      const ansTtl = addrToTtl[addr] !== undefined ? addrToTtl[addr] : '-';
+      if (hostStr) {
+        names[addr] = hostStr;
+        if (window.APP_DEBUG_ENABLED) {
+          traceLog(`names: answered ttl=${ansTtl}`);
+        }
+        hops.forEach((h) => {
+          if (hopAddresses(h).indexOf(addr) !== -1) renderHop(h);
+        });
+        refreshText();
+        if (viewMode === 'graph') scheduleTraceGraph();
+      } else if (window.APP_DEBUG_ENABLED) {
+        const r = (failReason === 'none' || failReason === 'timeout' || failReason === 'error') ? failReason : 'none';
+        traceLog(`names: no name ttl=${ansTtl} | reason=${r}`);
+      }
+      checkNamesAllSettled();
+    }
     if (window.APP_DEBUG_ENABLED) {
       traceLog(`ui: params | maxHops=${hopsToSend} | probes=${probesToSend} | timeoutS=${timeoutS} | resolveNames=${resolveNames} | pro=${isProNow()}`);
       traceLog(`order: ${newestFirst ? 'newest-first' : 'hop 1 first'}`);
@@ -9100,8 +10278,23 @@ function updateUpgradeUI(planTier) {
           const probeNum = (typeof ev.probe === 'number' && ev.probe >= 1) ? ev.probe : idx + 1;
           h.probes[idx] = { outcome: ev.outcome, address: ev.address || null, timeMs: (typeof ev.timeMs === 'number') ? ev.timeMs : null };
           if (ev.address) {
+            const isNewAddr = !uniqueHopAddrs.has(ev.address);
             uniqueHopAddrs.add(ev.address);
             if (addrToTtl[ev.address] === undefined) addrToTtl[ev.address] = ev.ttl;
+            if (resolveNames && isNewAddr && !settledNameAddrs.has(ev.address)) {
+              if (!loggedNamesStart) {
+                loggedNamesStart = true;
+                if (window.APP_DEBUG_ENABLED) traceLog('names: lookup start');
+              }
+              pendingNameAddrs.add(ev.address);
+              const dnsWaitMs = (typeof window._TRACE_DNS_TIMEOUT_MS === 'number' && window._TRACE_DNS_TIMEOUT_MS > 0) ? window._TRACE_DNS_TIMEOUT_MS : 3100;
+              const targetAddr = ev.address;
+              const tid = setTimeout(() => {
+                settleNameLookup(targetAddr, null, 'timeout');
+              }, dnsWaitMs);
+              dnsTimers.push(tid);
+              addrTimerMap[targetAddr] = tid;
+            }
           }
           if (window.APP_DEBUG_ENABLED) {
             const msPart = (typeof ev.timeMs === 'number') ? fmtMs(ev.timeMs) : '-';
@@ -9111,23 +10304,19 @@ function updateUpgradeUI(planTier) {
           statusLine.textContent = `Tracing to ${runResolved || runHost} · hop ${ev.ttl}`;
           scheduleTraceGraph();
         }));
-        listeners.push(await P.addListener('hostname', (ev) => {
-          if (!ev || !ev.address || !ev.hostname) return;
-          if (resolveNames && !loggedNamesStart) {
+        hostnameListenerHandle = await P.addListener('hostname', (ev) => {
+          if (!ev || !ev.address || !resolveNames) return;
+          if (!loggedNamesStart) {
             loggedNamesStart = true;
             if (window.APP_DEBUG_ENABLED) traceLog('names: lookup start');
           }
-          names[ev.address] = ev.hostname;
-          if (window.APP_DEBUG_ENABLED) {
-            const ansTtl = addrToTtl[ev.address] !== undefined ? addrToTtl[ev.address] : '-';
-            traceLog(`names: answered ttl=${ansTtl}`);
+          if (ev.hostname) {
+            settleNameLookup(ev.address, ev.hostname, null);
+          } else {
+            settleNameLookup(ev.address, null, ev.reason || 'none');
           }
-          hops.forEach((h) => {
-            if (hopAddresses(h).indexOf(ev.address) !== -1) renderHop(h);
-          });
-          refreshText();
-          if (viewMode === 'graph') scheduleTraceGraph();
-        }));
+        });
+        listeners.push(hostnameListenerHandle);
       }
 
       const res = await P.trace({ host: val, maxHops: hopsToSend, probes: probesToSend, timeoutMs: timeoutS * 1000, resolveNames: resolveNames });
@@ -9138,12 +10327,19 @@ function updateUpgradeUI(planTier) {
         loggedResolved = true;
         if (window.APP_DEBUG_ENABLED) traceLog('resolved: ok');
       }
-      if (resolveNames && window.APP_DEBUG_ENABLED) {
-        if (!loggedNamesStart) {
+      traceRunFinished = true;
+      if (resolveNames) {
+        if (!loggedNamesStart && window.APP_DEBUG_ENABLED) {
           loggedNamesStart = true;
           traceLog('names: lookup start');
         }
-        traceLog(`names: done ${Object.keys(names).length} of ${uniqueHopAddrs.size} answered`);
+        if (pendingNameAddrs.size > 0) {
+          if (window.APP_DEBUG_ENABLED) {
+            traceLog(`names: pending ${pendingNameAddrs.size} after run`);
+          }
+        } else {
+          checkNamesAllSettled();
+        }
       }
 
       const hopCount = (typeof res.hops === 'number' && res.hops > 0) ? res.hops : lastTtl();
@@ -9226,13 +10422,17 @@ function updateUpgradeUI(planTier) {
 
   if (btnShare) {
     btnShare.addEventListener('click', async () => {
+      if (isShareTapDuplicate('traceroute')) {
+        if (window.APP_DEBUG_ENABLED) traceLog('ui: share tap ignored | reason=double-tap');
+        return;
+      }
       if (window.APP_DEBUG_ENABLED) traceLog('ui: share tap');
       if (viewMode === 'graph' && hops.length > 0) {
         const sharedGraph = await shareTraceGraph();
         if (sharedGraph) return;
       }
       if (lastTraceText && typeof shareText === 'function') {
-        shareText('Traceroute Results', lastTraceText);
+        shareText('Traceroute Results', lastTraceText, true);
       }
     });
   }
@@ -10489,7 +11689,7 @@ function updateUpgradeUI(planTier) {
     if (!tool) return;
     const isLocked = tool.pro && !isProNow();
     if (isLocked) {
-      showProModal(tool.feature || 'tools');
+      showProModal(tool.feature || 'dns');
       return;
     }
     openTool(tool);
@@ -11101,6 +12301,12 @@ function updateUpgradeUI(planTier) {
       whoisLog(`ui: lookup tap | inputLength=${rawLen} | pro=${isProNow()}`);
     }
     hideError();
+    rawOpen = false;
+    if (rawPre) {
+      rawPre.textContent = '';
+      rawPre.style.display = 'none';
+    }
+    updateRawButtonUI();
 
     const parsed = parseWhoisQuery(input.value);
     if (parsed.error) {
@@ -11312,11 +12518,24 @@ function updateUpgradeUI(planTier) {
     });
   }
 
+  function getWhoisOutputText() {
+    if (!lastPlainText) return '';
+    if (rawOpen && isProNow() && rawPre && rawPre.textContent) {
+      const rawScreenText = rawPre.textContent;
+      if (window.APP_DEBUG_ENABLED) {
+        whoisLog(`whois: raw included in output | chars=${rawScreenText.length}`);
+      }
+      return `${lastPlainText}\n\nRaw data\n${rawScreenText}`;
+    }
+    return lastPlainText;
+  }
+
   if (btnCopy) {
     btnCopy.addEventListener('click', () => {
       if (window.APP_DEBUG_ENABLED) whoisLog('ui: copy tap');
-      if (!lastPlainText || !navigator.clipboard || !navigator.clipboard.writeText) return;
-      navigator.clipboard.writeText(lastPlainText)
+      const outText = getWhoisOutputText();
+      if (!outText || !navigator.clipboard || !navigator.clipboard.writeText) return;
+      navigator.clipboard.writeText(outText)
         .then(() => {
           if (typeof showToast === 'function') showToast('Whois results copied!');
         })
@@ -11329,8 +12548,9 @@ function updateUpgradeUI(planTier) {
   if (btnSave) {
     btnSave.addEventListener('click', () => {
       if (window.APP_DEBUG_ENABLED) whoisLog('ui: save tap');
-      if (!lastPlainText || typeof addNote !== 'function') return;
-      addNote(lastNoteTitle || 'Whois', lastPlainText, 'Whois');
+      const outText = getWhoisOutputText();
+      if (!outText || typeof addNote !== 'function') return;
+      addNote(lastNoteTitle || 'Whois', outText, 'Whois');
       if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
       if (typeof switchToNotesTab === 'function') switchToNotesTab();
     });
@@ -11338,9 +12558,14 @@ function updateUpgradeUI(planTier) {
 
   if (btnShare) {
     btnShare.addEventListener('click', () => {
+      if (isShareTapDuplicate('whois')) {
+        if (window.APP_DEBUG_ENABLED) whoisLog('ui: share tap ignored | reason=double-tap');
+        return;
+      }
       if (window.APP_DEBUG_ENABLED) whoisLog('ui: share tap');
-      if (lastPlainText && typeof shareText === 'function') {
-        shareText(lastNoteTitle || 'Whois Results', lastPlainText);
+      const outText = getWhoisOutputText();
+      if (outText && typeof shareText === 'function') {
+        shareText(lastNoteTitle || 'Whois Results', outText, true);
       }
     });
   }

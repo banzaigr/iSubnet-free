@@ -120,7 +120,7 @@ public class PingPlugin extends Plugin {
 
         boolean continuous = Boolean.TRUE.equals(call.getBoolean("continuous", false));
 
-        int count = call.getInt("count", 4);
+        int count = call.getInt("count", 5);
         if (count < 1) count = 1;
         if (count > 100) count = 100;
 
