@@ -13,6 +13,7 @@
   --accent-primary: #4f46e5;    /* Brand Indigo */
   --accent-primary-rgb: 79, 70, 229; /* RGB for rgba() usage */
   --accent-cyan: #0ea5e9;       /* Sky Blue */
+  --ula-subnet-color: var(--accent-cyan);
   --accent-success: #10b981;    /* Sage Green */
   --accent-danger: #ef4444;     /* Rose Red */
 
@@ -2887,6 +2888,74 @@ body.dark-mode .whois-chip-warn {
   color: var(--text-muted);
   margin-top: 8px;
   line-height: 1.4;
+}
+
+/* ULA Palette Coloring */
+.ula-subnet-id {
+  color: var(--ula-subnet-color, var(--accent-cyan));
+  font-weight: 700;
+}
+
+/* Route Summarization Details & Gaps */
+.summarize-route-detail {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  line-height: 1.4;
+}
+
+.summarize-route-from {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  line-height: 1.4;
+}
+
+.summarize-entry-tag {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 10px;
+}
+
+.summarize-totals-box {
+  margin-bottom: 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summarize-gaps-box {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.summarize-gaps-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.summarize-gap-row {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
 }
 
 /* ===== TAB-BAR-HIDE EXPERIMENT: START ===== */

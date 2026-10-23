@@ -4350,6 +4350,13 @@ function loadThemeColor() {
   // Update the inactive-bit contrast color whenever the theme changes
   document.documentElement.style.setProperty('--bit-off-color', computeBitOffColor(displayColor));
 
+  // ULA Subnet ID palette color (falls back to accent-warning if cyan swatch is selected)
+  if (activeThemeColor === '#00b4d8') {
+    document.documentElement.style.setProperty('--ula-subnet-color', 'var(--accent-warning, #f59e0b)');
+  } else {
+    document.documentElement.style.setProperty('--ula-subnet-color', 'var(--accent-cyan, #0ea5e9)');
+  }
+
   // Update swatch active outline states
   const swatches = document.querySelectorAll('.theme-swatch');
   swatches.forEach(swatch => {
@@ -5531,16 +5538,162 @@ function collapseDuplicateColons(el) {
   }
 }
 
+function transformPastedNetworkText(raw, contextBefore = '', contextAfter = '') {
+  // 1. Normalize line endings
+  const str = raw.replace(/\r\n|\r/g, '\n');
+
+  // Helper: does position i in str have a separator comma?
+  function isSepComma(idx) {
+    const textBefore = idx === 0 ? contextBefore : (contextBefore + str.slice(0, idx));
+    // At the very start of the whole field (or whitespace only)
+    if (textBefore.trim() === '') return true;
+    // Follows /digits
+    if (/(?<=\/\d+)[ \t]*$/.test(textBefore)) return true;
+    // Follows another separator or newline
+    if (/[,;\n][ \t]*$/.test(textBefore)) return true;
+
+    // Followed by separator, space/tab, newline, or end of text/field
+    const textAfter = (str.slice(idx + 1) + contextAfter);
+    if (/^[ \t]*(?:[,;\n]|$)/.test(textAfter)) return true;
+
+    return false;
+  }
+
+  // Convert chars:
+  let intermediate = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === ';' || ch === '\n') {
+      intermediate += '\uE000'; // separator placeholder
+    } else if (ch === ',') {
+      if (isSepComma(i)) {
+        intermediate += '\uE000';
+      } else {
+        intermediate += '.'; // decimal comma
+      }
+    } else {
+      intermediate += ch;
+    }
+  }
+
+  // Collapse runs of separators and spaces/tabs into a single \n
+  let res = intermediate.replace(/[ \t\uE000]*\uE000[ \t\uE000]*/g, '\n');
+
+  // Filter allowed chars: [0-9a-fA-F.:/\n]
+  res = res.replace(/[^0-9a-fA-F.:/\n]/g, '');
+
+  // Collapse duplicate dots and colons
+  res = res.replace(/\.{2,}/g, '.').replace(/:{3,}/g, '::');
+
+  // Check leading separator at the start of the whole field
+  if (contextBefore === '') {
+    res = res.replace(/^\n+/, '');
+  }
+
+  // Check trailing separator / newline
+  const hadTrailingSep = /[,;\r\n][ \t\r\n]*$/.test(raw) || /(?<=\/\d+)[ \t]*,[ \t\r\n]*$/.test(raw);
+  res = res.replace(/\n+$/, '');
+  if (hadTrailingSep) {
+    if (!contextAfter.startsWith('\n')) {
+      res += '\n';
+    }
+  }
+
+  return res;
+}
+
+function handleNetworkListInput(el, e) {
+  const prevVal = typeof el._lastVal === 'string' ? el._lastVal : '';
+  const curVal = el.value;
+  const inputType = e && e.inputType;
+  const grewBy = curVal.length - prevVal.length;
+
+  const isPaste = (
+    Boolean(el._isPasting) ||
+    inputType === 'insertFromPaste' ||
+    inputType === 'insertFromDrop' ||
+    inputType === 'insertFromPasteAsQuotation' ||
+    inputType === 'insertFromYank' ||
+    inputType === 'insertReplacementText' ||
+    grewBy > 2
+  );
+  el._isPasting = false;
+
+  if (isPaste) {
+    // 1. Work out inserted range by common prefix and common suffix with prevVal
+    let prefixLen = 0;
+    while (prefixLen < prevVal.length && prefixLen < curVal.length && prevVal[prefixLen] === curVal[prefixLen]) {
+      prefixLen++;
+    }
+
+    let suffixLen = 0;
+    while (
+      suffixLen < (prevVal.length - prefixLen) &&
+      suffixLen < (curVal.length - prefixLen) &&
+      prevVal[prevVal.length - 1 - suffixLen] === curVal[curVal.length - 1 - suffixLen]
+    ) {
+      suffixLen++;
+    }
+
+    const contextBefore = prevVal.slice(0, prefixLen);
+    const insertedRaw = curVal.slice(prefixLen, curVal.length - suffixLen);
+    const contextAfter = prevVal.slice(prevVal.length - suffixLen);
+
+    const transformedSegment = transformPastedNetworkText(insertedRaw, contextBefore, contextAfter);
+
+    const finalVal = contextBefore + transformedSegment + contextAfter;
+    el.value = finalVal;
+    el._lastVal = finalVal;
+
+    const newCaret = prefixLen + transformedSegment.length;
+    if (typeof el.setSelectionRange === 'function') {
+      el.setSelectionRange(newCaret, newCaret);
+    }
+    return;
+  }
+
+  // Typed input
+  const original = curVal;
+  let cursorPos = el.selectionStart;
+  if (cursorPos === null || cursorPos === undefined) cursorPos = original.length;
+
+  let filtered = '';
+  let removedBeforeCursor = 0;
+
+  for (let i = 0; i < original.length; i++) {
+    let ch = original[i];
+    if (ch === ',') {
+      ch = '.'; // typed ',' becomes '.'
+    } else if (ch === ';') {
+      if (i < cursorPos) removedBeforeCursor++;
+      continue; // typed ';' is rejected
+    }
+
+    if (/[0-9a-fA-F.:/\n]/.test(ch)) {
+      filtered += ch;
+    } else {
+      if (i < cursorPos) removedBeforeCursor++;
+    }
+  }
+
+  if (filtered !== original) {
+    el.value = filtered;
+    const newPos = Math.max(0, cursorPos - removedBeforeCursor);
+    if (typeof el.setSelectionRange === 'function') {
+      el.setSelectionRange(newPos, newPos);
+    }
+  }
+
+  collapseDuplicateDots(el);
+  collapseDuplicateColons(el);
+  el._lastVal = el.value;
+}
+
 function setupInputSanitizers() {
   const rules = [
     { id: 'ipv4-hosts',       allowed: /[0-9]/ },
     { id: 'ipv6-hosts',       allowed: /[0-9]/ },
     { id: 'ipv6-address',     allowed: /[0-9a-fA-F:./]/ },
-    { id: 'ipv4-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
-    { id: 'ipv6-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
-    { id: 'ipv4-overlap-input', allowed: /[0-9a-fA-F.:/,\n;]/ },
-    { id: 'ipv6-overlap-input', allowed: /[0-9a-fA-F.:/,\n;]/ },
-    { id: 'summarize-input',    allowed: /[0-9a-fA-F.:/,\n;]/ },
     { id: 'split-base-ip',    allowed: /[0-9a-fA-F.:/]/ },
     { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ },
     { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
@@ -5554,11 +5707,27 @@ function setupInputSanitizers() {
     el.addEventListener('input', () => {
       if (id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') normalizeDnsInput(el);
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'ipv4-overlap-input' || id === 'ipv6-overlap-input' || id === 'summarize-input' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') {
         collapseDuplicateDots(el);
         collapseDuplicateColons(el);
       }
     });
+  });
+
+  // Network list inputs (Bulk, Overlap, Summarize) sharing unified typed/pasted sanitization
+  const networkListIds = [
+    'ipv4-bulk-input',
+    'ipv6-bulk-input',
+    'ipv4-overlap-input',
+    'ipv6-overlap-input',
+    'summarize-input'
+  ];
+  networkListIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el._lastVal = el.value;
+    el.addEventListener('paste', () => { el._isPasting = true; });
+    el.addEventListener('input', (e) => handleNetworkListInput(el, e));
   });
 }
 
@@ -13613,17 +13782,45 @@ function runUlaGenerate() {
   const rangeEl = document.getElementById('ula-res-range');
   const firstSubnetsEl = document.getElementById('ula-res-first-subnets');
 
-  if (prefixEl) prefixEl.textContent = res.cidr;
-  if (globalIdEl) globalIdEl.textContent = res.globalIdHex;
+  if (prefixEl) {
+    prefixEl.innerHTML = `<span class="bit-on">${res.cidr.replace(/::\/48$/, '')}</span><span class="bit-off">::</span><span class="text-muted">/48</span>`;
+  }
+  if (globalIdEl) {
+    globalIdEl.innerHTML = `<span class="bit-on">${res.globalIdHex}</span>`;
+  }
   if (rangeEl) {
-    const formatWithWbr = (addr) => addr.replace(/::/g, '::<wbr>').replace(/(?<!:):(?!:)/g, ':<wbr>');
+    const fIdx = res.firstAddr.lastIndexOf('::');
+    const fPrefix = res.firstAddr.slice(0, fIdx);
+    const fPrefixHtml = fPrefix.split(':').join(':<wbr>');
+    const firstAddrHtml = `<span class="bit-on">${fPrefixHtml}</span><span class="bit-off">::<wbr></span>`;
+
+    const parts = res.lastAddr.split(':');
+    const g123Html = parts.slice(0, 3).join(':<wbr>') + ':<wbr>';
+    const g4Html = parts[3] + ':<wbr>';
+    const g58Html = parts.slice(4).join(':<wbr>');
+    const lastAddrHtml = `<span class="bit-on">${g123Html}</span><span class="ula-subnet-id">${g4Html}</span><span class="bit-off">${g58Html}</span>`;
+
     rangeEl.innerHTML = `
-      <div class="ula-range-line"><span class="ula-range-tag">From</span><span class="ula-range-addr">${formatWithWbr(res.firstAddr)}</span></div>
-      <div class="ula-range-line"><span class="ula-range-tag">To</span><span class="ula-range-addr">${formatWithWbr(res.lastAddr)}</span></div>
+      <div class="ula-range-line"><span class="ula-range-tag">From</span><span class="ula-range-addr">${firstAddrHtml}</span></div>
+      <div class="ula-range-line"><span class="ula-range-tag">To</span><span class="ula-range-addr">${lastAddrHtml}</span></div>
     `;
   }
   if (firstSubnetsEl) {
-    firstSubnetsEl.innerHTML = res.subnets.map((s) => `<div class="ula-subnet-item">${s}</div>`).join('');
+    const p = res.cidr.replace(/::\/48$/, '');
+    firstSubnetsEl.innerHTML = res.subnets.map((s, idx) => {
+      if (idx === 0) {
+        return `<div class="ula-subnet-item"><span class="bit-on">${p}</span><span class="bit-off">::</span><span class="text-muted">/64</span></div>`;
+      }
+      const prefixWithColon = `${p}:`;
+      if (s.startsWith(prefixWithColon)) {
+        const rest = s.slice(prefixWithColon.length);
+        const m = rest.match(/^([0-9a-fA-F]+)(::\/64)$/);
+        if (m) {
+          return `<div class="ula-subnet-item"><span class="bit-on">${prefixWithColon}</span><span class="ula-subnet-id">${m[1]}</span><span class="bit-off">::</span><span class="text-muted">/64</span></div>`;
+        }
+      }
+      return `<div class="ula-subnet-item">${s}</div>`;
+    }).join('');
   }
 
   if (card) {
@@ -13721,7 +13918,55 @@ let _lastSummarizeText = '';
 function summarizeFamily(validEntries, maxBits) {
   if (validEntries.length === 0) return null;
 
-  // 1. Sort ranges by start asc, then end desc
+  const maxB = BigInt(maxBits);
+
+  // 1. Tag duplicates and covered entries
+  const n = validEntries.length;
+  const entryTags = new Array(n).fill(null);
+
+  for (let i = 0; i < n; i++) {
+    const e = validEntries[i];
+
+    // Priority 1: Duplicate check - identical to an EARLIER entry (lowest-numbered earlier identical entry)
+    let dupTarget = null;
+    for (let j = 0; j < i; j++) {
+      const prev = validEntries[j];
+      if (prev.start === e.start && prev.end === e.end) {
+        if (dupTarget === null || prev.index < dupTarget) {
+          dupTarget = prev.index;
+        }
+      }
+    }
+    if (dupTarget !== null) {
+      entryTags[i] = { type: 'duplicate', targetIndex: dupTarget };
+      continue;
+    }
+
+    // Priority 2: Covered check - strictly contained in ANY other non-identical entry (earlier or later)
+    let coverTarget = null;
+    for (let j = 0; j < n; j++) {
+      if (j === i) continue;
+      const other = validEntries[j];
+      const isIdentical = (other.start === e.start && other.end === e.end);
+      if (!isIdentical && other.start <= e.start && other.end >= e.end) {
+        if (coverTarget === null || other.index < coverTarget) {
+          coverTarget = other.index;
+        }
+      }
+    }
+    if (coverTarget !== null) {
+      entryTags[i] = { type: 'covered', targetIndex: coverTarget };
+    }
+  }
+
+  let coveredCount = 0;
+  for (let i = 0; i < n; i++) {
+    if (entryTags[i] !== null) {
+      coveredCount++;
+    }
+  }
+
+  // 2. Sort ranges for merging
   const sorted = [...validEntries].sort((a, b) => {
     if (a.start < b.start) return -1;
     if (a.start > b.start) return 1;
@@ -13730,18 +13975,7 @@ function summarizeFamily(validEntries, maxBits) {
     return 0;
   });
 
-  // Count duplicates / covered
-  let coveredCount = 0;
-  let currentMax = BigInt(-1);
-  sorted.forEach((e) => {
-    if (e.end <= currentMax) {
-      coveredCount++;
-    } else {
-      currentMax = e.end;
-    }
-  });
-
-  // 2. Merge overlapping / adjacent ranges
+  // Merge overlapping / adjacent ranges
   const mergedRanges = [];
   sorted.forEach((e) => {
     if (mergedRanges.length === 0) {
@@ -13760,7 +13994,6 @@ function summarizeFamily(validEntries, maxBits) {
 
   // 3. Exact minimal CIDR decomposition
   const exactRoutes = [];
-  const maxB = BigInt(maxBits);
 
   mergedRanges.forEach((range) => {
     let curr = range.start;
@@ -13780,15 +14013,56 @@ function summarizeFamily(validEntries, maxBits) {
       }
       const prefix = maxBits - k;
       const count = BigInt(1) << BigInt(k);
+      const routeEnd = curr + count - BigInt(1);
       const cidr = maxBits === 32
         ? `${uint32ToIp(Number(curr))}/${prefix}`
         : `${formatIPv6Compressed(curr)}/${prefix}`;
-      exactRoutes.push({ cidr, prefix, start: curr, count });
+
+      let netmaskStr = null;
+      if (maxBits === 32) {
+        const maskUint = prefix === 0 ? 0 : ((0xFFFFFFFF << (32 - prefix)) >>> 0);
+        netmaskStr = uint32ToIp(maskUint);
+      }
+
+      const firstAddr = maxBits === 32 ? uint32ToIp(Number(curr)) : formatIPv6Compressed(curr);
+      const lastAddr = maxBits === 32 ? uint32ToIp(Number(routeEnd)) : formatIPv6Compressed(routeEnd);
+
+      exactRoutes.push({
+        cidr,
+        prefix,
+        start: curr,
+        end: routeEnd,
+        count,
+        netmaskStr,
+        firstAddr,
+        lastAddr,
+        entries: []
+      });
       curr += count;
     }
   });
 
   exactRoutes.sort((a, b) => (a.start < b.start ? -1 : (a.start > b.start ? 1 : 0)));
+
+  // Map input entries to routes in one linear pass over sorted entries
+  const sortedEntryIndices = validEntries.map((e, idx) => ({ e, originalIdx: idx, tag: entryTags[idx] }))
+    .sort((a, b) => (a.e.start < b.e.start ? -1 : (a.e.start > b.e.start ? 1 : 0)));
+
+  let rIdx = 0;
+  for (let i = 0; i < sortedEntryIndices.length; i++) {
+    const item = sortedEntryIndices[i];
+    while (rIdx < exactRoutes.length && item.e.start > exactRoutes[rIdx].end) {
+      rIdx++;
+    }
+    if (rIdx < exactRoutes.length && item.e.start >= exactRoutes[rIdx].start && item.e.end <= exactRoutes[rIdx].end) {
+      exactRoutes[rIdx].entries.push(item);
+    }
+  }
+
+  // Restore entry order inside each route to input order
+  exactRoutes.forEach((r) => {
+    r.entries.sort((a, b) => a.originalIdx - b.originalIdx);
+  });
 
   // 4. Single summary route
   let lo = validEntries[0].start;
@@ -13819,11 +14093,22 @@ function summarizeFamily(validEntries, maxBits) {
     summaryNet = lo & mask;
   }
 
+  const summaryTotal = pLen === 0 ? (BigInt(1) << maxB) : (BigInt(1) << hostBits);
+  const summaryEnd = summaryNet + summaryTotal - BigInt(1);
+
   const summaryCidr = maxBits === 32
     ? `${uint32ToIp(Number(summaryNet))}/${pLen}`
     : `${formatIPv6Compressed(summaryNet)}/${pLen}`;
 
-  const summaryTotal = pLen === 0 ? (BigInt(1) << maxB) : (BigInt(1) << hostBits);
+  let summaryNetmaskStr = null;
+  if (maxBits === 32) {
+    const maskUint = pLen === 0 ? 0 : ((0xFFFFFFFF << (32 - pLen)) >>> 0);
+    summaryNetmaskStr = uint32ToIp(maskUint);
+  }
+
+  const summaryFirstAddr = maxBits === 32 ? uint32ToIp(Number(summaryNet)) : formatIPv6Compressed(summaryNet);
+  const summaryLastAddr = maxBits === 32 ? uint32ToIp(Number(summaryEnd)) : formatIPv6Compressed(summaryEnd);
+
   let unionTotal = BigInt(0);
   mergedRanges.forEach((r) => {
     unionTotal += (r.end - r.start + BigInt(1));
@@ -13842,6 +14127,33 @@ function summarizeFamily(validEntries, maxBits) {
     }
   }
 
+  // 5. Gaps calculation
+  const gaps = [];
+  if (summaryNet < mergedRanges[0].start) {
+    gaps.push({
+      start: summaryNet,
+      end: mergedRanges[0].start - BigInt(1)
+    });
+  }
+  for (let i = 0; i < mergedRanges.length - 1; i++) {
+    gaps.push({
+      start: mergedRanges[i].end + BigInt(1),
+      end: mergedRanges[i + 1].start - BigInt(1)
+    });
+  }
+  if (summaryEnd > mergedRanges[mergedRanges.length - 1].end) {
+    gaps.push({
+      start: mergedRanges[mergedRanges.length - 1].end + BigInt(1),
+      end: summaryEnd
+    });
+  }
+
+  gaps.forEach((g) => {
+    g.count = g.end - g.start + BigInt(1);
+    g.first = maxBits === 32 ? uint32ToIp(Number(g.start)) : formatIPv6Compressed(g.start);
+    g.last = maxBits === 32 ? uint32ToIp(Number(g.end)) : formatIPv6Compressed(g.end);
+  });
+
   const normalizedCount = validEntries.filter((v) => v.normalized).length;
 
   return {
@@ -13851,12 +14163,18 @@ function summarizeFamily(validEntries, maxBits) {
     summaryCidr,
     summaryPrefix: pLen,
     summaryTotal,
+    summaryStart: summaryNet,
+    summaryEnd,
+    summaryNetmaskStr,
+    summaryFirstAddr,
+    summaryLastAddr,
     unionTotal,
     extraAddresses,
     extraShareStr,
     extraSharePercent,
     coveredCount,
-    normalizedCount
+    normalizedCount,
+    gaps
   };
 }
 
@@ -13868,45 +14186,68 @@ function buildSummarizeText(v4Res, v6Res, invalidEntries) {
   if (v6Res) parts.push(`IPv6: ${v6Res.inputCount}`);
   lines.push(`Input: ${totalIn} networks (${parts.join(', ')})`);
 
-  if (v4Res) {
+  [v4Res, v6Res].filter(Boolean).forEach((res) => {
     lines.push('');
-    lines.push('IPv4');
-    lines.push(`Exact aggregation: ${v4Res.inputCount} -> ${v4Res.exactRoutes.length} ${v4Res.exactRoutes.length === 1 ? 'route' : 'routes'}`);
-    const limit = Math.min(v4Res.exactRoutes.length, 500);
-    for (let i = 0; i < limit; i++) {
-      lines.push(v4Res.exactRoutes[i].cidr);
+    const familyName = `IPv${res.family}`;
+    const fewerStr = res.exactRoutes.length < res.inputCount
+      ? ` (${(((res.inputCount - res.exactRoutes.length) / res.inputCount) * 100).toFixed(1)}% fewer)`
+      : '';
+    const routeWord = res.exactRoutes.length === 1 ? 'route' : 'routes';
+    const netWord = res.inputCount === 1 ? 'network' : 'networks';
+    lines.push(`${familyName}: ${res.inputCount} ${netWord} -> ${res.exactRoutes.length} ${routeWord}${fewerStr}`);
+    lines.push(`Addresses in your list: ${formatAddressCount(res.unionTotal)}`);
+
+    lines.push('Exact routes:');
+    const routeLimit = Math.min(res.exactRoutes.length, 500);
+    for (let i = 0; i < routeLimit; i++) {
+      const r = res.exactRoutes[i];
+      const addrWord = r.count === BigInt(1) ? 'address' : 'addresses';
+      lines.push(`${r.cidr} (${formatAddressCount(r.count)} ${addrWord})`);
+
+      const maskPart = r.netmaskStr ? `, mask ${r.netmaskStr}` : '';
+      lines.push(`  ${r.firstAddr} - ${r.lastAddr}${maskPart}`);
+
+      const entryStrings = r.entries.slice(0, 20).map((item) => {
+        let tagStr = '';
+        if (item.tag) {
+          const rel = item.tag.type === 'duplicate' ? 'duplicate of' : 'covered by';
+          tagStr = ` (${rel} #${item.tag.targetIndex})`;
+        }
+        return `#${item.e.index} ${item.e.cidr}${tagStr}`;
+      });
+      if (r.entries.length > 20) {
+        entryStrings.push(`+ ${r.entries.length - 20} more`);
+      }
+      lines.push(`  from ${entryStrings.join(', ')}`);
     }
-    if (v4Res.exactRoutes.length > 500) {
-      lines.push(`+ ${v4Res.exactRoutes.length - 500} more routes`);
+    if (res.exactRoutes.length > 500) {
+      lines.push(`+ ${res.exactRoutes.length - 500} more routes`);
     }
 
-    if (v4Res.extraAddresses === BigInt(0)) {
-      lines.push('Single summary route: same as the exact result (no extra addresses)');
+    if (res.extraAddresses === BigInt(0)) {
+      lines.push(`Single summary route: ${res.summaryCidr} (${formatAddressCount(res.summaryTotal)} ${res.summaryTotal === BigInt(1) ? 'address' : 'addresses'})`);
+      const maskPart = res.summaryNetmaskStr ? `, mask ${res.summaryNetmaskStr}` : '';
+      lines.push(`  ${res.summaryFirstAddr} - ${res.summaryLastAddr}${maskPart}`);
+      lines.push('  No extra addresses - identical to the exact result');
     } else {
-      const extraWord = v4Res.extraAddresses === BigInt(1) ? 'address' : 'addresses';
-      lines.push(`Single summary route: ${v4Res.summaryCidr} (${formatAddressCount(v4Res.summaryTotal)} ${extraWord}; ${formatAddressCount(v4Res.extraAddresses)} not in your list, ${v4Res.extraShareStr})`);
+      const totalWord = res.summaryTotal === BigInt(1) ? 'address' : 'addresses';
+      lines.push(`Single summary route: ${res.summaryCidr} (${formatAddressCount(res.summaryTotal)} ${totalWord})`);
+      const maskPart = res.summaryNetmaskStr ? `, mask ${res.summaryNetmaskStr}` : '';
+      lines.push(`  ${res.summaryFirstAddr} - ${res.summaryLastAddr}${maskPart}`);
+      const extraWord = res.extraAddresses === BigInt(1) ? 'address' : 'addresses';
+      lines.push(`  Not in your list: ${formatAddressCount(res.extraAddresses)} ${extraWord} (${res.extraShareStr})`);
+      lines.push('  Gaps:');
+      const gapLimit = Math.min(res.gaps.length, 50);
+      for (let g = 0; g < gapLimit; g++) {
+        const gap = res.gaps[g];
+        const gWord = gap.count === BigInt(1) ? 'address' : 'addresses';
+        lines.push(`  ${gap.first} - ${gap.last} (${formatAddressCount(gap.count)} ${gWord})`);
+      }
+      if (res.gaps.length > 50) {
+        lines.push(`  + ${res.gaps.length - 50} more gaps`);
+      }
     }
-  }
-
-  if (v6Res) {
-    lines.push('');
-    lines.push('IPv6');
-    lines.push(`Exact aggregation: ${v6Res.inputCount} -> ${v6Res.exactRoutes.length} ${v6Res.exactRoutes.length === 1 ? 'route' : 'routes'}`);
-    const limit = Math.min(v6Res.exactRoutes.length, 500);
-    for (let i = 0; i < limit; i++) {
-      lines.push(v6Res.exactRoutes[i].cidr);
-    }
-    if (v6Res.exactRoutes.length > 500) {
-      lines.push(`+ ${v6Res.exactRoutes.length - 500} more routes`);
-    }
-
-    if (v6Res.extraAddresses === BigInt(0)) {
-      lines.push('Single summary route: same as the exact result (no extra addresses)');
-    } else {
-      const extraWord = v6Res.extraAddresses === BigInt(1) ? 'address' : 'addresses';
-      lines.push(`Single summary route: ${v6Res.summaryCidr} (${formatAddressCount(v6Res.summaryTotal)} ${extraWord}; ${formatAddressCount(v6Res.extraAddresses)} not in your list, ${v6Res.extraShareStr})`);
-    }
-  }
+  });
 
   if (invalidEntries && invalidEntries.length > 0) {
     lines.push('');
@@ -13990,6 +14331,87 @@ function runRouteSummarization() {
       subtitle.textContent = `${res.inputCount} ${res.inputCount === 1 ? 'network' : 'networks'} -> ${res.exactRoutes.length} ${res.exactRoutes.length === 1 ? 'route' : 'routes'}`;
       sec.appendChild(subtitle);
 
+      // Totals block
+      const totalsBox = document.createElement('div');
+      totalsBox.className = 'summarize-totals-box';
+
+      const rowEntered = document.createElement('div');
+      rowEntered.className = 'result-row';
+      rowEntered.style.cssText = 'display: flex; justify-content: space-between; align-items: center; font-size: 12px;';
+      const lblEntered = document.createElement('span');
+      lblEntered.className = 'result-lbl';
+      lblEntered.textContent = 'Networks entered';
+      const valEntered = document.createElement('span');
+      valEntered.className = 'result-val';
+      valEntered.style.fontFamily = 'monospace';
+      valEntered.textContent = `${res.inputCount}${res.coveredCount > 0 ? ` (${res.coveredCount} duplicate or covered)` : ''}`;
+      rowEntered.appendChild(lblEntered);
+      rowEntered.appendChild(valEntered);
+      totalsBox.appendChild(rowEntered);
+
+      const rowUnion = document.createElement('div');
+      rowUnion.className = 'result-row';
+      rowUnion.style.cssText = 'display: flex; justify-content: space-between; align-items: center; font-size: 12px;';
+      const lblUnion = document.createElement('span');
+      lblUnion.className = 'result-lbl';
+      lblUnion.textContent = 'Addresses in your list';
+      const valUnion = document.createElement('span');
+      valUnion.className = 'result-val';
+      valUnion.style.fontFamily = 'monospace';
+      valUnion.textContent = formatAddressCount(res.unionTotal);
+      rowUnion.appendChild(lblUnion);
+      rowUnion.appendChild(valUnion);
+      totalsBox.appendChild(rowUnion);
+
+      const rowExact = document.createElement('div');
+      rowExact.className = 'result-row';
+      rowExact.style.cssText = 'display: flex; justify-content: space-between; align-items: center; font-size: 12px;';
+      const lblExact = document.createElement('span');
+      lblExact.className = 'result-lbl';
+      lblExact.textContent = 'Exact routes';
+      const valExact = document.createElement('span');
+      valExact.className = 'result-val';
+      valExact.style.fontFamily = 'monospace';
+      const fewerStr = res.exactRoutes.length < res.inputCount
+        ? ` (${(((res.inputCount - res.exactRoutes.length) / res.inputCount) * 100).toFixed(1)}% fewer than entered)`
+        : '';
+      valExact.textContent = `${res.exactRoutes.length}${fewerStr}`;
+      rowExact.appendChild(lblExact);
+      rowExact.appendChild(valExact);
+      totalsBox.appendChild(rowExact);
+
+      const rowSummary = document.createElement('div');
+      rowSummary.className = 'result-row';
+      rowSummary.style.cssText = 'display: flex; justify-content: space-between; align-items: center; font-size: 12px;';
+      const lblSummary = document.createElement('span');
+      lblSummary.className = 'result-lbl';
+      lblSummary.textContent = 'Single summary route';
+      const valSummary = document.createElement('span');
+      valSummary.className = 'result-val';
+      valSummary.style.fontFamily = 'monospace';
+      valSummary.textContent = formatAddressCount(res.summaryTotal);
+      rowSummary.appendChild(lblSummary);
+      rowSummary.appendChild(valSummary);
+      totalsBox.appendChild(rowSummary);
+
+      const rowWasted = document.createElement('div');
+      rowWasted.className = 'result-row';
+      rowWasted.style.cssText = 'display: flex; justify-content: space-between; align-items: center; font-size: 12px;';
+      const lblWasted = document.createElement('span');
+      lblWasted.className = 'result-lbl';
+      lblWasted.textContent = 'Wasted by the summary route';
+      const valWasted = document.createElement('span');
+      valWasted.className = 'result-val';
+      valWasted.style.fontFamily = 'monospace';
+      valWasted.textContent = res.extraAddresses === BigInt(0)
+        ? '0'
+        : `${formatAddressCount(res.extraAddresses)} (${res.extraShareStr})`;
+      rowWasted.appendChild(lblWasted);
+      rowWasted.appendChild(valWasted);
+      totalsBox.appendChild(rowWasted);
+
+      sec.appendChild(totalsBox);
+
       // Exact aggregation box
       const exactBox = document.createElement('div');
       exactBox.className = 'summarize-exact-box';
@@ -14004,9 +14426,14 @@ function runRouteSummarization() {
       exactHead.textContent = 'Exact Aggregation';
       exactBox.appendChild(exactHead);
 
+      const formatColons = (s) => s.replace(/::/g, '::<wbr>').replace(/(?<!:):(?!:)/g, ':<wbr>');
+
       const limit = Math.min(res.exactRoutes.length, 500);
       for (let i = 0; i < limit; i++) {
         const r = res.exactRoutes[i];
+        const routeItem = document.createElement('div');
+        routeItem.style.marginBottom = '10px';
+
         const row = document.createElement('div');
         row.className = 'summarize-route-row';
         const cidrSpan = document.createElement('span');
@@ -14019,8 +14446,36 @@ function runRouteSummarization() {
         const word = r.count === BigInt(1) ? 'addr' : 'addrs';
         countSpan.textContent = `${formatAddressCount(r.count)} ${word}`;
         row.appendChild(countSpan);
+        routeItem.appendChild(row);
 
-        exactBox.appendChild(row);
+        // Line 2: range and netmask
+        const rangeDetail = document.createElement('div');
+        rangeDetail.className = 'summarize-route-detail';
+        const firstFmt = res.family === 6 ? formatColons(r.firstAddr) : r.firstAddr;
+        const lastFmt = res.family === 6 ? formatColons(r.lastAddr) : r.lastAddr;
+        const maskPart = r.netmaskStr ? ` | mask ${r.netmaskStr}` : '';
+        rangeDetail.innerHTML = `${firstFmt} - ${lastFmt}${maskPart}`;
+        routeItem.appendChild(rangeDetail);
+
+        // Line 3: from entries
+        const fromDiv = document.createElement('div');
+        fromDiv.className = 'summarize-route-from';
+        const visibleEntries = r.entries.slice(0, 6);
+        const entryParts = visibleEntries.map((item) => {
+          let tagStr = '';
+          if (item.tag) {
+            const rel = item.tag.type === 'duplicate' ? 'duplicate of' : 'covered by';
+            tagStr = ` <span class="summarize-entry-tag">(${rel} #${item.tag.targetIndex})</span>`;
+          }
+          return `#${item.e.index} ${item.e.cidr}${tagStr}`;
+        });
+        if (r.entries.length > 6) {
+          entryParts.push(`+ ${r.entries.length - 6} more`);
+        }
+        fromDiv.innerHTML = `from ${entryParts.join(', ')}`;
+        routeItem.appendChild(fromDiv);
+
+        exactBox.appendChild(routeItem);
       }
       if (res.exactRoutes.length > 500) {
         const more = document.createElement('div');
@@ -14053,11 +14508,53 @@ function runRouteSummarization() {
         singleCidr.textContent = `${res.summaryCidr} (${formatAddressCount(res.summaryTotal)} ${totalWord})`;
         singleBox.appendChild(singleCidr);
 
+        // Range line for single summary route
+        const sumRange = document.createElement('div');
+        sumRange.className = 'summarize-route-detail';
+        sumRange.style.marginTop = '2px';
+        const sumFirstFmt = res.family === 6 ? formatColons(res.summaryFirstAddr) : res.summaryFirstAddr;
+        const sumLastFmt = res.family === 6 ? formatColons(res.summaryLastAddr) : res.summaryLastAddr;
+        const sumMaskPart = res.summaryNetmaskStr ? ` | mask ${res.summaryNetmaskStr}` : '';
+        sumRange.innerHTML = `${sumFirstFmt} - ${sumLastFmt}${sumMaskPart}`;
+        singleBox.appendChild(sumRange);
+
         const details = document.createElement('div');
         details.className = 'summarize-single-details';
+        details.style.marginTop = '4px';
         const extraWord = res.extraAddresses === BigInt(1) ? 'address' : 'addresses';
         details.textContent = `${formatAddressCount(res.extraAddresses)} ${extraWord} not in your list (${res.extraShareStr})`;
         singleBox.appendChild(details);
+
+        // Gaps block
+        if (res.gaps && res.gaps.length > 0) {
+          const gapsBox = document.createElement('div');
+          gapsBox.className = 'summarize-gaps-box';
+          const gapsTitle = document.createElement('div');
+          gapsTitle.className = 'summarize-gaps-title';
+          gapsTitle.textContent = 'Not in your list (gaps)';
+          gapsBox.appendChild(gapsTitle);
+
+          const maxGapsUi = Math.min(res.gaps.length, 20);
+          for (let i = 0; i < maxGapsUi; i++) {
+            const g = res.gaps[i];
+            const gapRow = document.createElement('div');
+            gapRow.className = 'summarize-gap-row';
+            const gFirst = res.family === 6 ? formatColons(g.first) : g.first;
+            const gLast = res.family === 6 ? formatColons(g.last) : g.last;
+            const gWord = g.count === BigInt(1) ? 'address' : 'addresses';
+            gapRow.innerHTML = `${gFirst} - ${gLast} (${formatAddressCount(g.count)} ${gWord})`;
+            gapsBox.appendChild(gapRow);
+          }
+          if (res.gaps.length > 20) {
+            const moreGaps = document.createElement('div');
+            moreGaps.className = 'text-muted';
+            moreGaps.style.fontSize = '11px';
+            moreGaps.style.marginTop = '3px';
+            moreGaps.textContent = `+ ${res.gaps.length - 20} more gaps (not shown)`;
+            gapsBox.appendChild(moreGaps);
+          }
+          singleBox.appendChild(gapsBox);
+        }
 
         if (res.extraSharePercent > 50) {
           const warn = document.createElement('div');

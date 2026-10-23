@@ -521,7 +521,7 @@
           <!-- Bulk IPv4 Panel (hidden by default) -->
           <div id="ipv4-bulk-panel" class="hidden">
             <div class="input-group">
-              <label for="ipv4-bulk-input">IP Addresses (one per line or comma separated, e.g. 10.0.0.1/24)</label>
+              <label for="ipv4-bulk-input">IP Addresses (one per line, e.g. 10.0.0.1/24)</label>
               <textarea id="ipv4-bulk-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="5" placeholder="192.168.1.1/24&#10;10.0.0.5/8&#10;172.16.1.10/16" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
               <span class="error-msg" id="ipv4-bulk-error"></span>
             </div>
@@ -531,7 +531,7 @@
           <!-- Overlap IPv4 Panel (hidden by default) -->
           <div id="ipv4-overlap-panel" class="hidden">
             <div class="input-group">
-              <label for="ipv4-overlap-input">Networks (one per line, or separated by commas). e.g. 10.0.0.0/24</label>
+              <label for="ipv4-overlap-input">Networks (one per line). e.g. 10.0.0.0/24</label>
               <textarea id="ipv4-overlap-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="6" maxlength="60000" data-kbd-keep-visible="btn-check-overlap-v4" placeholder="10.0.0.0/24&#10;10.0.0.128/25&#10;192.168.1.0/24" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
               <span class="error-msg" id="ipv4-overlap-error"></span>
             </div>
@@ -747,7 +747,7 @@
           <!-- Bulk IPv6 Panel (hidden by default) -->
           <div id="ipv6-bulk-panel" class="hidden">
             <div class="input-group">
-              <label for="ipv6-bulk-input">IPv6 Addresses (one per line or comma separated, e.g. 2001:db8::/64)</label>
+              <label for="ipv6-bulk-input">IPv6 Addresses (one per line, e.g. 2001:db8::/64)</label>
               <textarea id="ipv6-bulk-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="5" placeholder="2001:db8::/64&#10;fe80::1/10&#10;2001:db8:a::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
               <span class="error-msg" id="ipv6-bulk-error"></span>
             </div>
@@ -757,7 +757,7 @@
           <!-- Overlap IPv6 Panel (hidden by default) -->
           <div id="ipv6-overlap-panel" class="hidden">
             <div class="input-group">
-              <label for="ipv6-overlap-input">Networks (one per line, or separated by commas). e.g. 2001:db8::/48</label>
+              <label for="ipv6-overlap-input">Networks (one per line). e.g. 2001:db8::/48</label>
               <textarea id="ipv6-overlap-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="6" maxlength="60000" data-kbd-keep-visible="btn-check-overlap-v6" placeholder="2001:db8::/48&#10;2001:db8:0:1::/64&#10;fd00:1234::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
               <span class="error-msg" id="ipv6-overlap-error"></span>
             </div>
@@ -1992,7 +1992,7 @@
             <div class="result-item">
               <span class="result-label">First /64 Subnets</span>
               <div id="ula-res-first-subnets"></div>
-              <div class="text-muted" style="font-size: 11px; margin-top: 4px;">Subnet ID is the 4th group (0000 - ffff).</div>
+              <div class="text-muted" style="font-size: 11px; margin-top: 6px;"><span class="bit-on">Prefix (/48)</span> &bull; <span class="ula-subnet-id">Subnet ID</span> &bull; <span class="bit-off">Interface ID</span> (Subnet ID is the 4th group, 0000 - ffff).</div>
             </div>
           </div>
           <div class="text-muted" style="font-size: 11px; margin-top: 14px; line-height: 1.4;">
@@ -2026,7 +2026,7 @@
         </div>
         <div class="card input-card">
           <div class="input-group">
-            <label for="summarize-input">Networks (one per line, or separated by commas)</label>
+            <label for="summarize-input">Networks (one per line)</label>
             <textarea id="summarize-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="8" maxlength="60000" data-kbd-keep-visible="btn-summarize-run" placeholder="10.0.0.0/24&#10;10.0.1.0/24&#10;10.0.2.0/24&#10;10.0.3.0/24&#10;2001:db8:0::/48&#10;2001:db8:1::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
             <span class="error-msg" id="summarize-error-msg"></span>
           </div>
