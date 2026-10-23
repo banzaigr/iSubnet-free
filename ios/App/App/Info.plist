@@ -48,6 +48,6 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>iSubnet uses your local network to ping devices on it when you run the Ping tool.</string>
+	<string>iSubnet uses your local network to reach devices on it when you run the Ping and Traceroute tools.</string>
 </dict>
 </plist>

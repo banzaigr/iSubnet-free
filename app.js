@@ -924,9 +924,13 @@ function applyProState() {
         btn.readOnly = false;
         if (btn.value === '🔒 Pro') {
           btn.value = ''; // Will be recomputed instantly
-          if (typeof convertBase === 'function') {
+          if (typeof runBaseConverter === 'function') {
             const decInput = document.getElementById('base-dec-input');
-            if (decInput && decInput.value) convertBase('dec', 10);
+            const binInput = document.getElementById('base-bin-input');
+            const octInput = document.getElementById('base-oct-input');
+            if (decInput && decInput.value) runBaseConverter('dec', 10);
+            else if (binInput && binInput.value) runBaseConverter('bin', 2);
+            else if (octInput && octInput.value) runBaseConverter('oct', 8);
           }
         }
       }
@@ -962,34 +966,33 @@ function applyProState() {
     
     // Lock all generalized pro feature buttons
     allProBtns.forEach(btn => {
+      // Build 115C: In Free plan, Hex copy button has no badge (field itself shows 🔒 Pro)
+      if (btn.id === 'btn-copy-base-hex') {
+        const lockBadge = btn.querySelector('.pro-badge');
+        if (lockBadge) lockBadge.remove();
+        return;
+      }
+      // Build 115C: Hex input is locked and label remains interactive for Pro gate, but has no badge
+      if (btn.id === 'base-hex-input') {
+        btn.disabled = false;
+        btn.readOnly = true;
+        btn.value = '🔒 Pro';
+        const label = document.querySelector('label[for="base-hex-input"], label[data-hex-label="true"]');
+        if (label) {
+          label.setAttribute('data-hex-label', 'true');
+          const existingBadge = label.querySelector('.pro-badge');
+          if (existingBadge) existingBadge.remove();
+          setProLabelInteractivity(label, null, true);
+        }
+        return;
+      }
       if (btn.id !== 'tab-btn-splitter' && !btn.querySelector('.pro-badge')) {
         // Create the pro badge
         const badgeEl = document.createElement('span');
         badgeEl.className = 'pro-badge';
         badgeEl.textContent = '🔒 Pro';
         badgeEl.style.marginLeft = '4px';
-        
-        // If it's a label with a specific layout or input, handle it
-        if (btn.id === 'base-hex-input') {
-          btn.disabled = false;
-          btn.readOnly = true;
-          btn.value = '🔒 Pro';
-          
-          // Also add badge to the label for visibility
-          const label = document.querySelector('label[for="base-hex-input"], label[data-hex-label="true"]');
-          if (label) { label.setAttribute('data-hex-label', 'true'); }
-          if (label && !label.querySelector('.pro-badge')) {
-            const labelBadge = document.createElement('span');
-            labelBadge.className = 'pro-badge';
-            labelBadge.textContent = '🔒 Pro';
-            labelBadge.style.textTransform = 'none';
-            labelBadge.style.letterSpacing = '0';
-            label.appendChild(labelBadge);
-            setProLabelInteractivity(label, labelBadge, true);
-          }
-        } else {
-          btn.appendChild(badgeEl);
-        }
+        btn.appendChild(badgeEl);
       }
     });
     
@@ -1171,6 +1174,61 @@ function coloredBinaryStr(binaryDottedStr) {
 }
 
 
+// Pure helper to classify IPv4 address class and type
+function classifyIPv4(ipVal) {
+  const u = (typeof ipVal === 'string' ? ipToUint32(ipVal) : (Number(ipVal) >>> 0)) >>> 0;
+  const o1 = (u >>> 24) & 255;
+  const o2 = (u >>> 16) & 255;
+  const o3 = (u >>> 8) & 255;
+
+  let ipClass = 'Unknown';
+  if (o1 === 0) ipClass = 'Class A (Reserved)';
+  else if (o1 >= 1 && o1 <= 126) ipClass = 'Class A';
+  else if (o1 === 127) ipClass = 'Class A (Loopback)';
+  else if (o1 >= 128 && o1 <= 191) ipClass = 'Class B';
+  else if (o1 >= 192 && o1 <= 223) ipClass = 'Class C';
+  else if (o1 >= 224 && o1 <= 239) ipClass = 'Class D (Multicast)';
+  else if (o1 >= 240 && o1 <= 255) ipClass = 'Class E (Experimental)';
+
+  let ipType = 'Public IP';
+  if (o1 === 10) {
+    ipType = 'Private IP (Class A)';
+  } else if (o1 === 172 && o2 >= 16 && o2 <= 31) {
+    ipType = 'Private IP (Class B)';
+  } else if (o1 === 192 && o2 === 168) {
+    ipType = 'Private IP (Class C)';
+  } else if (o1 === 127) {
+    ipType = 'Localhost (Loopback)';
+  } else if (o1 === 169 && o2 === 254) {
+    ipType = 'Link-Local (APIPA)';
+  } else if (o1 === 0) {
+    ipType = 'Reserved (This network)';
+  } else if (o1 === 100 && o2 >= 64 && o2 <= 127) {
+    ipType = 'Shared Address Space (CGNAT)';
+  } else if (o1 === 192 && o2 === 0 && o3 === 0) {
+    ipType = 'Reserved (IETF protocol assignments)';
+  } else if (
+    (o1 === 192 && o2 === 0 && o3 === 2) ||
+    (o1 === 198 && o2 === 51 && o3 === 100) ||
+    (o1 === 203 && o2 === 0 && o3 === 113)
+  ) {
+    ipType = 'Documentation (TEST-NET)';
+  } else if (o1 === 192 && o2 === 88 && o3 === 99) {
+    ipType = 'Reserved (6to4 relay, deprecated)';
+  } else if (o1 === 198 && (o2 === 18 || o2 === 19)) {
+    ipType = 'Benchmarking (RFC 2544)';
+  } else if (o1 >= 224 && o1 <= 239) {
+    ipType = 'Multicast';
+  } else if (u === 0xFFFFFFFF) {
+    ipType = 'Limited Broadcast';
+  } else if (o1 >= 240 && o1 <= 255) {
+    ipType = 'Reserved (Class E)';
+  }
+
+  return { ipClass, ipType };
+}
+window.classifyIPv4 = classifyIPv4;
+
 // Validate IPv4 format
 function validateIPv4(ipStr) {
   const reg = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -1267,23 +1325,7 @@ function calculateIPv4() {
   const networkVal = (ipVal & maskVal) >>> 0;
   const broadcastVal = (ipVal | wildcardVal) >>> 0;
 
-  // Class detection based on first octet
-  const firstOctet = (ipVal >>> 24) & 255;
-  let ipClass = 'Unknown';
-  if (firstOctet >= 1 && firstOctet <= 126) ipClass = 'Class A';
-  else if (firstOctet === 127) ipClass = 'Class A (Loopback)';
-  else if (firstOctet >= 128 && firstOctet <= 191) ipClass = 'Class B';
-  else if (firstOctet >= 192 && firstOctet <= 223) ipClass = 'Class C';
-  else if (firstOctet >= 224 && firstOctet <= 239) ipClass = 'Class D (Multicast)';
-  else if (firstOctet >= 240 && firstOctet <= 255) ipClass = 'Class E (Experimental)';
-
-  // Private vs Public IP check
-  let ipType = 'Public IP';
-  if (firstOctet === 10) ipType = 'Private IP (Class A)';
-  else if (firstOctet === 172 && ((ipVal >>> 16) & 255) >= 16 && ((ipVal >>> 16) & 255) <= 31) ipType = 'Private IP (Class B)';
-  else if (firstOctet === 192 && ((ipVal >>> 16) & 255) === 168) ipType = 'Private IP (Class C)';
-  else if (firstOctet === 127) ipType = 'Localhost (Loopback)';
-  else if (firstOctet === 169 && ((ipVal >>> 16) & 255) === 254) ipType = 'Link-Local (APIPA)';
+  const { ipClass, ipType } = classifyIPv4(ipVal);
 
   // Usable hosts calculations
   let totalHosts = 0;
@@ -2668,11 +2710,12 @@ function shareConvSubnetResult() {
 // --- REFERENCE GUIDE COPY & SHARE UTILITIES ---
 
 const refClassesText = `IPv4 Address Classes Reference:
-• Class A: 1.0.0.0 - 126.255.255.255 (Mask: 255.0.0.0 /8)
+• Class A: 0.0.0.0 - 127.255.255.255 (Mask: 255.0.0.0 /8)
 • Class B: 128.0.0.0 - 191.255.255.255 (Mask: 255.255.0.0 /16)
 • Class C: 192.0.0.0 - 223.255.255.255 (Mask: 255.255.255.0 /24)
 • Class D (Multicast): 224.0.0.0 - 239.255.255.255 (Mask: N/A)
-• Class E (Research): 240.0.0.0 - 255.255.255.255 (Mask: N/A)`;
+• Class E (Experimental): 240.0.0.0 - 255.255.255.255 (Mask: N/A)
+Note: 0.0.0.0/8 and 127.0.0.0/8 are reserved, so usable Class A network IDs run 1 - 126.`;
 
 const refPrivateText = `Private IP Ranges Reference (RFC 1918):
 • Class A Private: 10.0.0.0 - 10.255.255.255 (/8)
@@ -2831,7 +2874,8 @@ function setupEventListeners() {
       const bin = document.getElementById('base-bin-input').value.trim();
       const dec = document.getElementById('base-dec-input').value.trim();
       const oct = document.getElementById('base-oct-input').value.trim();
-      const hex = document.getElementById('base-hex-input').value.trim();
+      const rawHex = document.getElementById('base-hex-input').value.trim();
+      const hex = rawHex === '🔒 Pro' ? '' : rawHex;
       if (!dec && !bin) return;
       const label = dec ? `Base Converter: ${dec} (DEC)` : `Base Converter: ${bin} (BIN)`;
       const body = `BIN: ${bin}\nOCT: ${oct}\nDEC: ${dec}\nHEX: ${hex}`;
@@ -2847,7 +2891,8 @@ function setupEventListeners() {
       const bin = document.getElementById('base-bin-input').value.trim();
       const dec = document.getElementById('base-dec-input').value.trim();
       const oct = document.getElementById('base-oct-input').value.trim();
-      const hex = document.getElementById('base-hex-input').value.trim();
+      const rawHex = document.getElementById('base-hex-input').value.trim();
+      const hex = rawHex === '🔒 Pro' ? '' : rawHex;
       if (!dec && !bin) return;
       const text = `iSubnet – Number Base Converter\nBIN: ${bin}\nOCT: ${oct}\nDEC: ${dec}\nHEX: ${hex}`;
       shareText('iSubnet Base Conversion', text);
@@ -3037,6 +3082,10 @@ function formatBaseGroups(info) {
   };
 }
 
+function getHexEmptyValue() {
+  return (typeof PRO_UNLOCKED !== 'undefined' && !PRO_UNLOCKED) ? '🔒 Pro' : '';
+}
+
 function runBaseConverter(sourceId, fromBase) {
   logBaseConverterDebounced(sourceId);
   if (_baseConverting) return;
@@ -3063,10 +3112,15 @@ function runBaseConverter(sourceId, fromBase) {
   const rawValue = sourceEl ? sourceEl.value.trim() : '';
 
   if (!rawValue) {
-    // If source is cleared, clear all others too
+    // If source is cleared, clear all others too (Hex keeps '🔒 Pro' in Free plan)
     Object.entries(inputs).forEach(([key, el]) => {
-      if (el && key !== sourceId) el.value = '';
+      if (el && key !== sourceId) {
+        el.value = key === 'hex' ? getHexEmptyValue() : '';
+      }
     });
+    if (sourceId === 'hex' && typeof PRO_UNLOCKED !== 'undefined' && !PRO_UNLOCKED && sourceEl) {
+      sourceEl.value = '🔒 Pro';
+    }
     _baseConverting = false;
     return;
   }
@@ -3075,7 +3129,9 @@ function runBaseConverter(sourceId, fromBase) {
   if (grouped.status === 'incomplete') {
     // Still typing an IP address: no error yet, and the other fields stay empty until it is complete.
     Object.entries(inputs).forEach(([key, el]) => {
-      if (el && key !== sourceId) el.value = '';
+      if (el && key !== sourceId) {
+        el.value = key === 'hex' ? getHexEmptyValue() : '';
+      }
     });
     _baseConverting = false;
     return;
@@ -3185,7 +3241,10 @@ function setupBaseConverter() {
       _baseConverting = false;
       ['base-bin-input', 'base-oct-input', 'base-dec-input', 'base-hex-input'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) { el.value = ''; el.classList.remove('error'); }
+        if (el) {
+          el.value = id === 'base-hex-input' ? getHexEmptyValue() : '';
+          el.classList.remove('error');
+        }
       });
       ['base-bin-error', 'base-oct-error', 'base-dec-error', 'base-hex-error'].forEach(id => {
         const el = document.getElementById(id);
@@ -3205,20 +3264,7 @@ function runSubnetCalculationIPv4(ipInput, cidrInput) {
   const networkVal = (ipVal & maskVal) >>> 0;
   const broadcastVal = (ipVal | wildcardVal) >>> 0;
 
-  const firstOctet = (ipVal >>> 24) & 255;
-  let ipClass = 'Unknown';
-  if (firstOctet >= 1 && firstOctet <= 126) ipClass = 'Class A';
-  else if (firstOctet === 127) ipClass = 'Class A (Loopback)';
-  else if (firstOctet >= 128 && firstOctet <= 191) ipClass = 'Class B';
-  else if (firstOctet >= 192 && firstOctet <= 223) ipClass = 'Class C';
-  else if (firstOctet >= 224 && firstOctet <= 239) ipClass = 'Class D (Multicast)';
-  else if (firstOctet >= 240 && firstOctet <= 255) ipClass = 'Class E (Experimental)';
-
-  let ipType = 'Public IP';
-  if (firstOctet === 10) ipType = 'Private IP (Class A)';
-  else if (firstOctet === 172 && ((ipVal >>> 16) & 255) >= 16 && ((ipVal >>> 16) & 255) <= 31) ipType = 'Private IP (Class B)';
-  else if (firstOctet === 192 && ((ipVal >>> 16) & 255) === 168) ipType = 'Private IP (Class C)';
-  else if (firstOctet === 169 && ((ipVal >>> 16) & 255) === 254) ipType = 'Link-Local Address';
+  const { ipClass, ipType } = classifyIPv4(ipVal);
 
   let usableHosts = 0;
   let usableRange = '';
@@ -4242,7 +4288,10 @@ function initSettings() {
 
   // Toggle settings panel
   if (btnSettings && modalSettings && btnSettingsClose) {
-    btnSettings.addEventListener('click', () => modalSettings.classList.remove('hidden'));
+    btnSettings.addEventListener('click', () => {
+      syncRateButtonVisibility();
+      modalSettings.classList.remove('hidden');
+    });
     btnSettingsClose.addEventListener('click', () => modalSettings.classList.add('hidden'));
   }
 
@@ -4772,7 +4821,24 @@ function initSettings() {
     });
   }
 
-  // Feedback Modal Interaction Handlers
+  // Rate button & Feedback Modal Interaction Handlers
+  const btnRate = document.getElementById('btn-settings-rate');
+  function syncRateButtonVisibility() {
+    if (!btnRate) return;
+    const cap = window.Capacitor;
+    const platform = cap && typeof cap.getPlatform === 'function' ? cap.getPlatform() : 'web';
+    if (platform === 'ios' || platform === 'android') {
+      btnRate.style.display = '';
+    } else {
+      btnRate.style.display = 'none';
+    }
+  }
+  window.syncRateButtonVisibility = syncRateButtonVisibility;
+  syncRateButtonVisibility();
+  if (btnRate) {
+    btnRate.addEventListener('click', openStoreReview);
+  }
+
   const btnFeedback = document.getElementById('btn-settings-feedback');
   const modalFeedback = document.getElementById('feedback-modal');
   const btnFeedbackClose = document.getElementById('btn-feedback-close');
@@ -5113,6 +5179,92 @@ function initQuickPaste() {
 }
 
 // --- Run Setup on page load ---
+const APP_STORE_ID = '6794944106';          // Apple "Apple ID" of iSubnet (digits only)
+const PLAY_PACKAGE = 'com.banzaigr.isubnet';       // = appId in capacitor.config.json
+
+async function openStoreReview() {
+  if (isShareTapDuplicate('rate')) {
+    return;
+  }
+  const cap = window.Capacitor;
+  const platform = cap && typeof cap.getPlatform === 'function' ? cap.getPlatform() : 'web';
+  if (platform !== 'ios' && platform !== 'android') {
+    return;
+  }
+
+  const isIos = platform === 'ios';
+  const preferredUrl = isIos
+    ? `itms-apps://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`
+    : `market://details?id=${PLAY_PACKAGE}`;
+  const httpsFallback = isIos
+    ? `https://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`
+    : `https://play.google.com/store/apps/details?id=${PLAY_PACKAGE}`;
+
+  let opened = false;
+  let via = '';
+
+  // 1. First choice: App.openUrl({ url: preferredUrl })
+  const appPlugin = cap && cap.Plugins && cap.Plugins.App;
+  if (appPlugin && typeof appPlugin.openUrl === 'function') {
+    try {
+      const res = await appPlugin.openUrl({ url: preferredUrl });
+      if (res && res.completed === false) {
+        opened = false;
+      } else {
+        opened = true;
+        via = 'openUrl';
+      }
+    } catch (e) {
+      opened = false;
+    }
+  }
+
+  // 2. Second choice: Browser.open({ url: httpsFallback })
+  if (!opened) {
+    const browserPlugin = cap && cap.Plugins && cap.Plugins.Browser;
+    if (browserPlugin && typeof browserPlugin.open === 'function') {
+      try {
+        await browserPlugin.open({ url: httpsFallback });
+        opened = true;
+        via = 'browser';
+      } catch (e) {
+        opened = false;
+      }
+    }
+  }
+
+  // 3. Third choice: window.open(httpsFallback, '_blank')
+  if (!opened) {
+    try {
+      if (typeof window.open === 'function') {
+        const win = window.open(httpsFallback, '_blank');
+        if (win || win === undefined) {
+          opened = true;
+          via = 'window';
+        }
+      }
+    } catch (e) {
+      opened = false;
+    }
+  }
+
+  if (opened) {
+    if (typeof debugLog === 'function') {
+      debugLog(`[Settings] ui: rate tap | platform=${platform} | via=${via}`);
+    }
+    try {
+      SafeStorage.setItem('isubnet_review_requested', 'true');
+      SafeStorage.setItem('isubnet_review_requested_date', new Date().toISOString());
+    } catch (e) {}
+  } else {
+    if (typeof debugLog === 'function') {
+      debugLog(`[Settings] ui: rate tap | platform=${platform} | result=failed`);
+    }
+    showToast("Couldn't open the store. Please search for iSubnet in the store.");
+  }
+}
+window.openStoreReview = openStoreReview;
+
 const REVIEW_PROMPT_CALC_THRESHOLD = 6;
 async function maybeRequestReview(triggerReason = '') {
   try {
@@ -7115,7 +7267,8 @@ function setupExporterListeners() {
       const bin = document.getElementById('base-bin-input')?.value.trim() || '';
       const oct = document.getElementById('base-oct-input')?.value.trim() || '';
       const dec = document.getElementById('base-dec-input')?.value.trim() || '';
-      const hex = document.getElementById('base-hex-input')?.value.trim() || '';
+      const rawHex = document.getElementById('base-hex-input')?.value.trim() || '';
+      const hex = rawHex === '🔒 Pro' ? '' : rawHex;
 
       csv = `Parameter,Value\n`;
       csv += `Binary (Base 2),${bin}\n`;
@@ -9159,6 +9312,19 @@ function updateUpgradeUI(planTier) {
     const id = btn.getAttribute('data-clear-for');
     const el = id ? document.getElementById(id) : null;
     if (!el) return;
+    if (id === 'base-hex-input' && typeof PRO_UNLOCKED !== 'undefined' && !PRO_UNLOCKED) {
+      el.value = '🔒 Pro';
+      el.classList.remove('error');
+      ['base-bin-input', 'base-oct-input', 'base-dec-input'].forEach((otherId) => {
+        const otherEl = document.getElementById(otherId);
+        if (otherEl) { otherEl.value = ''; otherEl.classList.remove('error'); }
+      });
+      ['base-bin-error', 'base-oct-error', 'base-dec-error', 'base-hex-error'].forEach((errId) => {
+        const errEl = document.getElementById(errId);
+        if (errEl) errEl.textContent = '';
+      });
+      return;
+    }
     el.value = '';
     el.classList.remove('error');
     el.dispatchEvent(new Event('input', { bubbles: true }));

@@ -1959,6 +1959,92 @@ body.dark-mode .bit-level-off {
   font-size: 9px;
 }
 
+/* --- Base Converter action row (build 115 / 115C) ---
+   The row shares the .result-actions wrapping above.
+   In one-line layout (Pro plan on viewports > 370px), the Clear all text label is hidden and the button
+   remains a compact round (x) button at the right end. */
+.result-actions.base-actions > #btn-clear-base-converter {
+  flex: 0 0 auto !important;
+  margin-left: auto;
+}
+
+.result-actions.base-actions .clear-all-label {
+  display: none;
+}
+
+/* Wrapped layout: 2x2 grid for action buttons + centered Clear all button on line 3.
+   Free plan (keyed on :has(.pro-badge), follows upgrade/restore dynamically without reload). */
+.result-actions.base-actions:has(.pro-badge) > .btn-action:not(#btn-clear-base-converter) {
+  flex: 1 1 calc(50% - 4px) !important;
+  width: calc(50% - 4px) !important;
+  max-width: calc(50% - 4px) !important;
+}
+
+.result-actions.base-actions:has(.pro-badge) > #btn-clear-base-converter {
+  flex: 0 0 auto !important;
+  margin: 6px auto 0 auto !important;
+  width: auto !important;
+  max-width: fit-content !important;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--accent-danger) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 3px 8px !important;
+  gap: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 4px !important;
+}
+
+.result-actions.base-actions:has(.pro-badge) > #btn-clear-base-converter svg {
+  width: 11px !important;
+  height: 11px !important;
+}
+
+.result-actions.base-actions:has(.pro-badge) .clear-all-label {
+  display: inline !important;
+}
+
+/* Pro plan on narrow phones (<= 370px): same 2x2 grid + centered Clear all layout. */
+@media (max-width: 370px) {
+  .result-actions.base-actions > .btn-action:not(#btn-clear-base-converter) {
+    flex: 1 1 calc(50% - 4px) !important;
+    width: calc(50% - 4px) !important;
+    max-width: calc(50% - 4px) !important;
+  }
+
+  .result-actions.base-actions > #btn-clear-base-converter {
+    flex: 0 0 auto !important;
+    margin: 6px auto 0 auto !important;
+    width: auto !important;
+    max-width: fit-content !important;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--accent-danger) !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    padding: 3px 8px !important;
+    gap: 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 4px !important;
+  }
+
+  .result-actions.base-actions > #btn-clear-base-converter svg {
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  .result-actions.base-actions .clear-all-label {
+    display: inline !important;
+  }
+}
+
 .app-tab-bar {
   padding-left: 6px;
   padding-right: 6px;
