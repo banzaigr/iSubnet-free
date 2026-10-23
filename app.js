@@ -816,7 +816,8 @@ const PRO_FEATURE_INFO = {
   splitter: { title: '✂️ Subnet Splitter', text: 'Split a network into equal subnets, or into VLSM subnets sized by host count.' },
   ping: { title: '📶 Ping options', text: 'Choose how many probes to send (up to 100), or turn on -t to ping continuously until you stop it, with the newest result at the top.' },
   traceroute: { title: '🧭 Traceroute options', text: 'Set the maximum number of hops (up to 64), the probes per hop and the timeout, and turn on host name lookup to see a name for every hop.' },
-  whois: { title: '🔎 Whois extras', text: 'Look up AS numbers, see the registrar’s own record with more contact detail, and view the raw registry data.' }
+  whois: { title: '🔎 Whois extras', text: 'Look up AS numbers, see the registrar’s own record with more contact detail, and view the raw registry data.' },
+  summarize: { title: '🧮 Route Summarization', text: 'Merge a list of IPv4 and IPv6 networks into the fewest routes, or find the single smallest summary route that covers them all.' }
 };
 
 function showProModal(feature) {
@@ -966,6 +967,7 @@ function applyProState() {
     
     // Lock all generalized pro feature buttons
     allProBtns.forEach(btn => {
+
       // Build 115C: In Free plan, Hex copy button has no badge (field itself shows 🔒 Pro)
       if (btn.id === 'btn-copy-base-hex') {
         const lockBadge = btn.querySelector('.pro-badge');
@@ -1001,6 +1003,13 @@ function applyProState() {
     if (activeTab && activeTab.id === 'splitter-tab') {
       const calcBtn = document.querySelector('.tab-btn[data-target="calculator-tab"]');
       if (calcBtn) calcBtn.click();
+    }
+    // Build 116C: If currently on Route Summarization, leave screen and show Tools picker
+    if (activeTab && activeTab.id === 'summarize-tab') {
+      activeTab.classList.remove('active');
+      const defaultToolsScreen = document.getElementById('tools-tab');
+      if (defaultToolsScreen) defaultToolsScreen.classList.add('active');
+      openToolsPicker();
     }
     
     // Re-render list templates to show limits
@@ -1519,6 +1528,132 @@ function formatIPv6Compressed(bigIntVal) {
     return `${left}::${right}`;
   }
   return parts.join(':');
+}
+
+// Format address counts: exact digits with thousands separators when <= 2^64, otherwise 2^N or ~2^N
+function formatAddressCount(countBigInt) {
+  if (typeof countBigInt !== 'bigint') {
+    countBigInt = BigInt(countBigInt);
+  }
+  const MAX_EXACT = BigInt(1) << BigInt(64);
+  if (countBigInt <= MAX_EXACT) {
+    return countBigInt.toLocaleString('en-US');
+  }
+  const isPowerOfTwo = (countBigInt & (countBigInt - BigInt(1))) === BigInt(0);
+  let temp = countBigInt;
+  let bits = 0;
+  while (temp > BigInt(1)) {
+    temp = temp >> BigInt(1);
+    bits++;
+  }
+  if (isPowerOfTwo) {
+    return `2^${bits}`;
+  }
+  const lower = BigInt(1) << BigInt(bits);
+  const upper = BigInt(1) << BigInt(bits + 1);
+  const approxBits = (countBigInt - lower >= upper - countBigInt) ? (bits + 1) : bits;
+  return `~2^${approxBits}`;
+}
+
+// Parse network list for Overlap Checker and Route Summarization (shared helper)
+function parseNetworkList(text, family = null, maxEntries = 500) {
+  if (!text || typeof text !== 'string') {
+    return { valid: [], invalid: [], tooMany: false, totalCount: 0 };
+  }
+  const rawTokens = text.split(/[\r\n,;]+/).map((t) => t.trim()).filter(Boolean);
+  if (rawTokens.length > maxEntries) {
+    return { valid: [], invalid: [], tooMany: true, maxEntries, totalCount: rawTokens.length };
+  }
+
+  const valid = [];
+  const invalid = [];
+
+  for (let i = 0; i < rawTokens.length; i++) {
+    const original = rawTokens[i];
+    const index = i + 1; // 1-based non-empty token position
+
+    if (/\s/.test(original)) {
+      invalid.push({ index, reason: 'unrecognised format', original });
+      continue;
+    }
+
+    const slashIdx = original.indexOf('/');
+    let addrStr = original;
+    let prefixStr = null;
+
+    if (slashIdx !== -1) {
+      if (original.indexOf('/', slashIdx + 1) !== -1) {
+        invalid.push({ index, reason: 'unrecognised format', original });
+        continue;
+      }
+      addrStr = original.slice(0, slashIdx);
+      prefixStr = original.slice(slashIdx + 1);
+      if (!prefixStr || !/^\d+$/.test(prefixStr)) {
+        invalid.push({ index, reason: 'invalid prefix', original });
+        continue;
+      }
+    }
+
+    const isV4 = validateIPv4(addrStr);
+    const parsedV6 = !isV4 ? parseIPv6(addrStr) : null;
+    const isV6 = parsedV6 !== null;
+
+    if (!isV4 && !isV6) {
+      invalid.push({ index, reason: 'invalid address', original });
+      continue;
+    }
+
+    if (family === 4 && isV6) {
+      invalid.push({ index, reason: 'IPv6 address in IPv4 mode - use IPv6 Mode', original });
+      continue;
+    }
+    if (family === 6 && isV4) {
+      invalid.push({ index, reason: 'IPv4 address in IPv6 mode - use IPv4 Mode', original });
+      continue;
+    }
+
+    if (isV4) {
+      const prefix = prefixStr !== null ? parseInt(prefixStr, 10) : 32;
+      if (prefix < 0 || prefix > 32) {
+        invalid.push({ index, reason: 'invalid prefix', original });
+        continue;
+      }
+      const u = ipToUint32(addrStr);
+      const mask = prefix === 0 ? 0 : ((~0 << (32 - prefix)) >>> 0);
+      const netU = (u & mask) >>> 0;
+      const normalized = netU !== u;
+      const start = BigInt(netU);
+      const size = prefix === 32 ? BigInt(1) : (BigInt(1) << BigInt(32 - prefix));
+      const end = start + size - BigInt(1);
+      const cidr = `${uint32ToIp(netU)}/${prefix}`;
+      valid.push({ index, family: 4, start, end, prefix, cidr, normalized, original });
+    } else {
+      const prefix = prefixStr !== null ? parseInt(prefixStr, 10) : 128;
+      if (prefix < 0 || prefix > 128) {
+        invalid.push({ index, reason: 'invalid prefix', original });
+        continue;
+      }
+      const rawBigInt = parsedV6;
+      const hostBits = BigInt(128 - prefix);
+      let netBigInt;
+      if (prefix === 0) {
+        netBigInt = BigInt(0);
+      } else if (prefix === 128) {
+        netBigInt = rawBigInt;
+      } else {
+        const mask = ((BigInt(1) << BigInt(prefix)) - BigInt(1)) << hostBits;
+        netBigInt = rawBigInt & mask;
+      }
+      const normalized = netBigInt !== rawBigInt;
+      const start = netBigInt;
+      const size = prefix === 128 ? BigInt(1) : (BigInt(1) << hostBits);
+      const end = start + size - BigInt(1);
+      const cidr = `${formatIPv6Compressed(netBigInt)}/${prefix}`;
+      valid.push({ index, family: 6, start, end, prefix, cidr, normalized, original });
+    }
+  }
+
+  return { valid, invalid, tooMany: false, totalCount: rawTokens.length };
 }
 
 /**
@@ -5403,6 +5538,9 @@ function setupInputSanitizers() {
     { id: 'ipv6-address',     allowed: /[0-9a-fA-F:./]/ },
     { id: 'ipv4-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
     { id: 'ipv6-bulk-input',  allowed: /[0-9a-fA-F.:/\n]/ },
+    { id: 'ipv4-overlap-input', allowed: /[0-9a-fA-F.:/,\n;]/ },
+    { id: 'ipv6-overlap-input', allowed: /[0-9a-fA-F.:/,\n;]/ },
+    { id: 'summarize-input',    allowed: /[0-9a-fA-F.:/,\n;]/ },
     { id: 'split-base-ip',    allowed: /[0-9a-fA-F.:/]/ },
     { id: 'split-vlsm-hosts', allowed: /[0-9., ]/ },
     { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
@@ -5416,7 +5554,7 @@ function setupInputSanitizers() {
     el.addEventListener('input', () => {
       if (id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') normalizeDnsInput(el);
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'ipv4-bulk-input' || id === 'ipv6-bulk-input' || id === 'ipv4-overlap-input' || id === 'ipv6-overlap-input' || id === 'summarize-input' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') {
         collapseDuplicateDots(el);
         collapseDuplicateColons(el);
       }
@@ -6305,6 +6443,9 @@ function init() {
   loadHistory();
   initSplitterListeners();
   initBulkCalculator();
+  initOverlapChecker();
+  initUlaGenerator();
+  initRouteSummarizer();
   setupExporterListeners();
   
   // Setup clear history binding
@@ -6485,6 +6626,10 @@ function init() {
   if (traceSwitchChip) traceSwitchChip.addEventListener('click', openToolsPicker);
   const whoisSwitchChip = document.getElementById('btn-whois-switch');
   if (whoisSwitchChip) whoisSwitchChip.addEventListener('click', openToolsPicker);
+  const ulaSwitchChip = document.getElementById('btn-ula-switch');
+  if (ulaSwitchChip) ulaSwitchChip.addEventListener('click', openToolsPicker);
+  const summarizeSwitchChip = document.getElementById('btn-summarize-switch');
+  if (summarizeSwitchChip) summarizeSwitchChip.addEventListener('click', openToolsPicker);
   const toolsPickerModal = document.getElementById('tools-picker-modal');
   const toolsPickerClose = document.getElementById('btn-tools-picker-close');
   if (toolsPickerClose) toolsPickerClose.addEventListener('click', closeToolsPicker);
@@ -6499,7 +6644,9 @@ const TOOLS_LIST = [
   { id: 'dns', icon: '🌐', title: 'DNS Lookup', desc: 'A, MX, NS, TXT, reverse DNS and more', freeDesc: 'A records free · more types with Pro', screen: 'tools-tab', feature: 'dns', pro: false },
   { id: 'ping', icon: '📶', title: 'Ping', desc: 'Test reachability and round-trip time', screen: 'ping-tab', pro: false },
   { id: 'traceroute', icon: '🧭', title: 'Traceroute', desc: 'See the path your packets take, hop by hop', screen: 'traceroute-tab', feature: 'traceroute', pro: false },
-  { id: 'whois', icon: '🔎', title: 'Whois', desc: 'Who owns a domain, IP address or network', screen: 'whois-tab', feature: 'whois', pro: false }
+  { id: 'whois', icon: '🔎', title: 'Whois', desc: 'Who owns a domain, IP address or network', screen: 'whois-tab', feature: 'whois', pro: false },
+  { id: 'ula', icon: '🧩', title: 'ULA Generator', desc: 'Random private IPv6 prefix (RFC 4193)', screen: 'ula-tab', pro: false },
+  { id: 'summarize', icon: '🧮', title: 'Route Summarization', desc: 'Merge networks into the fewest routes', screen: 'summarize-tab', feature: 'summarize', pro: true }
 ];
 
 function openToolsPicker() {
@@ -6879,16 +7026,34 @@ function initBulkCalculator() {
       btn.style.background = 'var(--bg-card)';
       btn.style.color = 'var(--text-primary)';
 
+      const overlapPanelV4 = document.getElementById('ipv4-overlap-panel');
+      const overlapResultsCardV4 = document.getElementById('ipv4-overlap-results');
+
       if (mode === 'single') {
         singlePanelV4.classList.remove('hidden');
         bulkPanelV4.classList.add('hidden');
         bulkResultsCardV4.classList.add('hidden');
+        if (overlapPanelV4) overlapPanelV4.classList.add('hidden');
+        if (overlapResultsCardV4) overlapResultsCardV4.classList.add('hidden');
         calculateIPv4();
-      } else {
+      } else if (mode === 'bulk') {
         singlePanelV4.classList.add('hidden');
         bulkPanelV4.classList.remove('hidden');
         resultsCardV4.classList.add('hidden');
+        if (overlapPanelV4) overlapPanelV4.classList.add('hidden');
+        if (overlapResultsCardV4) overlapResultsCardV4.classList.add('hidden');
         calculateBulkIPv4();
+      } else if (mode === 'overlap') {
+        singlePanelV4.classList.add('hidden');
+        bulkPanelV4.classList.add('hidden');
+        resultsCardV4.classList.add('hidden');
+        bulkResultsCardV4.classList.add('hidden');
+        if (overlapPanelV4) overlapPanelV4.classList.remove('hidden');
+        if (overlapResultsCardV4 && overlapResultsCardV4.getAttribute('data-has-results') === 'true') {
+          overlapResultsCardV4.classList.remove('hidden');
+        } else if (overlapResultsCardV4) {
+          overlapResultsCardV4.classList.add('hidden');
+        }
       }
     });
   });
@@ -6915,16 +7080,34 @@ function initBulkCalculator() {
       btn.style.background = 'var(--bg-card)';
       btn.style.color = 'var(--text-primary)';
 
+      const overlapPanelV6 = document.getElementById('ipv6-overlap-panel');
+      const overlapResultsCardV6 = document.getElementById('ipv6-overlap-results');
+
       if (mode === 'single') {
         singlePanelV6.classList.remove('hidden');
         bulkPanelV6.classList.add('hidden');
         bulkResultsCardV6.classList.add('hidden');
+        if (overlapPanelV6) overlapPanelV6.classList.add('hidden');
+        if (overlapResultsCardV6) overlapResultsCardV6.classList.add('hidden');
         calculateIPv6();
-      } else {
+      } else if (mode === 'bulk') {
         singlePanelV6.classList.add('hidden');
         bulkPanelV6.classList.remove('hidden');
         resultsCardV6.classList.add('hidden');
+        if (overlapPanelV6) overlapPanelV6.classList.add('hidden');
+        if (overlapResultsCardV6) overlapResultsCardV6.classList.add('hidden');
         calculateBulkIPv6();
+      } else if (mode === 'overlap') {
+        singlePanelV6.classList.add('hidden');
+        bulkPanelV6.classList.add('hidden');
+        resultsCardV6.classList.add('hidden');
+        bulkResultsCardV6.classList.add('hidden');
+        if (overlapPanelV6) overlapPanelV6.classList.remove('hidden');
+        if (overlapResultsCardV6 && overlapResultsCardV6.getAttribute('data-has-results') === 'true') {
+          overlapResultsCardV6.classList.remove('hidden');
+        } else if (overlapResultsCardV6) {
+          overlapResultsCardV6.classList.add('hidden');
+        }
       }
     });
   });
@@ -12877,3 +13060,1108 @@ function updateUpgradeUI(planTier) {
     // Never let an exception escape
   }
 })();
+
+// =====================================================================
+// OVERLAP CHECKER (Build 116 - Addendum A)
+// =====================================================================
+
+let _lastOverlapTextV4 = '';
+let _lastOverlapTextV6 = '';
+
+function computeOverlaps(validEntries) {
+  const conflicts = [];
+  const overlappingIndices = new Set();
+
+  for (let i = 0; i < validEntries.length; i++) {
+    for (let j = i + 1; j < validEntries.length; j++) {
+      const a = validEntries[i];
+      const b = validEntries[j];
+
+      let isIdentical = false;
+      let aContainsB = false;
+      let bContainsA = false;
+
+      if (a.start === b.start && a.end === b.end) {
+        isIdentical = true;
+      } else if (a.start <= b.start && a.end >= b.end) {
+        aContainsB = true;
+      } else if (b.start <= a.start && b.end >= a.end) {
+        bContainsA = true;
+      }
+
+      if (isIdentical || aContainsB || bContainsA) {
+        overlappingIndices.add(a.index);
+        overlappingIndices.add(b.index);
+
+        if (isIdentical) {
+          conflicts.push({
+            firstIndex: a.index,
+            secondIndex: b.index,
+            firstCidr: a.cidr,
+            secondCidr: b.cidr,
+            type: 'identical',
+            family: a.family,
+            sharedStart: a.start,
+            sharedEnd: a.end,
+            sharedCount: a.end - a.start + BigInt(1)
+          });
+        } else if (aContainsB) {
+          conflicts.push({
+            firstIndex: a.index,
+            secondIndex: b.index,
+            firstCidr: a.cidr,
+            secondCidr: b.cidr,
+            type: 'contains',
+            family: a.family,
+            sharedStart: b.start,
+            sharedEnd: b.end,
+            sharedCount: b.end - b.start + BigInt(1)
+          });
+        } else {
+          conflicts.push({
+            firstIndex: b.index,
+            secondIndex: a.index,
+            firstCidr: b.cidr,
+            secondCidr: a.cidr,
+            type: 'contains',
+            family: a.family,
+            sharedStart: a.start,
+            sharedEnd: a.end,
+            sharedCount: a.end - a.start + BigInt(1)
+          });
+        }
+      }
+    }
+  }
+
+  conflicts.sort((x, y) => {
+    if (x.firstIndex !== y.firstIndex) return x.firstIndex - y.firstIndex;
+    return x.secondIndex - y.secondIndex;
+  });
+
+  return { conflicts, overlappingIndices };
+}
+
+function formatIpAddress(bigIntVal, family) {
+  if (family === 4) {
+    return uint32ToIp(Number(bigIntVal));
+  }
+  return formatIPv6Compressed(bigIntVal);
+}
+
+function buildOverlapText(family, validEntries, conflicts, invalidEntries, normalizedCount) {
+  const lines = [];
+  lines.push(`Overlap check (IPv${family})`);
+  lines.push(`Networks checked: ${validEntries.length}`);
+  const k = conflicts.length;
+  lines.push(`Result: ${k} ${k === 1 ? 'overlap' : 'overlaps'} found`);
+  lines.push('');
+
+  const displayLimit = Math.min(conflicts.length, 100);
+  for (let i = 0; i < displayLimit; i++) {
+    const c = conflicts[i];
+    const relationStr = c.type === 'identical' ? 'is identical to' : 'contains';
+    lines.push(`#${c.firstIndex} ${c.firstCidr} ${relationStr} #${c.secondIndex} ${c.secondCidr}`);
+    const s1 = formatIpAddress(c.sharedStart, c.family);
+    const s2 = formatIpAddress(c.sharedEnd, c.family);
+    const addrWord = c.sharedCount === BigInt(1) ? 'address' : 'addresses';
+    lines.push(`   Shared: ${s1} - ${s2} (${formatAddressCount(c.sharedCount)} ${addrWord})`);
+  }
+  if (conflicts.length > 100) {
+    lines.push(`+ ${conflicts.length - 100} more overlaps (not shown)`);
+  }
+  if (conflicts.length > 0) {
+    lines.push('');
+  }
+
+  lines.push('Networks:');
+  for (let i = 0; i < validEntries.length; i++) {
+    const e = validEntries[i];
+    const f1 = formatIpAddress(e.start, e.family);
+    const f2 = formatIpAddress(e.end, e.family);
+    const count = e.end - e.start + BigInt(1);
+    const addrWord = count === BigInt(1) ? 'address' : 'addresses';
+    lines.push(`#${e.index} ${e.cidr} | ${f1} - ${f2} | ${formatAddressCount(count)} ${addrWord}`);
+  }
+
+  if (invalidEntries && invalidEntries.length > 0) {
+    lines.push('');
+    invalidEntries.forEach((inv) => {
+      lines.push(`Skipped: entry ${inv.index} (${inv.reason})`);
+    });
+  }
+
+  return lines.join('\n');
+}
+
+function runOverlapCheck(family) {
+  const isV4 = family === 4;
+  const inputEl = document.getElementById(isV4 ? 'ipv4-overlap-input' : 'ipv6-overlap-input');
+  const errorEl = document.getElementById(isV4 ? 'ipv4-overlap-error' : 'ipv6-overlap-error');
+  const resultsCard = document.getElementById(isV4 ? 'ipv4-overlap-results' : 'ipv6-overlap-results');
+  const headlineEl = document.getElementById(isV4 ? 'ipv4-overlap-headline' : 'ipv6-overlap-headline');
+  const skippedNoteEl = document.getElementById(isV4 ? 'ipv4-overlap-skipped-note' : 'ipv6-overlap-skipped-note');
+  const conflictsBox = document.getElementById(isV4 ? 'ipv4-overlap-conflicts-container' : 'ipv6-overlap-conflicts-container');
+  const entriesBox = document.getElementById(isV4 ? 'ipv4-overlap-entries-container' : 'ipv6-overlap-entries-container');
+
+  if (!inputEl) return;
+  const text = inputEl.value;
+
+  if (errorEl) errorEl.textContent = '';
+  if (skippedNoteEl) { skippedNoteEl.textContent = ''; skippedNoteEl.style.display = 'none'; }
+  if (conflictsBox) conflictsBox.innerHTML = '';
+  if (entriesBox) entriesBox.innerHTML = '';
+
+  const parsed = parseNetworkList(text, family, 500);
+
+  if (parsed.tooMany) {
+    if (errorEl) errorEl.textContent = 'Too many entries (maximum 500)';
+    if (resultsCard) { resultsCard.classList.add('hidden'); resultsCard.removeAttribute('data-has-results'); }
+    return;
+  }
+
+  if (parsed.valid.length < 2) {
+    if (errorEl) errorEl.textContent = 'Enter at least two networks';
+    if (resultsCard) { resultsCard.classList.add('hidden'); resultsCard.removeAttribute('data-has-results'); }
+    return;
+  }
+
+  const normalizedCount = parsed.valid.filter((v) => v.normalized).length;
+  const { conflicts, overlappingIndices } = computeOverlaps(parsed.valid);
+  const k = conflicts.length;
+  const n = parsed.valid.length;
+
+  if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+    debugLog(`[Overlap] check | family=${family} | entries=${n} | invalid=${parsed.invalid.length} | normalized=${normalizedCount} | conflicts=${k}`);
+  }
+
+  // Display skipped entries in errorEl if any
+  if (parsed.invalid.length > 0 && errorEl) {
+    const errorLines = parsed.invalid.slice(0, 5).map((inv) => `entry ${inv.index}: ${inv.reason}`);
+    if (parsed.invalid.length > 5) {
+      errorLines.push(`+${parsed.invalid.length - 5} more`);
+    }
+    errorEl.textContent = errorLines.join(', ');
+  }
+
+  // Headline
+  if (headlineEl) {
+    if (k === 0) {
+      headlineEl.textContent = `No overlaps found - ${n} networks checked`;
+      headlineEl.style.color = 'var(--accent-success, #10B981)';
+    } else {
+      headlineEl.textContent = `${k} ${k === 1 ? 'overlap' : 'overlaps'} found - ${n} networks checked`;
+      headlineEl.style.color = 'var(--accent-danger, #EF4444)';
+    }
+  }
+
+  // Skipped note
+  if (skippedNoteEl) {
+    const notes = [];
+    if (parsed.invalid.length > 0) {
+      notes.push(`${parsed.invalid.length} ${parsed.invalid.length === 1 ? 'entry' : 'entries'} skipped (see above)`);
+    }
+    if (normalizedCount > 0) {
+      notes.push(`${normalizedCount} ${normalizedCount === 1 ? 'entry' : 'entries'} rounded down to its network`);
+    }
+    if (notes.length > 0) {
+      skippedNoteEl.textContent = notes.join(' • ');
+      skippedNoteEl.style.display = 'block';
+    }
+  }
+
+  // Conflicts list (max 100)
+  if (conflictsBox) {
+    if (conflicts.length > 0) {
+      const confHeader = document.createElement('div');
+      confHeader.style.fontSize = '12px';
+      confHeader.style.fontWeight = '700';
+      confHeader.style.textTransform = 'uppercase';
+      confHeader.style.letterSpacing = '0.5px';
+      confHeader.style.color = 'var(--text-secondary)';
+      confHeader.style.marginBottom = '8px';
+      confHeader.textContent = 'Conflicts';
+      conflictsBox.appendChild(confHeader);
+
+      const limit = Math.min(conflicts.length, 100);
+      for (let i = 0; i < limit; i++) {
+        const c = conflicts[i];
+        const item = document.createElement('div');
+        item.className = 'overlap-conflict-item';
+
+        const row = document.createElement('div');
+        row.className = 'overlap-conflict-row';
+        const relWord = c.type === 'identical' ? 'is identical to' : 'contains';
+        row.innerHTML = `<span class="overlap-cidr">#${c.firstIndex} ${c.firstCidr}</span> ${relWord} <span class="overlap-cidr">#${c.secondIndex} ${c.secondCidr}</span>`;
+        item.appendChild(row);
+
+        const shared = document.createElement('div');
+        shared.className = 'overlap-conflict-shared';
+        const s1 = formatIpAddress(c.sharedStart, c.family);
+        const s2 = formatIpAddress(c.sharedEnd, c.family);
+        const addrWord = c.sharedCount === BigInt(1) ? 'address' : 'addresses';
+        shared.innerHTML = `Shared: <span>${s1} - ${s2}</span> (${formatAddressCount(c.sharedCount)} ${addrWord})`;
+        item.appendChild(shared);
+
+        conflictsBox.appendChild(item);
+      }
+
+      if (conflicts.length > 100) {
+        const moreLine = document.createElement('div');
+        moreLine.className = 'text-muted';
+        moreLine.style.fontSize = '12px';
+        moreLine.style.marginTop = '6px';
+        moreLine.textContent = `+${conflicts.length - 100} more overlaps (not shown)`;
+        conflictsBox.appendChild(moreLine);
+      }
+    }
+  }
+
+  // Networks list
+  if (entriesBox) {
+    const entHeader = document.createElement('div');
+    entHeader.style.fontSize = '12px';
+    entHeader.style.fontWeight = '700';
+    entHeader.style.textTransform = 'uppercase';
+    entHeader.style.letterSpacing = '0.5px';
+    entHeader.style.color = 'var(--text-secondary)';
+    entHeader.style.marginBottom = '8px';
+    entHeader.textContent = 'Networks Checked';
+    entriesBox.appendChild(entHeader);
+
+    const listCard = document.createElement('div');
+    listCard.style.background = 'var(--bg-primary)';
+    listCard.style.border = '1px solid var(--border-color)';
+    listCard.style.borderRadius = '8px';
+    listCard.style.overflow = 'hidden';
+
+    parsed.valid.forEach((e) => {
+      const row = document.createElement('div');
+      row.className = 'overlap-entry-row';
+
+      const left = document.createElement('div');
+      left.style.display = 'flex';
+      left.style.flexDirection = 'column';
+      left.style.gap = '2px';
+      left.style.minWidth = '0';
+
+      const titleLine = document.createElement('div');
+      titleLine.innerHTML = `<span class="overlap-entry-cidr">#${e.index} ${e.cidr}</span>`;
+      if (overlappingIndices.has(e.index)) {
+        titleLine.innerHTML += ' <span class="overlap-badge-tag">overlap</span>';
+      }
+      left.appendChild(titleLine);
+
+      const f1 = formatIpAddress(e.start, e.family);
+      const f2 = formatIpAddress(e.end, e.family);
+      const rangeLine = document.createElement('div');
+      rangeLine.className = 'overlap-entry-range';
+      rangeLine.textContent = `${f1} - ${f2}`;
+      left.appendChild(rangeLine);
+
+      row.appendChild(left);
+
+      const right = document.createElement('div');
+      right.className = 'overlap-entry-count';
+      const count = e.end - e.start + BigInt(1);
+      const addrWord = count === BigInt(1) ? 'addr' : 'addrs';
+      right.textContent = `${formatAddressCount(count)} ${addrWord}`;
+      row.appendChild(right);
+
+      listCard.appendChild(row);
+    });
+
+    entriesBox.appendChild(listCard);
+  }
+
+  const generatedText = buildOverlapText(family, parsed.valid, conflicts, parsed.invalid, normalizedCount);
+  if (isV4) {
+    _lastOverlapTextV4 = generatedText;
+  } else {
+    _lastOverlapTextV6 = generatedText;
+  }
+
+  if (resultsCard) {
+    resultsCard.classList.remove('hidden');
+    resultsCard.setAttribute('data-has-results', 'true');
+    try {
+      resultsCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) {}
+  }
+}
+
+function initOverlapChecker() {
+  // IPv4 Overlap buttons
+  const btnCheckV4 = document.getElementById('btn-check-overlap-v4');
+  if (btnCheckV4) {
+    btnCheckV4.addEventListener('click', () => runOverlapCheck(4));
+  }
+  const btnClearV4 = document.getElementById('btn-clear-overlap-v4');
+  if (btnClearV4) {
+    btnClearV4.addEventListener('click', () => {
+      const inputEl = document.getElementById('ipv4-overlap-input');
+      const errEl = document.getElementById('ipv4-overlap-error');
+      const card = document.getElementById('ipv4-overlap-results');
+      if (inputEl) inputEl.value = '';
+      if (errEl) errEl.textContent = '';
+      if (card) { card.classList.add('hidden'); card.removeAttribute('data-has-results'); }
+      _lastOverlapTextV4 = '';
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: clear tap');
+      }
+    });
+  }
+  const btnCopyV4 = document.getElementById('btn-overlap-copy-v4');
+  if (btnCopyV4) {
+    btnCopyV4.addEventListener('click', () => {
+      if (!_lastOverlapTextV4) return;
+      navigator.clipboard.writeText(_lastOverlapTextV4).then(() => {
+        showToast('Copied to clipboard');
+      }).catch(() => {});
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: copy tap');
+      }
+    });
+  }
+  const btnSaveV4 = document.getElementById('btn-overlap-save-v4');
+  if (btnSaveV4) {
+    btnSaveV4.addEventListener('click', () => {
+      if (!_lastOverlapTextV4) return;
+      const countMatch = _lastOverlapTextV4.match(/Networks checked: (\d+)/);
+      const countStr = countMatch ? countMatch[1] : '';
+      addNote(`Overlap check IPv4 - ${countStr} networks`, _lastOverlapTextV4, 'Overlap');
+      if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+      if (typeof switchToNotesTab === 'function') switchToNotesTab();
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: save tap');
+      }
+    });
+  }
+  const btnShareV4 = document.getElementById('btn-overlap-share-v4');
+  if (btnShareV4) {
+    btnShareV4.addEventListener('click', () => {
+      if (!_lastOverlapTextV4) return;
+      if (isShareTapDuplicate('overlap-v4')) return;
+      shareText('Overlap check', _lastOverlapTextV4);
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: share tap');
+      }
+    });
+  }
+
+  // IPv6 Overlap buttons
+  const btnCheckV6 = document.getElementById('btn-check-overlap-v6');
+  if (btnCheckV6) {
+    btnCheckV6.addEventListener('click', () => runOverlapCheck(6));
+  }
+  const btnClearV6 = document.getElementById('btn-clear-overlap-v6');
+  if (btnClearV6) {
+    btnClearV6.addEventListener('click', () => {
+      const inputEl = document.getElementById('ipv6-overlap-input');
+      const errEl = document.getElementById('ipv6-overlap-error');
+      const card = document.getElementById('ipv6-overlap-results');
+      if (inputEl) inputEl.value = '';
+      if (errEl) errEl.textContent = '';
+      if (card) { card.classList.add('hidden'); card.removeAttribute('data-has-results'); }
+      _lastOverlapTextV6 = '';
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: clear tap');
+      }
+    });
+  }
+  const btnCopyV6 = document.getElementById('btn-overlap-copy-v6');
+  if (btnCopyV6) {
+    btnCopyV6.addEventListener('click', () => {
+      if (!_lastOverlapTextV6) return;
+      navigator.clipboard.writeText(_lastOverlapTextV6).then(() => {
+        showToast('Copied to clipboard');
+      }).catch(() => {});
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: copy tap');
+      }
+    });
+  }
+  const btnSaveV6 = document.getElementById('btn-overlap-save-v6');
+  if (btnSaveV6) {
+    btnSaveV6.addEventListener('click', () => {
+      if (!_lastOverlapTextV6) return;
+      const countMatch = _lastOverlapTextV6.match(/Networks checked: (\d+)/);
+      const countStr = countMatch ? countMatch[1] : '';
+      addNote(`Overlap check IPv6 - ${countStr} networks`, _lastOverlapTextV6, 'Overlap');
+      if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+      if (typeof switchToNotesTab === 'function') switchToNotesTab();
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: save tap');
+      }
+    });
+  }
+  const btnShareV6 = document.getElementById('btn-overlap-share-v6');
+  if (btnShareV6) {
+    btnShareV6.addEventListener('click', () => {
+      if (!_lastOverlapTextV6) return;
+      if (isShareTapDuplicate('overlap-v6')) return;
+      shareText('Overlap check', _lastOverlapTextV6);
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Overlap] ui: share tap');
+      }
+    });
+  }
+}
+
+// =====================================================================
+// ULA GENERATOR (Build 116 - Addendum B)
+// =====================================================================
+
+let _lastUlaResult = null;
+
+function generateUla(randomBytes) {
+  if (!randomBytes || randomBytes.length < 5) {
+    randomBytes = new Uint8Array(5);
+    const cryptoObj = (typeof window !== 'undefined' && window.crypto) ? window.crypto : (typeof crypto !== 'undefined' ? crypto : null);
+    if (!cryptoObj || typeof cryptoObj.getRandomValues !== 'function') {
+      throw new Error('generateUla requires 5 random bytes or crypto.getRandomValues');
+    }
+    cryptoObj.getRandomValues(randomBytes);
+  }
+  const b0 = randomBytes[0] & 0xff;
+  const b1 = randomBytes[1] & 0xff;
+  const b2 = randomBytes[2] & 0xff;
+  const b3 = randomBytes[3] & 0xff;
+  const b4 = randomBytes[4] & 0xff;
+
+  const hex2 = (n) => n.toString(16).padStart(2, '0');
+  const b0Hex = hex2(b0);
+  const b1Hex = hex2(b1);
+  const b2Hex = hex2(b2);
+  const b3Hex = hex2(b3);
+  const b4Hex = hex2(b4);
+
+  const globalIdHex = `${b0Hex}:${b1Hex}${b2Hex}:${b3Hex}${b4Hex}`;
+
+  const prefixBigInt =
+    (BigInt(0xfd) << BigInt(120)) |
+    (BigInt(b0) << BigInt(112)) |
+    (BigInt(b1) << BigInt(104)) |
+    (BigInt(b2) << BigInt(96)) |
+    (BigInt(b3) << BigInt(88)) |
+    (BigInt(b4) << BigInt(80));
+
+  const cidr = `${formatIPv6Compressed(prefixBigInt)}/48`;
+  const firstAddr = formatIPv6Compressed(prefixBigInt);
+
+  // Expanded last address: 8 groups of 4 hex digits
+  const g1 = `fd${b0Hex}`;
+  const g2 = `${b1Hex}${b2Hex}`;
+  const g3 = `${b3Hex}${b4Hex}`;
+  const lastAddr = `${g1}:${g2}:${g3}:ffff:ffff:ffff:ffff:ffff`;
+
+  const subnets = [];
+  for (let s = 0; s < 8; s++) {
+    const subnetBigInt = prefixBigInt | (BigInt(s) << BigInt(64));
+    subnets.push(`${formatIPv6Compressed(subnetBigInt)}/64`);
+  }
+
+  return {
+    prefixBigInt,
+    globalIdHex,
+    cidr,
+    firstAddr,
+    lastAddr,
+    subnets
+  };
+}
+
+function buildUlaText(res) {
+  const lines = [
+    'ULA prefix (RFC 4193)',
+    `Prefix: ${res.cidr}`,
+    `Global ID: ${res.globalIdHex}`,
+    `Range: ${res.firstAddr} - ${res.lastAddr}`,
+    'Subnets: 65,536 x /64 (subnet ID 0000 - ffff)',
+    'First /64s:'
+  ];
+  res.subnets.forEach((sub) => lines.push(sub));
+  return lines.join('\n');
+}
+
+function runUlaGenerate() {
+  const errorEl = document.getElementById('ula-error-msg');
+  const card = document.getElementById('ula-results-card');
+  if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+
+  const cryptoObj = window.crypto || (typeof window !== 'undefined' ? window.msCrypto : null);
+  if (!cryptoObj || typeof cryptoObj.getRandomValues !== 'function') {
+    if (errorEl) {
+      errorEl.textContent = 'Secure random numbers are not available on this device.';
+      errorEl.style.display = 'block';
+    }
+    if (card) card.classList.add('hidden');
+    return;
+  }
+
+  const bytes = new Uint8Array(5);
+  cryptoObj.getRandomValues(bytes);
+  const res = generateUla(bytes);
+  _lastUlaResult = res;
+
+  if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+    debugLog('[ULA] generate');
+  }
+
+  const prefixEl = document.getElementById('ula-res-prefix');
+  const globalIdEl = document.getElementById('ula-res-global-id');
+  const rangeEl = document.getElementById('ula-res-range');
+  const firstSubnetsEl = document.getElementById('ula-res-first-subnets');
+
+  if (prefixEl) prefixEl.textContent = res.cidr;
+  if (globalIdEl) globalIdEl.textContent = res.globalIdHex;
+  if (rangeEl) {
+    const formatWithWbr = (addr) => addr.replace(/::/g, '::<wbr>').replace(/(?<!:):(?!:)/g, ':<wbr>');
+    rangeEl.innerHTML = `
+      <div class="ula-range-line"><span class="ula-range-tag">From</span><span class="ula-range-addr">${formatWithWbr(res.firstAddr)}</span></div>
+      <div class="ula-range-line"><span class="ula-range-tag">To</span><span class="ula-range-addr">${formatWithWbr(res.lastAddr)}</span></div>
+    `;
+  }
+  if (firstSubnetsEl) {
+    firstSubnetsEl.innerHTML = res.subnets.map((s) => `<div class="ula-subnet-item">${s}</div>`).join('');
+  }
+
+  if (card) {
+    card.classList.remove('hidden');
+  }
+}
+
+function openUlaInCalculator() {
+  if (!_lastUlaResult) return;
+  const cidr = _lastUlaResult.cidr;
+
+  const calcTab = document.querySelector('.tab-btn[data-target="calculator-tab"]');
+  if (calcTab) calcTab.click();
+
+  const v6SubTab = document.querySelector('.calc-sub-tab-btn[data-sub-target="ipv6-panel"]');
+  if (v6SubTab) {
+    v6SubTab.click();
+  } else if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+    debugLog('ui: ula open-in: sub-tab not found');
+  }
+
+  const singleBtn = document.querySelector('.calc-mode-btn-v6[data-mode="single"]');
+  if (singleBtn) singleBtn.click();
+
+  const hostsEl = document.getElementById('ipv6-hosts');
+  if (hostsEl) hostsEl.value = '';
+
+  const addrEl = document.getElementById('ipv6-address');
+  if (addrEl) {
+    addrEl.value = cidr;
+    if (typeof calculateIPv6 === 'function') calculateIPv6();
+  }
+
+  if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+    debugLog('[ULA] ui: open-calc tap');
+  }
+}
+
+function initUlaGenerator() {
+  const btnGenerate = document.getElementById('btn-ula-generate');
+  if (btnGenerate) btnGenerate.addEventListener('click', runUlaGenerate);
+
+  const btnCopy = document.getElementById('btn-ula-copy');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      if (!_lastUlaResult) return;
+      navigator.clipboard.writeText(_lastUlaResult.cidr).then(() => {
+        showToast('Copied to clipboard');
+      }).catch(() => {});
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[ULA] ui: copy tap');
+      }
+    });
+  }
+
+  const btnSave = document.getElementById('btn-ula-save');
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      if (!_lastUlaResult) return;
+      const text = buildUlaText(_lastUlaResult);
+      addNote(`ULA prefix ${_lastUlaResult.cidr}`, text, 'ULA');
+      if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+      if (typeof switchToNotesTab === 'function') switchToNotesTab();
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[ULA] ui: save tap');
+      }
+    });
+  }
+
+  const btnShare = document.getElementById('btn-ula-share');
+  if (btnShare) {
+    btnShare.addEventListener('click', () => {
+      if (!_lastUlaResult) return;
+      if (isShareTapDuplicate('ula')) return;
+      const text = buildUlaText(_lastUlaResult);
+      shareText('ULA prefix', text);
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[ULA] ui: share tap');
+      }
+    });
+  }
+
+  const btnOpenCalc = document.getElementById('btn-ula-open-calc');
+  if (btnOpenCalc) {
+    btnOpenCalc.addEventListener('click', openUlaInCalculator);
+  }
+}
+
+// =====================================================================
+// ROUTE SUMMARIZATION (Build 116 - Addendum C)
+// =====================================================================
+
+let _lastSummarizeText = '';
+
+function summarizeFamily(validEntries, maxBits) {
+  if (validEntries.length === 0) return null;
+
+  // 1. Sort ranges by start asc, then end desc
+  const sorted = [...validEntries].sort((a, b) => {
+    if (a.start < b.start) return -1;
+    if (a.start > b.start) return 1;
+    if (a.end > b.end) return -1;
+    if (a.end < b.end) return 1;
+    return 0;
+  });
+
+  // Count duplicates / covered
+  let coveredCount = 0;
+  let currentMax = BigInt(-1);
+  sorted.forEach((e) => {
+    if (e.end <= currentMax) {
+      coveredCount++;
+    } else {
+      currentMax = e.end;
+    }
+  });
+
+  // 2. Merge overlapping / adjacent ranges
+  const mergedRanges = [];
+  sorted.forEach((e) => {
+    if (mergedRanges.length === 0) {
+      mergedRanges.push({ start: e.start, end: e.end });
+    } else {
+      const prev = mergedRanges[mergedRanges.length - 1];
+      if (e.start <= prev.end + BigInt(1)) {
+        if (e.end > prev.end) {
+          prev.end = e.end;
+        }
+      } else {
+        mergedRanges.push({ start: e.start, end: e.end });
+      }
+    }
+  });
+
+  // 3. Exact minimal CIDR decomposition
+  const exactRoutes = [];
+  const maxB = BigInt(maxBits);
+
+  mergedRanges.forEach((range) => {
+    let curr = range.start;
+    const end = range.end;
+
+    while (curr <= end) {
+      let k = 0;
+      while (k < maxBits) {
+        const nextK = k + 1;
+        const blockSize = BigInt(1) << BigInt(nextK);
+        const mask = blockSize - BigInt(1);
+        if ((curr & mask) === BigInt(0) && (curr + blockSize - BigInt(1)) <= end) {
+          k = nextK;
+        } else {
+          break;
+        }
+      }
+      const prefix = maxBits - k;
+      const count = BigInt(1) << BigInt(k);
+      const cidr = maxBits === 32
+        ? `${uint32ToIp(Number(curr))}/${prefix}`
+        : `${formatIPv6Compressed(curr)}/${prefix}`;
+      exactRoutes.push({ cidr, prefix, start: curr, count });
+      curr += count;
+    }
+  });
+
+  exactRoutes.sort((a, b) => (a.start < b.start ? -1 : (a.start > b.start ? 1 : 0)));
+
+  // 4. Single summary route
+  let lo = validEntries[0].start;
+  let hi = validEntries[0].end;
+  validEntries.forEach((e) => {
+    if (e.start < lo) lo = e.start;
+    if (e.end > hi) hi = e.end;
+  });
+
+  const diff = lo ^ hi;
+  let pLen = maxBits;
+  if (diff > BigInt(0)) {
+    let bits = 0;
+    let temp = diff;
+    while (temp > BigInt(0)) {
+      temp >>= BigInt(1);
+      bits++;
+    }
+    pLen = maxBits - bits;
+  }
+
+  const hostBits = BigInt(maxBits - pLen);
+  let summaryNet = lo;
+  if (pLen === 0) {
+    summaryNet = BigInt(0);
+  } else if (hostBits > BigInt(0)) {
+    const mask = ((BigInt(1) << BigInt(pLen)) - BigInt(1)) << hostBits;
+    summaryNet = lo & mask;
+  }
+
+  const summaryCidr = maxBits === 32
+    ? `${uint32ToIp(Number(summaryNet))}/${pLen}`
+    : `${formatIPv6Compressed(summaryNet)}/${pLen}`;
+
+  const summaryTotal = pLen === 0 ? (BigInt(1) << maxB) : (BigInt(1) << hostBits);
+  let unionTotal = BigInt(0);
+  mergedRanges.forEach((r) => {
+    unionTotal += (r.end - r.start + BigInt(1));
+  });
+
+  const extraAddresses = summaryTotal - unionTotal;
+  let extraSharePercent = 0;
+  let extraShareStr = '0.0%';
+  if (summaryTotal > BigInt(0) && extraAddresses > BigInt(0)) {
+    const scaled = (extraAddresses * BigInt(1000)) / summaryTotal;
+    extraSharePercent = Number(scaled) / 10;
+    if (extraSharePercent < 0.1) {
+      extraShareStr = '< 0.1%';
+    } else {
+      extraShareStr = `${extraSharePercent.toFixed(1)}%`;
+    }
+  }
+
+  const normalizedCount = validEntries.filter((v) => v.normalized).length;
+
+  return {
+    family: maxBits === 32 ? 4 : 6,
+    inputCount: validEntries.length,
+    exactRoutes,
+    summaryCidr,
+    summaryPrefix: pLen,
+    summaryTotal,
+    unionTotal,
+    extraAddresses,
+    extraShareStr,
+    extraSharePercent,
+    coveredCount,
+    normalizedCount
+  };
+}
+
+function buildSummarizeText(v4Res, v6Res, invalidEntries) {
+  const lines = ['Route summarization'];
+  const totalIn = (v4Res ? v4Res.inputCount : 0) + (v6Res ? v6Res.inputCount : 0);
+  const parts = [];
+  if (v4Res) parts.push(`IPv4: ${v4Res.inputCount}`);
+  if (v6Res) parts.push(`IPv6: ${v6Res.inputCount}`);
+  lines.push(`Input: ${totalIn} networks (${parts.join(', ')})`);
+
+  if (v4Res) {
+    lines.push('');
+    lines.push('IPv4');
+    lines.push(`Exact aggregation: ${v4Res.inputCount} -> ${v4Res.exactRoutes.length} ${v4Res.exactRoutes.length === 1 ? 'route' : 'routes'}`);
+    const limit = Math.min(v4Res.exactRoutes.length, 500);
+    for (let i = 0; i < limit; i++) {
+      lines.push(v4Res.exactRoutes[i].cidr);
+    }
+    if (v4Res.exactRoutes.length > 500) {
+      lines.push(`+ ${v4Res.exactRoutes.length - 500} more routes`);
+    }
+
+    if (v4Res.extraAddresses === BigInt(0)) {
+      lines.push('Single summary route: same as the exact result (no extra addresses)');
+    } else {
+      const extraWord = v4Res.extraAddresses === BigInt(1) ? 'address' : 'addresses';
+      lines.push(`Single summary route: ${v4Res.summaryCidr} (${formatAddressCount(v4Res.summaryTotal)} ${extraWord}; ${formatAddressCount(v4Res.extraAddresses)} not in your list, ${v4Res.extraShareStr})`);
+    }
+  }
+
+  if (v6Res) {
+    lines.push('');
+    lines.push('IPv6');
+    lines.push(`Exact aggregation: ${v6Res.inputCount} -> ${v6Res.exactRoutes.length} ${v6Res.exactRoutes.length === 1 ? 'route' : 'routes'}`);
+    const limit = Math.min(v6Res.exactRoutes.length, 500);
+    for (let i = 0; i < limit; i++) {
+      lines.push(v6Res.exactRoutes[i].cidr);
+    }
+    if (v6Res.exactRoutes.length > 500) {
+      lines.push(`+ ${v6Res.exactRoutes.length - 500} more routes`);
+    }
+
+    if (v6Res.extraAddresses === BigInt(0)) {
+      lines.push('Single summary route: same as the exact result (no extra addresses)');
+    } else {
+      const extraWord = v6Res.extraAddresses === BigInt(1) ? 'address' : 'addresses';
+      lines.push(`Single summary route: ${v6Res.summaryCidr} (${formatAddressCount(v6Res.summaryTotal)} ${extraWord}; ${formatAddressCount(v6Res.extraAddresses)} not in your list, ${v6Res.extraShareStr})`);
+    }
+  }
+
+  if (invalidEntries && invalidEntries.length > 0) {
+    lines.push('');
+    invalidEntries.forEach((inv) => {
+      lines.push(`Skipped: entry ${inv.index} (${inv.reason})`);
+    });
+  }
+
+  return lines.join('\n');
+}
+
+function runRouteSummarization() {
+  if (!PRO_UNLOCKED) {
+    if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+      debugLog('[Summarize] blocked: not pro');
+    }
+    showProModal('summarize');
+    return;
+  }
+
+  const inputEl = document.getElementById('summarize-input');
+  const errorEl = document.getElementById('summarize-error-msg');
+  const card = document.getElementById('summarize-results-card');
+  const contentBox = document.getElementById('summarize-results-content');
+
+  if (!inputEl) return;
+  const text = inputEl.value;
+
+  if (errorEl) errorEl.textContent = '';
+  if (contentBox) contentBox.innerHTML = '';
+
+  const parsed = parseNetworkList(text, null, 1000);
+
+  if (parsed.tooMany) {
+    if (errorEl) errorEl.textContent = 'Too many entries (maximum 1000)';
+    if (card) card.classList.add('hidden');
+    return;
+  }
+
+  if (parsed.valid.length === 0) {
+    if (errorEl) errorEl.textContent = 'Enter at least one network';
+    if (card) card.classList.add('hidden');
+    return;
+  }
+
+  // Show skipped entries if any
+  if (parsed.invalid.length > 0 && errorEl) {
+    const errorLines = parsed.invalid.slice(0, 5).map((inv) => `entry ${inv.index}: ${inv.reason}`);
+    if (parsed.invalid.length > 5) {
+      errorLines.push(`+${parsed.invalid.length - 5} more`);
+    }
+    errorEl.textContent = errorLines.join(', ');
+  }
+
+  const v4Entries = parsed.valid.filter((v) => v.family === 4);
+  const v6Entries = parsed.valid.filter((v) => v.family === 6);
+
+  const v4Res = summarizeFamily(v4Entries, 32);
+  const v6Res = summarizeFamily(v6Entries, 128);
+
+  const exact4Count = v4Res ? v4Res.exactRoutes.length : 0;
+  const exact6Count = v6Res ? v6Res.exactRoutes.length : 0;
+
+  if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+    debugLog(`[Summarize] run | v4=${v4Entries.length} | v6=${v6Entries.length} | invalid=${parsed.invalid.length} | exact4=${exact4Count} | exact6=${exact6Count}`);
+  }
+
+  // Render UI
+  if (contentBox) {
+    [v4Res, v6Res].filter(Boolean).forEach((res) => {
+      const sec = document.createElement('div');
+      sec.className = 'summarize-family-section';
+
+      const title = document.createElement('div');
+      title.className = 'summarize-family-title';
+      title.textContent = `IPv${res.family}`;
+      sec.appendChild(title);
+
+      const subtitle = document.createElement('div');
+      subtitle.className = 'summarize-family-subtitle';
+      subtitle.textContent = `${res.inputCount} ${res.inputCount === 1 ? 'network' : 'networks'} -> ${res.exactRoutes.length} ${res.exactRoutes.length === 1 ? 'route' : 'routes'}`;
+      sec.appendChild(subtitle);
+
+      // Exact aggregation box
+      const exactBox = document.createElement('div');
+      exactBox.className = 'summarize-exact-box';
+
+      const exactHead = document.createElement('div');
+      exactHead.style.fontSize = '11px';
+      exactHead.style.fontWeight = '700';
+      exactHead.style.textTransform = 'uppercase';
+      exactHead.style.letterSpacing = '0.5px';
+      exactHead.style.color = 'var(--text-secondary)';
+      exactHead.style.marginBottom = '6px';
+      exactHead.textContent = 'Exact Aggregation';
+      exactBox.appendChild(exactHead);
+
+      const limit = Math.min(res.exactRoutes.length, 500);
+      for (let i = 0; i < limit; i++) {
+        const r = res.exactRoutes[i];
+        const row = document.createElement('div');
+        row.className = 'summarize-route-row';
+        const cidrSpan = document.createElement('span');
+        cidrSpan.className = 'summarize-route-cidr';
+        cidrSpan.textContent = r.cidr;
+        row.appendChild(cidrSpan);
+
+        const countSpan = document.createElement('span');
+        countSpan.className = 'summarize-route-count';
+        const word = r.count === BigInt(1) ? 'addr' : 'addrs';
+        countSpan.textContent = `${formatAddressCount(r.count)} ${word}`;
+        row.appendChild(countSpan);
+
+        exactBox.appendChild(row);
+      }
+      if (res.exactRoutes.length > 500) {
+        const more = document.createElement('div');
+        more.className = 'text-muted';
+        more.style.fontSize = '12px';
+        more.style.marginTop = '6px';
+        more.textContent = `+${res.exactRoutes.length - 500} more routes`;
+        exactBox.appendChild(more);
+      }
+      sec.appendChild(exactBox);
+
+      // Single summary route box
+      const singleBox = document.createElement('div');
+      singleBox.className = 'summarize-single-box';
+
+      const singleHead = document.createElement('div');
+      singleHead.className = 'summarize-single-title';
+      singleHead.textContent = 'Single Summary Route';
+      singleBox.appendChild(singleHead);
+
+      if (res.extraAddresses === BigInt(0)) {
+        const noExtra = document.createElement('div');
+        noExtra.className = 'summarize-single-details';
+        noExtra.textContent = 'No extra addresses - identical to the exact result';
+        singleBox.appendChild(noExtra);
+      } else {
+        const singleCidr = document.createElement('div');
+        singleCidr.className = 'summarize-single-cidr';
+        const totalWord = res.summaryTotal === BigInt(1) ? 'address' : 'addresses';
+        singleCidr.textContent = `${res.summaryCidr} (${formatAddressCount(res.summaryTotal)} ${totalWord})`;
+        singleBox.appendChild(singleCidr);
+
+        const details = document.createElement('div');
+        details.className = 'summarize-single-details';
+        const extraWord = res.extraAddresses === BigInt(1) ? 'address' : 'addresses';
+        details.textContent = `${formatAddressCount(res.extraAddresses)} ${extraWord} not in your list (${res.extraShareStr})`;
+        singleBox.appendChild(details);
+
+        if (res.extraSharePercent > 50) {
+          const warn = document.createElement('div');
+          warn.className = 'summarize-warning-msg';
+          warn.textContent = 'This route also covers many addresses that are not in your list.';
+          singleBox.appendChild(warn);
+        }
+        if (res.summaryPrefix === 0) {
+          const zeroWarn = document.createElement('div');
+          zeroWarn.className = 'summarize-warning-msg';
+          zeroWarn.textContent = 'A /0 route covers every address.';
+          singleBox.appendChild(zeroWarn);
+        }
+      }
+      sec.appendChild(singleBox);
+
+      // Notes (covered / duplicates, normalized)
+      const notes = [];
+      if (res.coveredCount > 0) {
+        notes.push(`${res.coveredCount} ${res.coveredCount === 1 ? 'entry was a duplicate or already covered' : 'entries were duplicates or already covered by another entry'}`);
+      }
+      if (res.normalizedCount > 0) {
+        notes.push(`${res.normalizedCount} ${res.normalizedCount === 1 ? 'entry rounded down to its network' : 'entries rounded down to their network'}`);
+      }
+      if (notes.length > 0) {
+        const noteLine = document.createElement('div');
+        noteLine.className = 'summarize-notes-line';
+        noteLine.textContent = notes.join(' • ');
+        sec.appendChild(noteLine);
+      }
+
+      contentBox.appendChild(sec);
+    });
+  }
+
+  _lastSummarizeText = buildSummarizeText(v4Res, v6Res, parsed.invalid);
+
+  if (card) {
+    card.classList.remove('hidden');
+    try {
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) {}
+  }
+}
+
+function initRouteSummarizer() {
+  const btnRun = document.getElementById('btn-summarize-run');
+  if (btnRun) btnRun.addEventListener('click', runRouteSummarization);
+
+  const btnClear = document.getElementById('btn-summarize-clear');
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      const inputEl = document.getElementById('summarize-input');
+      const errEl = document.getElementById('summarize-error-msg');
+      const card = document.getElementById('summarize-results-card');
+      const content = document.getElementById('summarize-results-content');
+      if (inputEl) inputEl.value = '';
+      if (errEl) errEl.textContent = '';
+      if (card) card.classList.add('hidden');
+      if (content) content.innerHTML = '';
+      _lastSummarizeText = '';
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Summarize] ui: clear tap');
+      }
+    });
+  }
+
+  const btnCopy = document.getElementById('btn-summarize-copy');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      if (!_lastSummarizeText) return;
+      navigator.clipboard.writeText(_lastSummarizeText).then(() => {
+        showToast('Copied to clipboard');
+      }).catch(() => {});
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Summarize] ui: copy tap');
+      }
+    });
+  }
+
+  const btnSave = document.getElementById('btn-summarize-save');
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      if (!_lastSummarizeText) return;
+      const countMatch = _lastSummarizeText.match(/Input: (\d+) networks/);
+      const countStr = countMatch ? countMatch[1] : '';
+      addNote(`Route summarization - ${countStr} networks`, _lastSummarizeText, 'Summary');
+      if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+      if (typeof switchToNotesTab === 'function') switchToNotesTab();
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Summarize] ui: save tap');
+      }
+    });
+  }
+
+  const btnShare = document.getElementById('btn-summarize-share');
+  if (btnShare) {
+    btnShare.addEventListener('click', () => {
+      if (!_lastSummarizeText) return;
+      if (isShareTapDuplicate('summarize')) return;
+      shareText('Route summarization', _lastSummarizeText);
+      if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
+        debugLog('[Summarize] ui: share tap');
+      }
+    });
+  }
+}
