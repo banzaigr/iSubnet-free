@@ -817,7 +817,8 @@ const PRO_FEATURE_INFO = {
   ping: { title: '📶 Ping options', text: 'Choose how many probes to send (up to 100), or turn on -t to ping continuously until you stop it, with the newest result at the top.' },
   traceroute: { title: '🧭 Traceroute options', text: 'Set the maximum number of hops (up to 64), the probes per hop and the timeout, and turn on host name lookup to see a name for every hop.' },
   whois: { title: '🔎 Whois extras', text: 'Look up AS numbers, see the registrar’s own record with more contact detail, and view the raw registry data.' },
-  summarize: { title: '🧮 Route Summarization', text: 'Merge a list of IPv4 and IPv6 networks into the fewest routes, or find the single smallest summary route that covers them all.' }
+  summarize: { title: '🧮 Route Summarization', text: 'Merge a list of IPv4 and IPv6 networks into the fewest routes, or find the single smallest summary route that covers them all.' },
+  geolocation: { title: '📍 IP Geolocation details', text: 'See coordinates with a map link, the time zone, the AS number and whether the address is a known proxy or VPN, and save or share the result.' }
 };
 
 function showProModal(feature) {
@@ -1020,6 +1021,7 @@ function applyProState() {
   if (typeof window.updatePingControls === 'function') window.updatePingControls();
   if (typeof window.updateTraceControls === 'function') window.updateTraceControls();
   if (typeof window.updateWhoisControls === 'function') window.updateWhoisControls();
+  if (typeof window.updateGeoControls === 'function') window.updateGeoControls();
 }
 
 // --- Safe Storage Wrapper for Local file:// CORS constraints ---
@@ -5699,7 +5701,8 @@ function setupInputSanitizers() {
     { id: 'dns-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
     { id: 'ping-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
     { id: 'trace-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
-    { id: 'whois-input', allowed: /[\p{L}\p{N}._\-:\/]/u }
+    { id: 'whois-input', allowed: /[\p{L}\p{N}._\-:\/]/u },
+    { id: 'geo-input', allowed: /[0-9a-fA-F:./]/ }
   ];
   rules.forEach(({ id, allowed }) => {
     const el = document.getElementById(id);
@@ -5707,7 +5710,7 @@ function setupInputSanitizers() {
     el.addEventListener('input', () => {
       if (id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') normalizeDnsInput(el);
       stripDisallowedChars(el, allowed);
-      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input') {
+      if (id === 'ipv6-address' || id === 'split-base-ip' || id === 'dns-input' || id === 'ping-input' || id === 'trace-input' || id === 'whois-input' || id === 'geo-input') {
         collapseDuplicateDots(el);
         collapseDuplicateColons(el);
       }
@@ -6615,6 +6618,7 @@ function init() {
   initOverlapChecker();
   initUlaGenerator();
   initRouteSummarizer();
+  initGeoTool();
   setupExporterListeners();
   
   // Setup clear history binding
@@ -6814,6 +6818,7 @@ const TOOLS_LIST = [
   { id: 'ping', icon: '📶', title: 'Ping', desc: 'Test reachability and round-trip time', screen: 'ping-tab', pro: false },
   { id: 'traceroute', icon: '🧭', title: 'Traceroute', desc: 'See the path your packets take, hop by hop', screen: 'traceroute-tab', feature: 'traceroute', pro: false },
   { id: 'whois', icon: '🔎', title: 'Whois', desc: 'Who owns a domain, IP address or network', screen: 'whois-tab', feature: 'whois', pro: false },
+  { id: 'geolocation', icon: '📍', title: 'IP Geolocation', desc: 'Approximate location and network of an IP address', screen: 'geolocation-tab', pro: false },
   { id: 'ula', icon: '🧩', title: 'ULA Generator', desc: 'Random private IPv6 prefix (RFC 4193)', screen: 'ula-tab', pro: false },
   { id: 'summarize', icon: '🧮', title: 'Route Summarization', desc: 'Merge networks into the fewest routes', screen: 'summarize-tab', feature: 'summarize', pro: true }
 ];
@@ -12290,6 +12295,12 @@ function updateUpgradeUI(planTier) {
         el.value = targetVal;
         el.dispatchEvent(new Event('input', { bubbles: true }));
       }
+    } else if (toolId === 'geolocation') {
+      const el = document.getElementById('geo-input');
+      if (el) {
+        el.value = targetVal;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }
   }
 
@@ -12359,6 +12370,7 @@ function updateUpgradeUI(planTier) {
     if (parsed.kind === 'ipv4' || parsed.kind === 'ipv6') {
       const calcValue = parsed.prefix !== null ? parsed.query : (firstNetworkCidr || parsed.ip);
       addBtn('Subnet Calculator', () => openInSubnetCalculator(parsed, calcValue));
+      addBtn('IP Geolocation', () => openInTool('geolocation', parsed.ip));
     }
 
     openInBox.appendChild(label);
@@ -14658,6 +14670,746 @@ function initRouteSummarizer() {
       shareText('Route summarization', _lastSummarizeText);
       if (window.APP_DEBUG_ENABLED && typeof debugLog === 'function') {
         debugLog('[Summarize] ui: share tap');
+      }
+    });
+  }
+}
+
+// =====================================================================
+// IP GEOLOCATION (Build 117)
+// =====================================================================
+
+const GEO_PROVIDER = {
+  name: 'FreeIPAPI',
+  site: 'freeipapi.com',
+  url: (ip) => 'https://free.freeipapi.com/api/v1/json/' + (ip ? encodeURIComponent(ip) : ''),
+  parse: (json) => {
+    if (!json || typeof json !== 'object') return null;
+    const iana = (Array.isArray(json.timeZones) && json.timeZones.length > 0 && typeof json.timeZones[0] === 'string' && json.timeZones[0].trim())
+      ? json.timeZones[0].trim()
+      : null;
+    const rawTz = (typeof json.timeZone === 'string' && json.timeZone.trim())
+      ? json.timeZone.trim()
+      : null;
+    const isOffset = rawTz && /^[+-]\d{2}:\d{2}$/.test(rawTz);
+
+    let tz = null;
+    if (iana && isOffset) {
+      tz = `${iana} (UTC${rawTz})`;
+    } else if (iana) {
+      tz = iana;
+    } else if (isOffset) {
+      tz = `UTC${rawTz}`;
+    } else if (rawTz) {
+      tz = rawTz;
+    }
+    if (tz && tz.length > 64) tz = tz.slice(0, 64);
+
+    let asnStr = null;
+    if (json.asn != null) {
+      const rawAsn = String(json.asn).trim();
+      if (rawAsn) {
+        asnStr = /^as/i.test(rawAsn) ? rawAsn.toUpperCase() : 'AS' + rawAsn;
+      }
+    }
+    const lat = (typeof json.latitude === 'number' && Number.isFinite(json.latitude)) ? json.latitude : null;
+    const lon = (typeof json.longitude === 'number' && Number.isFinite(json.longitude)) ? json.longitude : null;
+    const isProxy = typeof json.isProxy === 'boolean' ? json.isProxy : null;
+
+    const norm = {
+      ip: typeof json.ipAddress === 'string' && json.ipAddress.trim() ? json.ipAddress.trim() : null,
+      version: json.ipVersion === 4 || json.ipVersion === 6 ? json.ipVersion : null,
+      countryName: typeof json.countryName === 'string' && json.countryName.trim() ? json.countryName.trim() : null,
+      countryCode: typeof json.countryCode === 'string' && json.countryCode.trim() ? json.countryCode.trim().toUpperCase() : null,
+      region: typeof json.regionName === 'string' && json.regionName.trim() ? json.regionName.trim() : null,
+      city: typeof json.cityName === 'string' && json.cityName.trim() ? json.cityName.trim() : null,
+      network: typeof json.asnOrganization === 'string' && json.asnOrganization.trim() ? json.asnOrganization.trim() : null,
+      asn: asnStr,
+      lat: lat,
+      lon: lon,
+      timeZone: tz,
+      isProxy: isProxy
+    };
+
+    const hasUsable = !!(norm.ip || norm.countryName || norm.countryCode || norm.region || norm.city || norm.network || norm.asn || (norm.lat !== null && norm.lon !== null));
+    if (!hasUsable) return null;
+    return norm;
+  }
+};
+
+const _GEO_V4_RESERVED = [
+  [0x00000000n, 0x00ffffffn], // 0.0.0.0/8
+  [0x0a000000n, 0x0affffffn], // 10.0.0.0/8
+  [0x64400000n, 0x647fffffn], // 100.64.0.0/10
+  [0x7f000000n, 0x7fffffffn], // 127.0.0.0/8
+  [0xa9fe0000n, 0xa9feffffn], // 169.254.0.0/16
+  [0xac100000n, 0xac1fffffn], // 172.16.0.0/12
+  [0xc0000000n, 0xc00000ffn], // 192.0.0.0/24
+  [0xc0000200n, 0xc00002ffn], // 192.0.2.0/24
+  [0xc0a80000n, 0xc0a8ffffn], // 192.168.0.0/16
+  [0xc6120000n, 0xc613ffffn], // 198.18.0.0/15
+  [0xc6336400n, 0xc63364ffn], // 198.51.100.0/24
+  [0xcb007100n, 0xcb0071ffn], // 203.0.113.0/24
+  [0xe0000000n, 0xefffffffn], // 224.0.0.0/4
+  [0xf0000000n, 0xffffffffn]  // 240.0.0.0/4
+];
+
+function _isGeoV4Reserved(v4Big) {
+  return _GEO_V4_RESERVED.some(([start, end]) => v4Big >= start && v4Big <= end);
+}
+
+function classifyIp(str) {
+  if (!str || typeof str !== 'string') {
+    return { ok: false, family: null, reserved: false, reason: 'Enter a valid IPv4 or IPv6 address.' };
+  }
+  const s = str.trim();
+  if (!s || s.includes(' ') || s.includes('\t') || s.includes('\n')) {
+    return { ok: false, family: null, reserved: false, reason: 'Enter a valid IPv4 or IPv6 address.' };
+  }
+  if (s.includes('/')) {
+    return { ok: false, family: null, reserved: false, reason: 'Enter a single IP address, not a network range.' };
+  }
+  if (validateIPv4(s)) {
+    const octets = s.split('.');
+    if (octets.some((o) => o.length > 1 && o.startsWith('0'))) {
+      return { ok: false, family: null, reserved: false, reason: 'Enter a valid IPv4 or IPv6 address.' };
+    }
+    const v4 = BigInt(ipToUint32(s));
+    if (_isGeoV4Reserved(v4)) {
+      return { ok: false, family: 4, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    return { ok: true, family: 4, reserved: false, reason: null };
+  }
+  const v6 = parseIPv6(s);
+  if (v6 !== null) {
+    if ((v6 >> 32n) === 0xffffn) {
+      const embeddedV4 = v6 & 0xffffffffn;
+      if (_isGeoV4Reserved(embeddedV4)) {
+        return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+      }
+      return { ok: true, family: 6, reserved: false, reason: null };
+    }
+    if ((v6 >> 32n) === 0x0064ff9b0000000000000000n) { // 64:ff9b::/96 (NAT64)
+      const embeddedV4 = v6 & 0xffffffffn;
+      if (_isGeoV4Reserved(embeddedV4)) {
+        return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+      }
+      return { ok: true, family: 6, reserved: false, reason: null };
+    }
+    if (v6 === 0n || v6 === 1n) {
+      return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    if ((v6 >> 121n) === 0x7en) { // fc00::/7
+      return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    if ((v6 >> 118n) === 0x3fan) { // fe80::/10
+      return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    if ((v6 >> 118n) === 0x3fbn) { // fec0::/10
+      return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    if ((v6 >> 64n) === 0x0100000000000000n) { // 100::/64
+      return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    if ((v6 >> 120n) === 0xffn) { // ff00::/8 (multicast)
+      return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    if ((v6 >> 96n) === 0x20010db8n) { // 2001:db8::/32
+      return { ok: false, family: 6, reserved: true, reason: 'This is a private or reserved address, so it has no public location.' };
+    }
+    return { ok: true, family: 6, reserved: false, reason: null };
+  }
+  if (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(s) && !s.includes(':')) {
+    return { ok: false, family: null, reserved: false, reason: 'Domain names are not supported - use the DNS Lookup to find the address first.' };
+  }
+  return { ok: false, family: null, reserved: false, reason: 'Enter a valid IPv4 or IPv6 address.' };
+}
+
+function getFlagEmoji(countryCode) {
+  if (typeof countryCode !== 'string' || !/^[A-Za-z]{2}$/.test(countryCode)) return '';
+  const upper = countryCode.toUpperCase();
+  return String.fromCodePoint(0x1F1E6 + (upper.charCodeAt(0) - 65), 0x1F1E6 + (upper.charCodeAt(1) - 65));
+}
+
+function geoLog(msg) {
+  if (typeof window.debugLog === 'function') {
+    window.debugLog(`[Geo] ${msg}`);
+  }
+}
+
+const _geoRequestTimestamps = [];
+const _geoCache = new Map();
+const GEO_REQUEST_TIMEOUT_MS = 10000;
+const GEO_CACHE_IP_MS = 10 * 60 * 1000; // 10 minutes
+const GEO_CACHE_MYIP_MS = 2 * 60 * 1000; // 2 minutes
+
+function checkGeoRateLimit() {
+  const now = Date.now();
+  while (_geoRequestTimestamps.length > 0 && (now - _geoRequestTimestamps[0]) >= 60000) {
+    _geoRequestTimestamps.shift();
+  }
+  const count60s = _geoRequestTimestamps.length;
+  let count10s = 0;
+  for (let i = _geoRequestTimestamps.length - 1; i >= 0; i--) {
+    if (now - _geoRequestTimestamps[i] < 10000) {
+      count10s++;
+    } else {
+      break;
+    }
+  }
+  if (count10s >= 8 || count60s >= 50) {
+    return false;
+  }
+  return true;
+}
+
+function recordGeoRequest() {
+  _geoRequestTimestamps.push(Date.now());
+}
+
+async function geoHttpGetJson(url, signal) {
+  const reqStart = performance.now();
+  let host = 'free.freeipapi.com';
+  try { host = new URL(url).hostname || host; } catch (e) {}
+
+  const logOutcome = (statusOrKind) => {
+    if (window.APP_DEBUG_ENABLED) {
+      const ms = Math.max(0, Math.round(performance.now() - reqStart));
+      geoLog(`request: host=${host} | status=${statusOrKind} | ms=${ms}`);
+    }
+  };
+
+  const hasCapHttp = !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorHttp && typeof window.Capacitor.Plugins.CapacitorHttp.get === 'function');
+  if (hasCapHttp) {
+    let timeoutId = null;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const err = new Error('Timeout');
+        err.kind = 'timeout';
+        reject(err);
+      }, GEO_REQUEST_TIMEOUT_MS);
+    });
+    try {
+      const res = await Promise.race([
+        window.Capacitor.Plugins.CapacitorHttp.get({
+          url: url,
+          headers: { Accept: 'application/json' },
+          responseType: 'text',
+          connectTimeout: GEO_REQUEST_TIMEOUT_MS,
+          readTimeout: GEO_REQUEST_TIMEOUT_MS
+        }),
+        timeoutPromise
+      ]);
+      if (timeoutId) clearTimeout(timeoutId);
+      const status = res && typeof res.status === 'number' ? res.status : 0;
+      if (status < 200 || status >= 300) {
+        const err = new Error(`HTTP ${status}`);
+        err.status = status;
+        throw err;
+      }
+      let body = res.data;
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body);
+        } catch (e) {
+          const jErr = new Error('Invalid JSON');
+          jErr.kind = 'json';
+          throw jErr;
+        }
+      }
+      if (!body || typeof body !== 'object') {
+        const jErr = new Error('Invalid JSON');
+        jErr.kind = 'json';
+        throw jErr;
+      }
+      logOutcome(status);
+      return body;
+    } catch (e) {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (e && (e.kind === 'timeout' || /timeout|timed out/i.test(e.message || ''))) {
+        logOutcome('timeout');
+        const tErr = new Error('Timeout');
+        tErr.kind = 'timeout';
+        throw tErr;
+      }
+      const statusOrKind = (e && typeof e.status === 'number' && e.status > 0)
+        ? String(e.status)
+        : (e && e.kind ? e.kind : 'network');
+      logOutcome(statusOrKind);
+      throw e;
+    }
+  }
+
+  // Browser fetch fallback
+  const ctrl = new window.AbortController();
+  const onAbort = () => ctrl.abort();
+  if (signal) {
+    if (signal.aborted) ctrl.abort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ctrl.abort();
+  }, GEO_REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!response.ok) {
+      const err = new Error(`HTTP ${response.status}`);
+      err.status = response.status;
+      throw err;
+    }
+    const text = await response.text();
+    let parsed = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      const jErr = new Error('Invalid JSON');
+      jErr.kind = 'json';
+      throw jErr;
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      const jErr = new Error('Invalid JSON');
+      jErr.kind = 'json';
+      throw jErr;
+    }
+    logOutcome(response.status);
+    return parsed;
+  } catch (e) {
+    clearTimeout(timer);
+    if (timedOut || (e && (e.name === 'AbortError' || /timeout/i.test(e.message || '')) && !signal?.aborted)) {
+      logOutcome('timeout');
+      const tErr = new Error('Timeout');
+      tErr.kind = 'timeout';
+      throw tErr;
+    }
+    const statusOrKind = (e && typeof e.status === 'number' && e.status > 0)
+      ? String(e.status)
+      : (e && e.kind ? e.kind : 'network');
+    logOutcome(statusOrKind);
+    throw e;
+  }
+}
+
+function friendlyGeoError(err) {
+  if (err && err.status === 429) {
+    return 'The location service is busy. Please try again in a minute.';
+  }
+  if (err && (err.kind === 'timeout' || /timeout|timed out/i.test(err.message || ''))) {
+    return "Couldn't reach the location service. Check your connection and try again.";
+  }
+  if (err && (err.kind === 'network' || /network|failed to fetch/i.test(err.message || ''))) {
+    return "Couldn't reach the location service. Check your connection and try again.";
+  }
+  if (err && (err.kind === 'json' || (err.status && err.status !== 429) || err.kind === 'no_usable_fields')) {
+    return 'The location service is not available right now. Please try again later.';
+  }
+  return "Couldn't reach the location service. Check your connection and try again.";
+}
+
+function buildGeoText(data, isPro) {
+  const lines = ['IP geolocation (approximate)'];
+  lines.push('IP: ' + (data.ip || '—'));
+  let countryStr = '—';
+  if (data.countryName && data.countryCode) {
+    countryStr = `${data.countryName} (${data.countryCode})`;
+  } else if (data.countryName) {
+    countryStr = data.countryName;
+  } else if (data.countryCode) {
+    countryStr = data.countryCode;
+  }
+  lines.push('Country: ' + countryStr);
+  lines.push('Region: ' + (data.region || '—'));
+  lines.push('City: ' + (data.city || '—'));
+  lines.push('Network: ' + (data.network || '—'));
+
+  if (isPro) {
+    if (data.lat !== null && data.lon !== null) {
+      lines.push(`Coordinates: ${data.lat}, ${data.lon} (approx.)`);
+    } else {
+      lines.push('Coordinates: —');
+    }
+    lines.push('Time zone: ' + (data.timeZone || '—'));
+    lines.push('ASN: ' + (data.asn || '—'));
+    const proxyStr = data.isProxy === true ? 'Yes' : (data.isProxy === false ? 'No' : 'Unknown');
+    lines.push('Proxy/VPN: ' + proxyStr);
+  }
+  lines.push('Source: ' + GEO_PROVIDER.name);
+  return lines.join('\n');
+}
+
+let _lastGeoResult = null;
+let _geoLookupSeq = 0;
+let _geoCurrentAbort = null;
+let _geoInFlight = false;
+
+function isGeoProNow() {
+  return typeof PRO_UNLOCKED !== 'undefined' && PRO_UNLOCKED === true;
+}
+
+function updateGeoControls() {
+  const isPro = isGeoProNow();
+  const teaserRow = document.getElementById('geo-teaser-row');
+  const proDetails = document.getElementById('geo-pro-details');
+  if (teaserRow) teaserRow.style.display = isPro ? 'none' : 'block';
+  if (proDetails) proDetails.style.display = isPro ? 'block' : 'none';
+}
+window.updateGeoControls = updateGeoControls;
+
+function renderGeoResult(data) {
+  _lastGeoResult = data;
+  const resultsCard = document.getElementById('geo-results-card');
+  if (!resultsCard) return;
+
+  const flagEl = document.getElementById('geo-flag');
+  const ipEl = document.getElementById('geo-ip-display');
+  const badgeEl = document.getElementById('geo-family-badge');
+
+  if (flagEl) {
+    flagEl.textContent = getFlagEmoji(data.countryCode);
+  }
+  if (ipEl) {
+    ipEl.textContent = data.ip || '—';
+  }
+  if (badgeEl) {
+    const isV6 = data.version === 6 || (data.ip && data.ip.includes(':'));
+    badgeEl.textContent = isV6 ? 'IPv6' : 'IPv4';
+  }
+
+  // Free fields
+  const countryEl = document.getElementById('geo-val-country');
+  if (countryEl) {
+    let countryStr = '—';
+    if (data.countryName && data.countryCode) {
+      countryStr = `${data.countryName} (${data.countryCode})`;
+    } else if (data.countryName) {
+      countryStr = data.countryName;
+    } else if (data.countryCode) {
+      countryStr = data.countryCode;
+    }
+    countryEl.textContent = countryStr;
+  }
+
+  const regionEl = document.getElementById('geo-val-region');
+  if (regionEl) regionEl.textContent = data.region || '—';
+
+  const cityEl = document.getElementById('geo-val-city');
+  if (cityEl) cityEl.textContent = data.city || '—';
+
+  const networkEl = document.getElementById('geo-val-network');
+  if (networkEl) networkEl.textContent = data.network || '—';
+
+  // Pro fields
+  const coordsEl = document.getElementById('geo-val-coords');
+  const mapBtn = document.getElementById('btn-geo-open-map');
+  const hasCoords = data.lat !== null && data.lon !== null &&
+    data.lat >= -90 && data.lat <= 90 && data.lon >= -180 && data.lon <= 180;
+
+  if (coordsEl) {
+    coordsEl.textContent = (data.lat !== null && data.lon !== null) ? `${data.lat}, ${data.lon}` : '—';
+  }
+  if (mapBtn) {
+    mapBtn.style.display = hasCoords ? 'inline-block' : 'none';
+  }
+
+  const tzEl = document.getElementById('geo-val-timezone');
+  if (tzEl) tzEl.textContent = data.timeZone || '—';
+
+  const asnEl = document.getElementById('geo-val-asn');
+  if (asnEl) asnEl.textContent = data.asn || '—';
+
+  const proxyEl = document.getElementById('geo-val-proxy');
+  if (proxyEl) {
+    proxyEl.textContent = data.isProxy === true ? 'Yes' : (data.isProxy === false ? 'No' : 'Unknown');
+  }
+
+  // Update Pro/Free visibility
+  updateGeoControls();
+
+  resultsCard.style.display = 'block';
+}
+
+function initGeoTool() {
+  const inputEl = document.getElementById('geo-input');
+  const errorEl = document.getElementById('geo-error-msg');
+  const resultsCard = document.getElementById('geo-results-card');
+  const btnLookup = document.getElementById('btn-geo-lookup');
+  const btnMyIp = document.getElementById('btn-geo-myip');
+  const btnClear = document.getElementById('btn-geo-clear');
+  const btnGeoSwitch = document.getElementById('btn-geo-switch');
+  const btnGeoTeaser = document.getElementById('btn-geo-teaser');
+  const btnOpenMap = document.getElementById('btn-geo-open-map');
+  const btnOpenWhois = document.getElementById('btn-geo-open-whois');
+  const btnCopy = document.getElementById('btn-geo-copy');
+  const btnSave = document.getElementById('btn-geo-save');
+  const btnShare = document.getElementById('btn-geo-share');
+
+  if (!inputEl || !btnLookup) return;
+
+  function showError(msg) {
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+    if (resultsCard) resultsCard.style.display = 'none';
+  }
+
+  function hideError() {
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
+  }
+
+  function hideResult() {
+    if (resultsCard) resultsCard.style.display = 'none';
+    _lastGeoResult = null;
+  }
+
+  async function runGeoLookup(isMyIp) {
+    if (_geoInFlight) return;
+
+    if (_geoCurrentAbort) _geoCurrentAbort.abort();
+    _geoCurrentAbort = (typeof window !== 'undefined' && window.AbortController) ? new window.AbortController() : null;
+    const mySeq = ++_geoLookupSeq;
+
+    hideError();
+    hideResult();
+
+    let targetIp = null;
+    let cacheKey = 'myip';
+    let rawInput = '';
+
+    if (!isMyIp) {
+      rawInput = inputEl.value.trim();
+      if (!rawInput) {
+        showError('Enter a valid IPv4 or IPv6 address.');
+        return;
+      }
+      const cls = classifyIp(rawInput);
+      if (!cls.ok) {
+        if (cls.reserved && window.APP_DEBUG_ENABLED) {
+          geoLog('blocked: reserved address');
+        }
+        showError(cls.reason);
+        return;
+      }
+      targetIp = rawInput;
+      cacheKey = 'ip:' + rawInput.toLowerCase();
+    }
+
+    // Check cache
+    const cached = _geoCache.get(cacheKey);
+    if (cached && Date.now() < cached.expires) {
+      if (window.APP_DEBUG_ENABLED) {
+        const fam = cached.data.version || (cached.data.ip && cached.data.ip.includes(':') ? 6 : 4);
+        geoLog(`lookup | family=${fam} | cached=true`);
+      }
+      renderGeoResult(cached.data);
+      if (isMyIp && cached.data.ip) {
+        inputEl.value = cached.data.ip;
+      }
+      return;
+    }
+
+    // Check rate limit
+    if (!checkGeoRateLimit()) {
+      if (window.APP_DEBUG_ENABLED) geoLog('blocked: client rate limit');
+      showError('Please wait a moment and try again.');
+      return;
+    }
+
+    // Begin network lookup
+    _geoInFlight = true;
+    btnLookup.disabled = true;
+    btnMyIp.disabled = true;
+    if (!isMyIp) {
+      btnLookup.textContent = 'Looking up...';
+    } else {
+      btnMyIp.textContent = 'Locating...';
+    }
+    recordGeoRequest();
+
+    try {
+      const url = GEO_PROVIDER.url(targetIp);
+      const rawJson = await geoHttpGetJson(url, _geoCurrentAbort.signal);
+      if (mySeq !== _geoLookupSeq) return;
+
+      const norm = GEO_PROVIDER.parse(rawJson);
+      if (!norm) {
+        const err = new Error('No usable fields');
+        err.kind = 'no_usable_fields';
+        throw err;
+      }
+
+      const ttl = isMyIp ? GEO_CACHE_MYIP_MS : GEO_CACHE_IP_MS;
+      _geoCache.set(cacheKey, { data: norm, expires: Date.now() + ttl });
+      if (!isMyIp) {
+        if (norm.ip && norm.ip.toLowerCase() !== rawInput.toLowerCase()) {
+          _geoCache.set('ip:' + norm.ip.toLowerCase(), { data: norm, expires: Date.now() + ttl });
+        }
+      } else if (norm.ip) {
+        inputEl.value = norm.ip;
+        _geoCache.set('ip:' + norm.ip.toLowerCase(), { data: norm, expires: Date.now() + ttl });
+      }
+
+      renderGeoResult(norm);
+    } catch (err) {
+      if (mySeq !== _geoLookupSeq) return;
+      showError(friendlyGeoError(err));
+    } finally {
+      if (mySeq === _geoLookupSeq) {
+        _geoInFlight = false;
+        btnLookup.disabled = false;
+        btnMyIp.disabled = false;
+        btnLookup.textContent = 'Lookup';
+        btnMyIp.textContent = 'My IP';
+      }
+    }
+  }
+
+  btnLookup.addEventListener('click', () => runGeoLookup(false));
+  btnMyIp.addEventListener('click', () => runGeoLookup(true));
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      runGeoLookup(false);
+    }
+  });
+
+  inputEl.addEventListener('paste', (e) => {
+    const text = (e.clipboardData || window.clipboardData)?.getData('text');
+    if (typeof text === 'string') {
+      const trimmed = text.trim();
+      if (trimmed !== text) {
+        e.preventDefault();
+        if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+          document.execCommand('insertText', false, trimmed);
+        } else {
+          inputEl.value = trimmed;
+          inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    }
+  });
+
+  btnClear.addEventListener('click', () => {
+    _geoLookupSeq++;
+    if (_geoCurrentAbort) _geoCurrentAbort.abort();
+    _geoInFlight = false;
+    btnLookup.disabled = false;
+    btnMyIp.disabled = false;
+    btnLookup.textContent = 'Lookup';
+    btnMyIp.textContent = 'My IP';
+    inputEl.value = '';
+    hideError();
+    hideResult();
+  });
+
+  if (btnGeoSwitch) {
+    btnGeoSwitch.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) geoLog('ui: switch tap');
+      openToolsPicker();
+    });
+  }
+
+  if (btnGeoTeaser) {
+    btnGeoTeaser.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) geoLog('ui: teaser tap');
+      showProModal('geolocation');
+    });
+  }
+
+  if (btnOpenMap) {
+    btnOpenMap.addEventListener('click', async () => {
+      if (window.APP_DEBUG_ENABLED) geoLog('ui: open map');
+      if (!_lastGeoResult || _lastGeoResult.lat === null || _lastGeoResult.lon === null) return;
+      const lat = _lastGeoResult.lat;
+      const lon = _lastGeoResult.lon;
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+      const mapUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=9/${lat}/${lon}`;
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+        try {
+          await window.Capacitor.Plugins.Browser.open({ url: mapUrl });
+        } catch (e) {
+          window.open(mapUrl, '_blank');
+        }
+      } else {
+        window.open(mapUrl, '_blank');
+      }
+    });
+  }
+
+  if (btnOpenWhois) {
+    btnOpenWhois.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) geoLog('ui: open-in tap target=whois');
+      if (!_lastGeoResult || !_lastGeoResult.ip) return;
+      const whoisTool = TOOLS_LIST.find((t) => t.id === 'whois');
+      if (whoisTool) {
+        openTool(whoisTool);
+        const whoisInp = document.getElementById('whois-input');
+        if (whoisInp) {
+          whoisInp.value = _lastGeoResult.ip;
+          whoisInp.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+  }
+
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      if (window.APP_DEBUG_ENABLED) geoLog('ui: copy tap');
+      if (!_lastGeoResult) return;
+      const text = buildGeoText(_lastGeoResult, isGeoProNow());
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          if (typeof showToast === 'function') showToast('Location copied to clipboard');
+        }).catch(() => {});
+      }
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener('click', () => {
+      if (!isGeoProNow()) {
+        if (window.APP_DEBUG_ENABLED) geoLog('ui: save gated for free user');
+        showProModal('geolocation');
+        return;
+      }
+      if (window.APP_DEBUG_ENABLED) geoLog('ui: save tap');
+      if (!_lastGeoResult) return;
+      const text = buildGeoText(_lastGeoResult, true);
+      const noteTitle = 'Geolocation ' + (_lastGeoResult.ip || '');
+      if (typeof addNote === 'function') {
+        addNote(noteTitle, text, 'Geolocation');
+        if (typeof maybeRequestReview === 'function') maybeRequestReview('save_note');
+        if (typeof switchToNotesTab === 'function') switchToNotesTab();
+      }
+    });
+  }
+
+  if (btnShare) {
+    btnShare.addEventListener('click', () => {
+      if (!isGeoProNow()) {
+        if (window.APP_DEBUG_ENABLED) geoLog('ui: share gated for free user');
+        showProModal('geolocation');
+        return;
+      }
+      if (isShareTapDuplicate('geo')) {
+        if (window.APP_DEBUG_ENABLED) geoLog('ui: share tap ignored | reason=double-tap');
+        return;
+      }
+      if (window.APP_DEBUG_ENABLED) geoLog('ui: share tap');
+      if (!_lastGeoResult) return;
+      const text = buildGeoText(_lastGeoResult, true);
+      if (typeof shareText === 'function') {
+        shareText('IP geolocation', text, true);
       }
     });
   }

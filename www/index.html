@@ -415,6 +415,7 @@
           <li><span class="pro-check">✓</span> All DNS Record Types (MX, TXT, NS, reverse DNS...)</li>
           <li><span class="pro-check">✓</span> Advanced Ping, Traceroute &amp; Whois Options</li>
           <li><span class="pro-check">✓</span> Route Summarization (IPv4 &amp; IPv6)</li>
+          <li><span class="pro-check">✓</span> Geolocation details, Save &amp; Share</li>
           <li><span class="pro-check">✓</span> Bulk IPv4 & IPv6 Calculations</li>
           <li><span class="pro-check">✓</span> Export CSV & Professional Reports</li>
           <li><span class="pro-check">✓</span> Share Without the Watermark</li>
@@ -1958,6 +1959,118 @@
         </div>
       </section>
 
+      <!-- IP Geolocation Section -->
+      <section id="geolocation-tab" class="tab-content">
+        <div class="tools-title-row">
+          <h2 class="tab-title">IP Geolocation</h2>
+          <button id="btn-geo-switch" class="tools-switch-chip">⇄ Tools</button>
+        </div>
+        <div class="card input-card" style="margin-bottom: 20px;">
+          <div class="input-group">
+            <label for="geo-input">IP address</label>
+            <input type="text" id="geo-input" data-kbd-keep-visible="btn-geo-lookup" placeholder="8.8.8.8 or 2001:4860:4860::8888" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off">
+            <div id="geo-error-msg" style="color: var(--accent-danger); font-size: 13px; margin-top: 6px; display: none;"></div>
+          </div>
+          <div class="geo-input-actions" style="margin-top: 20px;">
+            <button id="btn-geo-lookup" class="btn-primary">Lookup</button>
+            <button id="btn-geo-myip" class="btn-secondary">My IP</button>
+            <button id="btn-geo-clear" class="btn-secondary">Clear</button>
+          </div>
+          <div class="geo-disclosure">
+            The address is sent to FreeIPAPI (freeipapi.com) to look up its location. &quot;My IP&quot; sends nothing but the request itself.
+          </div>
+        </div>
+
+        <div id="geo-results-card" class="card result-card" style="display: none;">
+          <div class="geo-result-head">
+            <div class="geo-head-title">
+              <span id="geo-flag" class="geo-flag"></span>
+              <span id="geo-ip-display" class="geo-ip-display"></span>
+              <span id="geo-family-badge" class="badge">IPv4</span>
+            </div>
+          </div>
+          <div class="geo-approx-notice">
+            <div class="geo-approx-title">Approximate location</div>
+            <div class="geo-approx-desc">Based on IP address databases. It often shows where the provider&#39;s network is, not where the device is. Treat it as accurate to country level.</div>
+          </div>
+
+          <div class="whois-body">
+            <div class="geo-kv-row">
+              <span class="geo-kv-label">Country</span>
+              <span id="geo-val-country" class="geo-kv-val">—</span>
+            </div>
+            <div class="geo-kv-row">
+              <span class="geo-kv-label">Region</span>
+              <span id="geo-val-region" class="geo-kv-val">—</span>
+            </div>
+            <div class="geo-kv-row">
+              <span class="geo-kv-label">City</span>
+              <span id="geo-val-city" class="geo-kv-val">—</span>
+            </div>
+            <div class="geo-kv-row">
+              <span class="geo-kv-label">Network</span>
+              <span id="geo-val-network" class="geo-kv-val">—</span>
+            </div>
+
+            <!-- Free Pro Teaser -->
+            <div id="geo-teaser-row" style="margin-top: 10px;">
+              <button type="button" id="btn-geo-teaser" class="geo-teaser-btn">
+                <span>Coordinates, time zone, AS number, proxy flag</span>
+                <span class="pro-badge">🔒 Pro</span>
+              </button>
+            </div>
+
+            <!-- Pro Details -->
+            <div id="geo-pro-details" style="display: none;">
+              <div class="geo-kv-row">
+                <span class="geo-kv-label">Coordinates</span>
+                <span class="geo-kv-val">
+                  <span id="geo-val-coords">—</span>
+                  <span class="text-muted" style="font-size: 11px; font-weight: normal; margin-left: 2px;">(approx.)</span>
+                  <button type="button" id="btn-geo-open-map" class="btn-action geo-map-btn" style="margin-left: 6px; display: none;">Open in map</button>
+                </span>
+              </div>
+              <div class="geo-kv-row">
+                <span class="geo-kv-label">Time zone</span>
+                <span id="geo-val-timezone" class="geo-kv-val">—</span>
+              </div>
+              <div class="geo-kv-row">
+                <span class="geo-kv-label">AS number</span>
+                <span id="geo-val-asn" class="geo-kv-val">—</span>
+              </div>
+              <div class="geo-kv-row">
+                <span class="geo-kv-label">Proxy / VPN</span>
+                <span id="geo-val-proxy" class="geo-kv-val">—</span>
+              </div>
+            </div>
+
+            <div class="geo-source-line">Data: FreeIPAPI · approximate</div>
+
+            <div id="geo-open-in" class="whois-open-in">
+              <div class="whois-open-label">Open in</div>
+              <div class="whois-open-btns">
+                <button type="button" id="btn-geo-open-whois" class="btn-action whois-open-btn">Whois</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="result-actions" style="margin-top: 16px; display: flex; gap: 8px;">
+            <button id="btn-geo-copy" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-geo-save" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-geo-share" class="btn-action pro-feature-btn" data-pro="true" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- ULA Generator Section -->
       <section id="ula-tab" class="tab-content">
         <div class="tools-title-row">
@@ -2086,18 +2199,6 @@
         </div>
         <span>Splitter</span>
       </button>
-      <button class="tab-btn" data-target="reference-tab">
-        <div class="tab-icon-wrap">
-          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
-        </div>
-        <span>Reference</span>
-      </button>
-      <button class="tab-btn" data-target="history-tab">
-        <div class="tab-icon-wrap">
-          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.53.85-1.07-3.63-2.16V8h-1.5z"/></svg>
-        </div>
-        <span>History</span>
-      </button>
       <button class="tab-btn" id="tab-btn-tools">
         <div class="tab-icon-wrap" style="position: relative;">
           
@@ -2111,6 +2212,18 @@
    </svg>
         </div>
         <span>Tools</span>
+      </button>
+      <button class="tab-btn" data-target="reference-tab">
+        <div class="tab-icon-wrap">
+          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+        </div>
+        <span>Reference</span>
+      </button>
+      <button class="tab-btn" data-target="history-tab">
+        <div class="tab-icon-wrap">
+          <svg class="tab-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.53.85-1.07-3.63-2.16V8h-1.5z"/></svg>
+        </div>
+        <span>History</span>
       </button>
       <button class="tab-btn" data-target="notes-tab">
         <div class="tab-icon-wrap">
