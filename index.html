@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>iSubnet - Network Calculator</title>
-  <link rel="stylesheet" href="styles.css?v=1.5.1">
+  <link rel="stylesheet" href="styles.css?v=1.6.0">
   <!-- Import premium font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -270,7 +270,7 @@
 
         <!-- App Version Footer -->
         <div id="settings-version-footer" style="text-align: center; margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-muted); font-weight: 500;">
-          iSubnet v1.5.1
+          iSubnet v1.6.0
         </div>
         </div>
       </div>
@@ -414,6 +414,7 @@
           <li><span class="pro-check">✓</span> VLSM & FLSM Subnet Designer</li>
           <li><span class="pro-check">✓</span> All DNS Record Types (MX, TXT, NS, reverse DNS...)</li>
           <li><span class="pro-check">✓</span> Advanced Ping, Traceroute &amp; Whois Options</li>
+          <li><span class="pro-check">✓</span> Route Summarization (IPv4 &amp; IPv6)</li>
           <li><span class="pro-check">✓</span> Bulk IPv4 & IPv6 Calculations</li>
           <li><span class="pro-check">✓</span> Export CSV & Professional Reports</li>
           <li><span class="pro-check">✓</span> Share Without the Watermark</li>
@@ -466,6 +467,7 @@
           <div class="segmented-control" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 18px; gap: 4px;">
             <button class="calc-mode-btn-v4 active" data-mode="single" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">Single IP</button>
             <button class="calc-mode-btn-v4" data-mode="bulk" id="btn-bulk-mode-v4" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 4px;">Bulk IPs <span style="font-size: 10px;">👑</span></button>
+            <button class="calc-mode-btn-v4" data-mode="overlap" id="btn-overlap-mode-v4" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth);">Overlap</button>
           </div>
           
           <div id="ipv4-single-panel">
@@ -526,6 +528,19 @@
             <button id="btn-calc-bulk-ipv4" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
           </div>
 
+          <!-- Overlap IPv4 Panel (hidden by default) -->
+          <div id="ipv4-overlap-panel" class="hidden">
+            <div class="input-group">
+              <label for="ipv4-overlap-input">Networks (one per line, or separated by commas). e.g. 10.0.0.0/24</label>
+              <textarea id="ipv4-overlap-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="6" maxlength="60000" data-kbd-keep-visible="btn-check-overlap-v4" placeholder="10.0.0.0/24&#10;10.0.0.128/25&#10;192.168.1.0/24" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <span class="error-msg" id="ipv4-overlap-error"></span>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 5px;">
+              <button id="btn-check-overlap-v4" class="btn-primary" style="flex: 1;">Check</button>
+              <button id="btn-clear-overlap-v4" class="btn-secondary" style="width: 80px;">Clear</button>
+            </div>
+          </div>
+
           <button id="btn-calc-ipv4" class="btn-primary" style="display: none;">Calculate</button>
         </div>
 
@@ -562,6 +577,30 @@
               <span>Save</span>
             </button>
             <button id="btn-share-bulk-ipv4" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Overlap Results Card IPv4 -->
+        <div class="card result-card hidden" id="ipv4-overlap-results">
+          <div class="result-header" style="margin-bottom: 8px;">
+            <h3 id="ipv4-overlap-headline" style="margin: 0; font-size: 15px;"></h3>
+            <div id="ipv4-overlap-skipped-note" class="text-muted" style="font-size: 12px; margin-top: 4px; display: none;"></div>
+          </div>
+          <div id="ipv4-overlap-conflicts-container" style="margin-top: 12px;"></div>
+          <div id="ipv4-overlap-entries-container" style="margin-top: 16px;"></div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-overlap-copy-v4" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-overlap-save-v4" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-overlap-share-v4" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
               <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
               <span>Share</span>
             </button>
@@ -654,6 +693,7 @@
           <div class="segmented-control" style="display: flex; background: rgba(0,0,0,0.08); border: 1px solid var(--border-color); border-radius: 10px; padding: 4px; margin-bottom: 18px; gap: 4px;">
             <button class="calc-mode-btn-v6 active" data-mode="single" style="flex: 1; background: var(--bg-card); border: none; border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition-smooth);">Single IP</button>
             <button class="calc-mode-btn-v6" data-mode="bulk" id="btn-bulk-mode-v6" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth); display: flex; align-items: center; justify-content: center; gap: 4px;">Bulk IPs <span style="font-size: 10px;">👑</span></button>
+            <button class="calc-mode-btn-v6" data-mode="overlap" id="btn-overlap-mode-v6" style="flex: 1; background: none; border: none; border-radius: 6px; padding: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition-smooth);">Overlap</button>
           </div>
           
           <div id="ipv6-single-panel">
@@ -714,6 +754,19 @@
             <button id="btn-calc-bulk-ipv6" class="btn-primary" style="width: 100%; margin-top: 5px;">Calculate Bulk</button>
           </div>
 
+          <!-- Overlap IPv6 Panel (hidden by default) -->
+          <div id="ipv6-overlap-panel" class="hidden">
+            <div class="input-group">
+              <label for="ipv6-overlap-input">Networks (one per line, or separated by commas). e.g. 2001:db8::/48</label>
+              <textarea id="ipv6-overlap-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="6" maxlength="60000" data-kbd-keep-visible="btn-check-overlap-v6" placeholder="2001:db8::/48&#10;2001:db8:0:1::/64&#10;fd00:1234::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+              <span class="error-msg" id="ipv6-overlap-error"></span>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 5px;">
+              <button id="btn-check-overlap-v6" class="btn-primary" style="flex: 1;">Check</button>
+              <button id="btn-clear-overlap-v6" class="btn-secondary" style="width: 80px;">Clear</button>
+            </div>
+          </div>
+
           <button id="btn-calc-ipv6" class="btn-primary" style="display: none;">Calculate</button>
         </div>
 
@@ -750,6 +803,30 @@
               <span>Save</span>
             </button>
             <button id="btn-share-bulk-ipv6" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Overlap Results Card IPv6 -->
+        <div class="card result-card hidden" id="ipv6-overlap-results">
+          <div class="result-header" style="margin-bottom: 8px;">
+            <h3 id="ipv6-overlap-headline" style="margin: 0; font-size: 15px;"></h3>
+            <div id="ipv6-overlap-skipped-note" class="text-muted" style="font-size: 12px; margin-top: 4px; display: none;"></div>
+          </div>
+          <div id="ipv6-overlap-conflicts-container" style="margin-top: 12px;"></div>
+          <div id="ipv6-overlap-entries-container" style="margin-top: 16px;"></div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-overlap-copy-v6" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-overlap-save-v6" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-overlap-share-v6" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; gap: 4px;">
               <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
               <span>Share</span>
             </button>
@@ -1880,6 +1957,102 @@
           </div>
         </div>
       </section>
+
+      <!-- ULA Generator Section -->
+      <section id="ula-tab" class="tab-content">
+        <div class="tools-title-row">
+          <h2 class="tab-title">ULA Generator</h2>
+          <button id="btn-ula-switch" class="tools-switch-chip">⇄ Tools</button>
+        </div>
+        <div class="card input-card">
+          <p class="text-muted" style="font-size: 13px; line-height: 1.4; margin: 0 0 16px 0;">
+            Creates a random private IPv6 prefix for your own network (fd00::/8, RFC 4193). It is not routable on the Internet.
+          </p>
+          <div id="ula-error-msg" class="error-msg" style="display: none; margin-bottom: 12px;"></div>
+          <button id="btn-ula-generate" class="btn-primary" style="width: 100%;">Generate</button>
+        </div>
+        <div id="ula-results-card" class="card result-card hidden" style="margin-top: 20px;">
+          <div class="result-header" style="margin-bottom: 14px;">
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 4px;">ULA Prefix (RFC 4193)</div>
+            <div id="ula-res-prefix" style="font-family: monospace; font-size: clamp(14.5px, 5.1vw, 20px); font-weight: 700; color: var(--accent-primary); white-space: nowrap; overflow-wrap: normal;"></div>
+          </div>
+          <div class="result-grid" style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+            <div class="result-item">
+              <span class="result-label">Global ID</span>
+              <span id="ula-res-global-id" class="result-val" style="font-family: monospace; overflow-wrap: anywhere;"></span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Address Range</span>
+              <div id="ula-res-range" class="result-val ula-range-box"></div>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Subnets</span>
+              <span id="ula-res-subnets" class="result-val" style="font-family: monospace;">65,536 × /64 (0000 - ffff)</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">First /64 Subnets</span>
+              <div id="ula-res-first-subnets"></div>
+              <div class="text-muted" style="font-size: 11px; margin-top: 4px;">Subnet ID is the 4th group (0000 - ffff).</div>
+            </div>
+          </div>
+          <div class="text-muted" style="font-size: 11px; margin-top: 14px; line-height: 1.4;">
+            The Global ID is generated randomly on this device. Nothing is sent anywhere.
+          </div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-ula-copy" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; align-items: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-ula-save" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; align-items: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-ula-share" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; align-items: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+            <button id="btn-ula-open-calc" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; align-items: center; gap: 4px;">
+              <span>Open in Calc</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Route Summarization Section (Pro) -->
+      <section id="summarize-tab" class="tab-content">
+        <div class="tools-title-row">
+          <h2 class="tab-title">Route Summarization</h2>
+          <button id="btn-summarize-switch" class="tools-switch-chip">⇄ Tools</button>
+        </div>
+        <div class="card input-card">
+          <div class="input-group">
+            <label for="summarize-input">Networks (one per line, or separated by commas)</label>
+            <textarea id="summarize-input" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" rows="8" maxlength="60000" data-kbd-keep-visible="btn-summarize-run" placeholder="10.0.0.0/24&#10;10.0.1.0/24&#10;10.0.2.0/24&#10;10.0.3.0/24&#10;2001:db8:0::/48&#10;2001:db8:1::/48" style="padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); outline: none; font-family: monospace; font-size: 13px; resize: vertical; width: 100%;"></textarea>
+            <span class="error-msg" id="summarize-error-msg"></span>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 5px;">
+            <button id="btn-summarize-run" class="btn-primary" style="flex: 1;">Summarize</button>
+            <button id="btn-summarize-clear" class="btn-secondary" style="width: 80px;">Clear</button>
+          </div>
+        </div>
+        <div id="summarize-results-card" class="card result-card hidden" style="margin-top: 20px;">
+          <div id="summarize-results-content"></div>
+          <div class="result-actions" style="display: flex; gap: 8px; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; width: 100%;">
+            <button id="btn-summarize-copy" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; align-items: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              <span>Copy</span>
+            </button>
+            <button id="btn-summarize-save" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; align-items: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              <span>Save</span>
+            </button>
+            <button id="btn-summarize-share" class="btn-action" style="flex: 1; padding: 6px 4px; font-size: 12px; display: flex; justify-content: center; align-items: center; gap: 4px;">
+              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92c0-1.61-1.31-2.92-2.92-2.92z"/></svg>
+              <span>Share</span>
+            </button>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- Tab Bar Navigation (Simulating iOS) -->
@@ -1974,6 +2147,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
-  <script src="app.js?v=1.5.1"></script>
+  <script src="app.js?v=1.6.0"></script>
 </body>
 </html>
